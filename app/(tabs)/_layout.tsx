@@ -10,6 +10,7 @@ import {
 } from "react-native";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import { LinearGradient } from "expo-linear-gradient";
+import { SignedIn, useUser } from "@clerk/clerk-expo";
 
 // Create the bottom tab navigator
 const Tab = createBottomTabNavigator();
@@ -171,8 +172,9 @@ function CyberpunkTabBar({ state, descriptors, navigation }) {
 
 // Layout component
 export default function Layout() {
+  const { user } = useUser();
   return (
-    <>
+    <SignedIn>
       <StatusBar barStyle='light-content' backgroundColor='#0A1115' />
       <SafeAreaView className='flex-1 bg-gray-900'>
         <Tab.Navigator
@@ -203,6 +205,6 @@ export default function Layout() {
           />
         </Tab.Navigator>
       </SafeAreaView>
-    </>
+    </SignedIn>
   );
 }

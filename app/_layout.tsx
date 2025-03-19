@@ -1,116 +1,136 @@
-import React, { useEffect, useState } from "react";
-import { StatusBar, View, Text, Button } from "react-native";
-import { Stack } from "expo-router";
+import React from "react";
+import { StatusBar, View, ActivityIndicator } from "react-native";
+import { Stack, useRouter, useSegments } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { router } from "expo-router";
+import { ClerkProvider, useAuth } from "@clerk/clerk-expo";
+import { tokenCache } from "@clerk/clerk-expo/token-cache";
+import { cyberpunkTheme } from "@/constants/theme";
 import "./globals.css";
 
-// Cyberpunk theme configuration - can be used throughout the app
-export const cyberpunkTheme = {
-  colors: {
-    primary: "#00FF94",
-    primaryDark: "#02C39A",
-    background: {
-      dark: "#080F12",
-      darker: "#03120F",
-    },
-    text: {
-      light: "#E0F0EA",
-      muted: "#8F9BB3",
-      accent: "#00FF94",
-    },
-    gradients: {
-      primary: ["#00FF94", "#02C39A"],
-      background: ["rgba(8, 15, 18, 0.97)", "rgba(3, 18, 17, 0.98)"],
-    },
-  },
-  shadows: {
-    glow: {
-      shadowColor: "#00FF94",
-      shadowOffset: { width: 0, height: 0 },
-      shadowOpacity: 0.3,
-      shadowRadius: 10,
-      elevation: 8,
-    },
-  },
-};
+// A robust error boundary component
+class ErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { hasError: boolean }
+> {
+  constructor(props: { children: React.ReactNode }) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error: Error, info: React.ErrorInfo) {
+    console.error("ErrorBoundary caught an error:", error, info);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <View className='flex-1 items-center justify-center bg-gray-900'>
+          <LinearGradient
+            colors={cyberpunkTheme.colors.gradients.background}
+            className='absolute inset-0'
+          />
+          <View className='p-4 bg-gray-800 rounded'>
+            <StatusBar
+              barStyle='light-content'
+              backgroundColor={cyberpunkTheme.colors.background.dark}
+            />
+            <ActivityIndicator
+              size='large'
+              color={cyberpunkTheme.colors.text.accent}
+            />
+          </View>
+        </View>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+// AuthWrapper handles redirection based on auth state and shows a loading spinner
+function AuthWrapper({ children }: { children: React.ReactNode }) {
+  const { isSignedIn, isLoaded } = useAuth();
+  const segments = useSegments();
+  const router = useRouter();
+
+  React.useEffect(() => {
+    if (!isLoaded) return; // Wait until Clerk finishes loading
+
+    const inAuthGroup = segments[0] === "(auth)";
+    const inOnboarding = segments[0] === "onboarding";
+
+    // If the user is not signed in and not already on the onboarding or auth screens, redirect them
+    if (!isSignedIn && !inAuthGroup && !inOnboarding) {
+      router.replace("/onboarding");
+      return;
+    }
+
+    // If the user is signed in and is on the onboarding or auth screens, send them to the main app
+    if (isSignedIn && (inAuthGroup || inOnboarding)) {
+      router.replace("/(tabs)");
+      return;
+    }
+  }, [isSignedIn, isLoaded, segments, router]);
+
+  // Display loading spinner until Clerk is ready
+  if (!isLoaded) {
+    return (
+      <View className='flex-1 items-center justify-center bg-gray-900'>
+        <LinearGradient
+          colors={cyberpunkTheme.colors.gradients.background}
+          className='absolute inset-0'
+        />
+        <ActivityIndicator
+          size='large'
+          color={cyberpunkTheme.colors.text.accent}
+        />
+      </View>
+    );
+  }
+
+  return <>{children}</>;
+}
 
 export default function RootLayout() {
-  const [isFirstLaunch, setIsFirstLaunch] = useState(null);
-  const [forceOnboarding, setForceOnboarding] = useState(false);
+  const publishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY;
 
-  useEffect(() => {
-    const checkOnboardingStatus = async () => {
-      try {
-        const value = await AsyncStorage.getItem("hasOnboarded");
-        if (value === null) {
-          setIsFirstLaunch(true);
-        } else {
-          setIsFirstLaunch(false);
-        }
-      } catch (error) {
-        console.log("Error checking onboarding status:", error);
-        setIsFirstLaunch(false);
-      }
-    };
-
-    checkOnboardingStatus();
-  }, []);
-
-
-  if (isFirstLaunch === null) {
-    return null;
+  if (!publishableKey) {
+    throw new Error("Add EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY to your .env file");
   }
 
   return (
-    <View className='flex-1 bg-gray-900'>
-      <StatusBar
-        barStyle='light-content'
-        backgroundColor={cyberpunkTheme.colors.background.dark}
-      />
-
-      {/* Background gradient */}
-      <LinearGradient
-        colors={cyberpunkTheme.colors.gradients.background}
-        className='absolute inset-0'
-      />
-
-
-      <Stack
-        screenOptions={{
-          headerStyle: {
-            backgroundColor: cyberpunkTheme.colors.background.dark,
-          },
-          headerTintColor: cyberpunkTheme.colors.text.accent,
-          headerTitleStyle: {
-            fontWeight: "bold",
-          },
-          headerShadowVisible: false,
-          headerBackTitleVisible: false,
-          animation: "slide_from_right",
-          contentStyle: {
-            backgroundColor: "transparent",
-          },
-        }}
-      >
-        {forceOnboarding || isFirstLaunch ? (
-          <Stack.Screen
-            name='onboarding'
-            options={{
-              headerShown: false,
-              gestureEnabled: false,
-            }}
+    <ClerkProvider tokenCache={tokenCache} publishableKey={publishableKey}>
+      <ErrorBoundary>
+        <View className='flex-1 bg-gray-900'>
+          <StatusBar
+            barStyle='light-content'
+            backgroundColor={cyberpunkTheme.colors.background.dark}
           />
-        ) : (
-          <Stack.Screen
-            name='(tabs)'
-            options={{
-              headerShown: false,
-            }}
+          <LinearGradient
+            colors={cyberpunkTheme.colors.gradients.background}
+            className='absolute inset-0'
           />
-        )}
-      </Stack>
-    </View>
+          <AuthWrapper>
+            <Stack
+              screenOptions={{
+                headerShown: false,
+                contentStyle: { backgroundColor: "transparent" },
+              }}
+            >
+              <Stack.Screen name='index' redirect={true} />
+              <Stack.Screen
+                name='onboarding'
+                options={{ gestureEnabled: false }}
+              />
+              <Stack.Screen name='(auth)' />
+              <Stack.Screen name='(tabs)' />
+            </Stack>
+          </AuthWrapper>
+        </View>
+      </ErrorBoundary>
+    </ClerkProvider>
   );
 }

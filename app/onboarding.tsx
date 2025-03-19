@@ -9,16 +9,15 @@ import {
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
-import { cyberpunkTheme } from "./_layout";
+import { cyberpunkTheme } from "@/constants/theme";
 
 const { width } = Dimensions.get("window");
 
 const slides = [
   {
     id: "1",
-    title: "Hey, Let’s Debate!",
+    title: "Hey, Let's Debate!",
     description:
       "Welcome to Lets Debate – your digital arena for structured, high-impact discussions. Connect with passionate debaters and ignite meaningful conversations.",
     icon: "database-eye",
@@ -57,26 +56,16 @@ export default function OnboardingScreen() {
 
   const viewConfig = useRef({ viewAreaCoveragePercentThreshold: 50 }).current;
 
-  const scrollTo = async () => {
+  const scrollTo = () => {
     if (currentIndex < slides.length - 1) {
       slidesRef.current.scrollToIndex({ index: currentIndex + 1 });
     } else {
-      try {
-        await AsyncStorage.setItem("hasOnboarded", "true");
-        router.replace("/(tabs)");
-      } catch (err) {
-        console.log("Error storing onboarding status:", err);
-      }
+      router.replace("/(auth)/sign-in");
     }
   };
 
-  const skipOnboarding = async () => {
-    try {
-      await AsyncStorage.setItem("hasOnboarded", "true");
-      router.replace("/(tabs)");
-    } catch (err) {
-      console.log("Error storing onboarding status:", err);
-    }
+  const skipOnboarding = () => {
+    router.replace("/(auth)/sign-in");
   };
 
   return (
