@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import {
   View,
   Text,
@@ -6,42 +6,49 @@ import {
   Pressable,
   Dimensions,
   SafeAreaView,
+  Easing,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import { cyberpunkTheme } from "@/constants/theme";
+import * as Haptics from "expo-haptics";
 
 const { width } = Dimensions.get("window");
 
 const slides = [
   {
     id: "1",
-    title: "Hey, Let's Debate!",
+    title: "Welcome to Let's Debate",
     description:
-      "Welcome to Lets Debate – your digital arena for structured, high-impact discussions. Connect with passionate debaters and ignite meaningful conversations.",
-    icon: "database-eye",
+      "Ignite your intellect and join a revolution in online discourse. Experience debates that are structured, meaningful, and designed to spark real insights.",
+    icon: "forum",
+    bgColor: "rgba(0, 255, 148, 0.1)",
   },
   {
     id: "2",
-    title: "Timed Discussions",
+    title: "Time-Bound Conversations",
     description:
-      "Experience the power of focus. Our debates are time-bound – whether 24 hours or 3 days – ensuring every conversation is dynamic, engaging, and results-driven.",
+      "Say goodbye to endless arguments. Our debates run on strict time limits, ensuring discussions remain focused and decisions are reached.",
     icon: "clock-outline",
+    bgColor: "rgba(0, 180, 255, 0.1)",
   },
   {
     id: "3",
-    title: "Give Your Opinion Before Voting",
+    title: "Evidence-Driven Insights",
     description:
-      "Quality takes center stage. Share well-researched, fact-backed opinions before voting to earn reputation points and unlock exclusive badges.",
+      "Back your opinions with facts. Every vote requires evidence, promoting quality, accountability, and smarter debates.",
     icon: "check-decagram",
+    bgColor: "rgba(255, 100, 255, 0.1)",
   },
   {
     id: "4",
-    title: "Privacy & Security",
+    title: "Secure & Exclusive Spaces",
     description:
-      "Your data is our priority. With robust encryption and tight security, join a community where privacy is paramount and every debate is secure.",
+      "Debate with confidence. Our platform prioritizes your privacy, with verified voices and state-of-the-art security keeping discussions safe and impactful.",
     icon: "shield-lock",
+    bgColor: "rgba(255, 210, 0, 0.1)",
+    buttonText: "JOIN THE DEBATE",
   },
 ];
 
@@ -50,23 +57,169 @@ export default function OnboardingScreen() {
   const scrollX = useRef(new Animated.Value(0)).current;
   const slidesRef = useRef(null);
 
-  const viewableItemsChanged = useRef(({ viewableItems }) => {
-    setCurrentIndex(viewableItems[0].index);
+  // Animation values
+  const iconScale = useRef(new Animated.Value(0.5)).current;
+  const titleOpacity = useRef(new Animated.Value(0)).current;
+  const descriptionTranslateY = useRef(new Animated.Value(20)).current;
+  const skipButtonAnim = useRef(new Animated.Value(0)).current;
+  const buttonScale = useRef(new Animated.Value(1)).current;
+  const buttonWidth = useRef(new Animated.Value(64)).current;
+  const buttonTextOpacity = useRef(new Animated.Value(0)).current;
+
+  const isLastSlide = currentIndex === slides.length - 1;
+
+  const animateContent = useCallback(() => {
+    iconScale.setValue(0.5);
+    titleOpacity.setValue(0);
+    descriptionTranslateY.setValue(20);
+    Animated.sequence([
+      Animated.timing(iconScale, {
+        toValue: 1,
+        duration: 400,
+        useNativeDriver: true,
+        easing: Easing.out(Easing.back(1.5)),
+      }),
+      Animated.parallel([
+        Animated.timing(titleOpacity, {
+          toValue: 1,
+          duration: 400,
+          useNativeDriver: true,
+        }),
+        Animated.timing(descriptionTranslateY, {
+          toValue: 0,
+          duration: 500,
+          useNativeDriver: true,
+          easing: Easing.out(Easing.exp),
+        }),
+      ]),
+    ]).start();
+  }, [iconScale, titleOpacity, descriptionTranslateY]);
+
+  const onViewableItemsChanged = useRef(({ viewableItems }) => {
+    if (!viewableItems[0]) return;
+    const newIndex = viewableItems[0].index;
+    setCurrentIndex(newIndex);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    animateContent();
+
+    if (newIndex === slides.length - 1) {
+      Animated.sequence([
+        Animated.delay(300),
+        Animated.parallel([
+          Animated.timing(buttonWidth, {
+            toValue: 200,
+            duration: 600,
+            useNativeDriver: false,
+            easing: Easing.out(Easing.back(1)),
+          }),
+          Animated.timing(buttonTextOpacity, {
+            toValue: 1,
+            duration: 400,
+            delay: 300,
+            useNativeDriver: true,
+          }),
+        ]),
+      ]).start();
+    } else {
+      Animated.parallel([
+        Animated.timing(buttonWidth, {
+          toValue: 64,
+          duration: 300,
+          useNativeDriver: false,
+        }),
+        Animated.timing(buttonTextOpacity, {
+          toValue: 0,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }
   }).current;
+
+  useEffect(() => {
+    Animated.timing(skipButtonAnim, {
+      toValue: 1,
+      duration: 800,
+      useNativeDriver: true,
+      easing: Easing.out(Easing.cubic),
+    }).start();
+
+    const pulseButton = () => {
+      Animated.sequence([
+        Animated.timing(buttonScale, {
+          toValue: isLastSlide ? 1.05 : 1.08,
+          duration: isLastSlide ? 1200 : 800,
+          useNativeDriver: true,
+          easing: Easing.inOut(Easing.ease),
+        }),
+        Animated.timing(buttonScale, {
+          toValue: 1,
+          duration: isLastSlide ? 1200 : 800,
+          useNativeDriver: true,
+          easing: Easing.inOut(Easing.ease),
+        }),
+      ]).start(() => pulseButton());
+    };
+
+    pulseButton();
+    return () => {
+      buttonScale.stopAnimation();
+      skipButtonAnim.stopAnimation();
+    };
+  }, [isLastSlide, buttonScale, skipButtonAnim]);
 
   const viewConfig = useRef({ viewAreaCoveragePercentThreshold: 50 }).current;
 
-  const scrollTo = () => {
+  const scrollTo = useCallback(() => {
     if (currentIndex < slides.length - 1) {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       slidesRef.current.scrollToIndex({ index: currentIndex + 1 });
     } else {
-      router.replace("/(auth)/sign-in");
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      Animated.sequence([
+        Animated.timing(buttonScale, {
+          toValue: 0.95,
+          duration: 100,
+          useNativeDriver: true,
+        }),
+        Animated.timing(buttonScale, {
+          toValue: 1.2,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+        Animated.timing(buttonScale, {
+          toValue: 1,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+        Animated.timing(buttonTextOpacity, {
+          toValue: 0,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+      ]).start(() => {
+        router.replace("/(auth)/sign-in");
+      });
     }
-  };
+  }, [currentIndex, buttonScale, buttonTextOpacity]);
 
-  const skipOnboarding = () => {
+  const skipOnboarding = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     router.replace("/(auth)/sign-in");
-  };
+  }, []);
+
+  const inputRange = slides.map((_, i) => i * width);
+  const backgroundColor = scrollX.interpolate({
+    inputRange,
+    outputRange: slides.map((slide) => slide.bgColor),
+    extrapolate: "clamp",
+  });
+
+  const buttonRotation = scrollX.interpolate({
+    inputRange: [0, (slides.length - 2) * width, (slides.length - 1) * width],
+    outputRange: ["0deg", "180deg", "0deg"],
+    extrapolate: "clamp",
+  });
 
   return (
     <SafeAreaView className='flex-1 bg-gray-900'>
@@ -74,15 +227,34 @@ export default function OnboardingScreen() {
         colors={cyberpunkTheme.colors.gradients.background}
         className='absolute inset-0'
       />
-
-      <View className='absolute top-12 right-6 z-10'>
+      <Animated.View
+        className='absolute inset-0 opacity-50'
+        style={{ backgroundColor }}
+      />
+      <Animated.View
+        className='absolute top-12 right-6 z-10'
+        style={{
+          opacity: skipButtonAnim,
+          transform: [
+            {
+              translateY: skipButtonAnim.interpolate({
+                inputRange: [0, 1],
+                outputRange: [-20, 0],
+              }),
+            },
+          ],
+        }}
+      >
         <Pressable
           className='px-4 py-2 rounded-full border border-green-400/30'
           onPress={skipOnboarding}
+          onPressIn={() =>
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+          }
         >
           <Text className='text-green-400 font-medium'>Skip</Text>
         </Pressable>
-      </View>
+      </Animated.View>
 
       <Animated.FlatList
         data={slides}
@@ -96,20 +268,21 @@ export default function OnboardingScreen() {
           [{ nativeEvent: { contentOffset: { x: scrollX } } }],
           { useNativeDriver: false }
         )}
-        onViewableItemsChanged={viewableItemsChanged}
+        onViewableItemsChanged={onViewableItemsChanged}
         viewabilityConfig={viewConfig}
         renderItem={({ item }) => (
           <View
             className='flex-1 justify-center items-center px-6'
             style={{ width }}
           >
-            <View
+            <Animated.View
               className='w-32 h-32 rounded-full bg-gray-800/50 items-center justify-center mb-8 border border-green-400/20'
               style={{
                 shadowColor: cyberpunkTheme.colors.primary,
                 shadowOffset: { width: 0, height: 0 },
                 shadowOpacity: 0.3,
                 shadowRadius: 15,
+                transform: [{ scale: iconScale }],
               }}
             >
               <Icon
@@ -117,18 +290,21 @@ export default function OnboardingScreen() {
                 size={64}
                 color={cyberpunkTheme.colors.primary}
               />
-            </View>
-
-            <Text className='text-white text-3xl font-bold text-center mb-4'>
+            </Animated.View>
+            <Animated.Text
+              className='text-white text-3xl font-bold text-center mb-4'
+              style={{ opacity: titleOpacity }}
+            >
               {item.title}
-            </Text>
-
-            <View className='px-4'>
+            </Animated.Text>
+            <Animated.View
+              className='px-4'
+              style={{ transform: [{ translateY: descriptionTranslateY }] }}
+            >
               <Text className='text-gray-300 text-center text-base'>
                 {item.description}
               </Text>
-            </View>
-
+            </Animated.View>
             <LinearGradient
               colors={["rgba(0, 255, 148, 0.1)", "rgba(0, 255, 148, 0.01)"]}
               className='absolute bottom-0 left-0 right-0 h-40 opacity-30'
@@ -138,40 +314,96 @@ export default function OnboardingScreen() {
       />
 
       <View className='flex-row justify-between items-center px-6 pb-12'>
-        <View className='flex-row'>
-          {slides.map((_, index) => (
-            <View
-              key={index}
-              className={`h-1 rounded-full mx-1 ${
-                currentIndex === index ? "bg-green-400 w-8" : "bg-gray-600 w-2"
-              }`}
-            />
-          ))}
-        </View>
-
-        <Pressable
-          onPress={scrollTo}
-          className='w-16 h-16 rounded-full items-center justify-center'
+        <Animated.View className='flex-row'>
+          {slides.map((_, index) => {
+            const dotInput = [
+              (index - 1) * width,
+              index * width,
+              (index + 1) * width,
+            ];
+            const dotWidth = scrollX.interpolate({
+              inputRange: dotInput,
+              outputRange: [8, 32, 8],
+              extrapolate: "clamp",
+            });
+            const dotOpacity = scrollX.interpolate({
+              inputRange: dotInput,
+              outputRange: [0.3, 1, 0.3],
+              extrapolate: "clamp",
+            });
+            return (
+              <Animated.View
+                key={index}
+                className='h-1 rounded-full mx-1 bg-green-400'
+                style={{ width: dotWidth, opacity: dotOpacity }}
+              />
+            );
+          })}
+        </Animated.View>
+        <Animated.View
+          style={{ transform: [{ scale: buttonScale }], position: "relative" }}
         >
-          <LinearGradient
-            colors={cyberpunkTheme.colors.gradients.primary}
-            className='w-16 h-16 rounded-full items-center justify-center'
-            style={{
-              shadowColor: cyberpunkTheme.colors.primary,
-              shadowOffset: { width: 0, height: 0 },
-              shadowOpacity: 0.5,
-              shadowRadius: 10,
+          <Pressable
+            onPress={scrollTo}
+            onPressIn={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              Animated.spring(buttonScale, {
+                toValue: 0.95,
+                useNativeDriver: true,
+              }).start();
             }}
-          >
-            <Icon
-              name={
-                currentIndex === slides.length - 1 ? "check" : "chevron-right"
+            onPressOut={() => {
+              if (!isLastSlide) {
+                Animated.spring(buttonScale, {
+                  toValue: 1,
+                  useNativeDriver: true,
+                }).start();
               }
-              size={32}
-              color='#0A1115'
-            />
-          </LinearGradient>
-        </Pressable>
+            }}
+            className='rounded-full items-center justify-center overflow-hidden'
+          >
+            <Animated.View style={{ width: buttonWidth, height: 64 }}>
+              <LinearGradient
+                colors={cyberpunkTheme.colors.gradients.primary}
+                className='h-full w-full items-center justify-center flex-row'
+                style={{
+                  shadowColor: cyberpunkTheme.colors.primary,
+                  shadowOffset: { width: 0, height: 0 },
+                  shadowOpacity: 0.5,
+                  shadowRadius: 10,
+                }}
+              >
+                {isLastSlide ? (
+                  <Animated.View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      width: "100%",
+                    }}
+                  >
+                    <Animated.Text
+                      style={{
+                        color: "#0A1115",
+                        fontWeight: "bold",
+                        fontSize: 16,
+                        opacity: buttonTextOpacity,
+                      }}
+                    >
+                      JOIN THE DEBATE
+                    </Animated.Text>
+                  </Animated.View>
+                ) : (
+                  <Animated.View
+                    style={{ transform: [{ rotate: buttonRotation }] }}
+                  >
+                    <Icon name='chevron-right' size={32} color='#0A1115' />
+                  </Animated.View>
+                )}
+              </LinearGradient>
+            </Animated.View>
+          </Pressable>
+        </Animated.View>
       </View>
     </SafeAreaView>
   );
