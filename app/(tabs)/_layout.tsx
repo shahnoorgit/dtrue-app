@@ -11,6 +11,7 @@ import {
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import { LinearGradient } from "expo-linear-gradient";
 import { SignedIn, useUser } from "@clerk/clerk-expo";
+import * as Haptics from "expo-haptics"; // Import expo-haptics
 
 // Create the bottom tab navigator
 const Tab = createBottomTabNavigator();
@@ -25,6 +26,7 @@ function TabButton({ icon, label, isFocused, onPress }) {
       duration: 100,
       useNativeDriver: true,
     }).start();
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); // Add haptic feedback
   };
 
   const handlePressOut = () => {
