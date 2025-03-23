@@ -105,7 +105,7 @@ function TabButton({ icon, label, isFocused, onPress }) {
 // Custom Tab Bar Component
 function CyberpunkTabBar({ state, descriptors, navigation }) {
   return (
-    <View className='absolute bottom-6 left-4 right-4 rounded-2xl overflow-hidden h-20'>
+    <View className='absolute bottom-[-1] left-0 right-0 rounded-2xl overflow-hidden h-18'>
       <LinearGradient
         colors={["rgba(8, 15, 18, 0.97)", "rgba(3, 18, 17, 0.98)"]}
         start={{ x: 0, y: 0 }}
