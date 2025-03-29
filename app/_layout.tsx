@@ -6,8 +6,9 @@ import { ClerkProvider, useAuth } from "@clerk/clerk-expo";
 import { tokenCache } from "@clerk/clerk-expo/token-cache";
 import { cyberpunkTheme } from "@/constants/theme";
 import "./globals.css";
+import { useRedirectIfSignedIn } from "@/hook/useUserRedirect";
 
-// A robust error boundary component
+// A robust error boundary component remains the same.
 class ErrorBoundary extends React.Component<
   { children: React.ReactNode },
   { hasError: boolean }
@@ -50,32 +51,30 @@ class ErrorBoundary extends React.Component<
   }
 }
 
-// AuthWrapper handles redirection based on auth state and shows a loading spinner
+// AuthWrapper handles redirection based on auth state.
 function AuthWrapper({ children }: { children: React.ReactNode }) {
   const { isSignedIn, isLoaded } = useAuth();
   const segments = useSegments();
   const router = useRouter();
 
+  // Determine which route group the user is in.
+  const inAuthGroup = segments[0] === "(auth)";
+  const inOnboarding = segments[0] === "onboarding";
+
+  // Always call the redirect hook.
+  // The hook itself checks if the user is signed in and performs the API check.
+  useRedirectIfSignedIn("/(tabs)");
+
   React.useEffect(() => {
-    if (!isLoaded) return; // Wait until Clerk finishes loading
+    if (!isLoaded) return; // Wait for Clerk to load
 
-    const inAuthGroup = segments[0] === "(auth)";
-    const inOnboarding = segments[0] === "onboarding";
-
-    // If the user is not signed in and not already on the onboarding or auth screens, redirect them
+    // If the user is not signed in and is not already on auth or onboarding screens, redirect them to onboarding.
     if (!isSignedIn && !inAuthGroup && !inOnboarding) {
       router.replace("/onboarding");
-      return;
     }
+  }, [isSignedIn, isLoaded, inAuthGroup, inOnboarding, router]);
 
-    // If the user is signed in and is on the onboarding or auth screens, send them to the main app
-    if (isSignedIn && (inAuthGroup || inOnboarding)) {
-      router.replace("/(tabs)");
-      return;
-    }
-  }, [isSignedIn, isLoaded, segments, router]);
-
-  // Display loading spinner until Clerk is ready
+  // Show a loading spinner while Clerk is loading.
   if (!isLoaded) {
     return (
       <View className='flex-1 items-center justify-center bg-gray-900'>
@@ -96,7 +95,6 @@ function AuthWrapper({ children }: { children: React.ReactNode }) {
 
 export default function RootLayout() {
   const publishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY;
-
   if (!publishableKey) {
     throw new Error("Add EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY to your .env file");
   }

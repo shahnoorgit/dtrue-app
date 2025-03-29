@@ -64,7 +64,7 @@ export default function SignInScreen() {
 
       if (signInAttempt.status === "complete") {
         await setActive({ session: signInAttempt.createdSessionId });
-        router.replace("/(tabs)");
+        router.replace("/boarding");
       } else {
         console.error(JSON.stringify(signInAttempt, null, 2));
         Alert.alert(

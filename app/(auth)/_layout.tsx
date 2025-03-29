@@ -3,15 +3,11 @@ import { useAuth } from "@clerk/clerk-expo";
 import { LinearGradient } from "expo-linear-gradient";
 import { View, Dimensions } from "react-native";
 import { cyberpunkTheme } from "@/constants/theme";
+import { useRedirectIfSignedIn } from "@/hook/useUserRedirect";
 
 export default function AuthRoutesLayout() {
-  const { isSignedIn } = useAuth();
   const { width } = Dimensions.get("window");
-
-  if (isSignedIn) {
-    return <Redirect href='/(tabs)' />;
-  }
-
+  useRedirectIfSignedIn("/(tabs)");
   return (
     <View className='flex-1'>
       {/* Cyberpunk background with animated gradient */}

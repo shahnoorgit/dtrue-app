@@ -86,43 +86,43 @@ export default function SignUpScreen() {
   };
 
   // Handle submission of verification form
-  const onVerifyPress = async () => {
-    if (!isLoaded || isSubmitting) return;
+const onVerifyPress = async () => {
+  if (!isLoaded || isSubmitting) return;
 
-    if (!code.trim()) {
-      setVerificationError("Verification code is required");
-      return;
-    }
+  if (!code.trim()) {
+    setVerificationError("Verification code is required");
+    return;
+  }
 
-    setIsSubmitting(true);
+  setIsSubmitting(true);
 
-    try {
-      // Use the code the user provided to attempt verification
-      const signUpAttempt = await signUp.attemptEmailAddressVerification({
-        code,
-      });
+  try {
+    // Use the code the user provided to attempt verification
+    const signUpAttempt = await signUp.attemptEmailAddressVerification({
+      code,
+    });
 
-      // If verification was completed, set the session to active and redirect
-      if (signUpAttempt.status === "complete") {
-        await setActive({ session: signUpAttempt.createdSessionId });
-        router.replace("/(tabs)");
-      } else {
-        console.error(JSON.stringify(signUpAttempt, null, 2));
-        Alert.alert(
-          "Verification Error",
-          "Unable to verify your account. Please try again."
-        );
-      }
-    } catch (err) {
-      console.error(JSON.stringify(err, null, 2));
+    // If verification was completed, set the session to active and redirect
+    if (signUpAttempt.status === "complete") {
+      await setActive({ session: signUpAttempt.createdSessionId });
+      router.replace("/boarding");
+    } else {
+      console.error(JSON.stringify(signUpAttempt, null, 2));
       Alert.alert(
-        "Verification Failed",
-        err.errors?.[0]?.message || "Invalid verification code"
+        "Verification Error",
+        "Unable to verify your account. Please try again."
       );
-    } finally {
-      setIsSubmitting(false);
     }
-  };
+  } catch (err) {
+    console.error(JSON.stringify(err, null, 2));
+    Alert.alert(
+      "Verification Failed",
+      err.errors?.[0]?.message || "Invalid verification code"
+    );
+  } finally {
+    setIsSubmitting(false);
+  }
+};
 
   return (
     <SafeAreaView className='flex-1'>
