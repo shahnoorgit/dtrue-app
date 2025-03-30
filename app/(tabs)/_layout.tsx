@@ -1,23 +1,22 @@
-import React, { useRef } from "react";
-import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
-import {
-  StatusBar,
-  SafeAreaView,
-  View,
-  Text,
-  Pressable,
-  Animated,
-} from "react-native";
-import Icon from "react-native-vector-icons/MaterialCommunityIcons";
-import { LinearGradient } from "expo-linear-gradient";
-import { SignedIn, useUser } from "@clerk/clerk-expo";
-import * as Haptics from "expo-haptics"; // Import expo-haptics
+import React, { useRef } from 'react';
+import { Tabs } from 'expo-router';
+import { useAuth } from '@clerk/clerk-expo';
+import { View, Text, Pressable, Animated } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import { cyberpunkTheme } from '@/constants/theme';
+import { BottomTabBarProps, BottomTabNavigationOptions } from '@react-navigation/bottom-tabs';
 
-// Create the bottom tab navigator
-const Tab = createBottomTabNavigator();
+// Types for tab button
+interface TabButtonProps {
+  icon: string;
+  label: string;
+  isFocused: boolean;
+  onPress: () => void;
+}
 
-// Custom Tab Button Component with Basic Animation
-function TabButton({ icon, label, isFocused, onPress }) {
+// Custom Tab Button Component with Animation
+function TabButton({ icon, label, isFocused, onPress }: TabButtonProps) {
   const scaleAnim = useRef(new Animated.Value(1)).current;
 
   const handlePressIn = () => {
@@ -26,7 +25,6 @@ function TabButton({ icon, label, isFocused, onPress }) {
       duration: 100,
       useNativeDriver: true,
     }).start();
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); // Add haptic feedback
   };
 
   const handlePressOut = () => {
@@ -103,9 +101,9 @@ function TabButton({ icon, label, isFocused, onPress }) {
 }
 
 // Custom Tab Bar Component
-function CyberpunkTabBar({ state, descriptors, navigation }) {
+function CyberpunkTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
   return (
-    <View className='absolute bottom-[-1] left-0 right-0 rounded-2xl overflow-hidden h-18'>
+    <View className='absolute bottom-[-1] left-0 right-0 rounded-2xl overflow-hidden h-20'>
       <LinearGradient
         colors={["rgba(8, 15, 18, 0.97)", "rgba(3, 18, 17, 0.98)"]}
         start={{ x: 0, y: 0 }}
@@ -121,28 +119,24 @@ function CyberpunkTabBar({ state, descriptors, navigation }) {
       >
         {state.routes.map((route, index) => {
           const { options } = descriptors[route.key];
-          const label = options.title || route.name;
+          const label = options.tabBarLabel || options.title || route.name;
           const isFocused = state.index === index;
 
-          // Improved cyberpunk-themed icons
-          let iconName;
+          // Get icon name based on route name
+          let iconName = "";
           if (route.name === "index") {
-            iconName = "newspaper-variant-outline"; // Better Feed icon
-          } else if (route.name === "Trending") {
+            iconName = "newspaper-variant-outline"; // Feed icon
+          } else if (route.name === "trending") {
             iconName = "fire"; // Fire flame for trending
-          } else if (route.name === "Rooms") {
-            iconName = "door-sliding"; // Better rooms icon
-          } else if (route.name === "Profile") {
-            iconName = "card-account-details-outline"; // Better profile icon
+          } else if (route.name === "rooms") {
+            iconName = "door-sliding"; // Rooms icon
+          } else if (route.name === "profile") {
+            iconName = "card-account-details-outline"; // Profile icon
           }
 
           const onPress = () => {
-            const event = navigation.emit({
-              type: "tabPress",
-              target: route.key,
-            });
-
-            if (!isFocused && !event.defaultPrevented) {
+            // Handle navigation without using event emit directly
+            if (!isFocused) {
               navigation.navigate(route.name);
             }
           };
@@ -151,7 +145,7 @@ function CyberpunkTabBar({ state, descriptors, navigation }) {
             <TabButton
               key={index}
               icon={iconName}
-              label={label}
+              label={label as string}
               isFocused={isFocused}
               onPress={onPress}
             />
@@ -172,41 +166,40 @@ function CyberpunkTabBar({ state, descriptors, navigation }) {
   );
 }
 
-// Layout component
-export default function Layout() {
-  const { user } = useUser();
+export default function TabsLayout() {
+  const { isSignedIn } = useAuth();
+
   return (
-    <SignedIn>
-      <StatusBar barStyle='light-content' backgroundColor='#0A1115' />
-      <SafeAreaView className='flex-1 bg-gray-900'>
-        <Tab.Navigator
-          tabBar={(props) => <CyberpunkTabBar {...props} />}
-          screenOptions={{
-            headerShown: false,
-          }}
-        >
-          <Tab.Screen
-            name='index'
-            component={require("./index").default}
-            options={{ title: "Feed" }}
-          />
-          <Tab.Screen
-            name='Trending'
-            component={require("./trending").default}
-            options={{ title: "Trending" }}
-          />
-          <Tab.Screen
-            name='Rooms'
-            component={require("./rooms").default}
-            options={{ title: "Rooms" }}
-          />
-          <Tab.Screen
-            name='Profile'
-            component={require("./profile").default}
-            options={{ title: "Profile" }}
-          />
-        </Tab.Navigator>
-      </SafeAreaView>
-    </SignedIn>
+    <Tabs
+      tabBar={props => <CyberpunkTabBar {...props} />}
+      screenOptions={{
+        headerShown: false,
+      }}
+    >
+      <Tabs.Screen
+        name="index"
+        options={{
+          title: "Feed",
+        }}
+      />
+      <Tabs.Screen
+        name="trending"
+        options={{
+          title: "Trending",
+        }}
+      />
+      <Tabs.Screen
+        name="rooms"
+        options={{
+          title: "Rooms",
+        }}
+      />
+      <Tabs.Screen
+        name="profile"
+        options={{
+          title: "Profile",
+        }}
+      />
+    </Tabs>
   );
 }

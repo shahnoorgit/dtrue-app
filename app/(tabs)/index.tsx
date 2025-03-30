@@ -31,6 +31,10 @@ const DebateFeed = () => {
     return () => subscription.remove();
   }, []);
 
+  useEffect(() => {
+    console.log("FEED SCREEN: Feed tab loaded successfully");
+  }, []);
+
   // Animation for button presses
   const createButtonAnimation = () => {
     const scaleAnim = useRef(new Animated.Value(1)).current;

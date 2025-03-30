@@ -1,13 +1,40 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { View, Text, TouchableOpacity, ScrollView, Image } from "react-native";
 import { SignedIn } from "@clerk/clerk-expo";
 import { useClerk } from "@clerk/clerk-expo";
 import { LinearGradient } from "expo-linear-gradient";
-import { MaterialIcons } from "@expo/vector-icons";
+import { MaterialIcons, MaterialCommunityIcons } from "@expo/vector-icons";
+import { router } from "expo-router";
+import * as Haptics from "expo-haptics";
+
+// Define the type for badge icons
+type BadgeIconName = "analytics" | "emoji-events" | "search" | "lightbulb";
+
+// Define the type for the badges
+interface Badge {
+  name: string;
+  icon: BadgeIconName;
+}
 
 const ProfilePage = () => {
   const [activeTab, setActiveTab] = useState("debates");
   const { signOut } = useClerk();
+
+  useEffect(() => {
+    console.log("PROFILE SCREEN: Profile tab loaded successfully");
+  }, []);
+
+  // Handle logout with redirection
+  const handleLogout = async () => {
+    try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      await signOut();
+      // After signOut succeeds, redirect to onboarding
+      router.replace("/onboarding");
+    } catch (error) {
+      console.error("Error signing out:", error);
+    }
+  };
 
   // Mock user data
   const userData = {
@@ -22,11 +49,11 @@ const ProfilePage = () => {
       reputation: 4.8,
     },
     badges: [
-      { name: "Evidence Expert", icon: "analytics" },
-      { name: "Debate Champion", icon: "emoji-events" },
-      { name: "Truth Seeker", icon: "search" },
-      { name: "Thought Leader", icon: "lightbulb" },
-    ],
+      { name: "Evidence Expert", icon: "analytics" as BadgeIconName },
+      { name: "Debate Champion", icon: "emoji-events" as BadgeIconName },
+      { name: "Truth Seeker", icon: "search" as BadgeIconName },
+      { name: "Thought Leader", icon: "lightbulb" as BadgeIconName },
+    ] as Badge[],
     activeDebates: [
       {
         id: 1,
@@ -66,7 +93,7 @@ const ProfilePage = () => {
   };
 
   // Helper function to determine result style class
-  const getResultClass = (result) => {
+  const getResultClass = (result: string): string => {
     switch (result) {
       case "For":
         return "bg-[#00FF9415] text-[#00FF94]";
@@ -85,7 +112,7 @@ const ProfilePage = () => {
           <Text className='text-[#00FF94] font-bold text-lg'>Profile</Text>
           <SignedIn>
             <TouchableOpacity
-              onPress={() => signOut()}
+              onPress={handleLogout}
               className='px-4 py-2 rounded-lg bg-[#FF00E515] border border-[#FF00E530]'
             >
               <Text className='text-[#FF00E5]'>Log Out</Text>

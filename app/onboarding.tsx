@@ -168,6 +168,10 @@ export default function OnboardingScreen() {
     };
   }, [isLastSlide, buttonScale, skipButtonAnim]);
 
+  useEffect(() => {
+    console.log("ONBOARDING SCREEN: Onboarding page loaded successfully");
+  }, []);
+
   const viewConfig = useRef({ viewAreaCoveragePercentThreshold: 50 }).current;
 
   const scrollTo = useCallback(() => {

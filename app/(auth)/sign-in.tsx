@@ -63,8 +63,23 @@ export default function SignInScreen() {
       });
 
       if (signInAttempt.status === "complete") {
+        // Set the active session
         await setActive({ session: signInAttempt.createdSessionId });
-        router.replace("/boarding");
+        
+        // Force navigation to the tabs layout after successful authentication
+        console.log("Sign in successful, directly navigating to app tabs");
+        
+        // Create a small delay to ensure the session is fully set
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        // Force navigation to the tabs
+        router.replace("/(tabs)");
+        
+        // Add a fallback navigation as a safety net
+        setTimeout(() => {
+          console.log("NAVIGATION: Force redirecting to app tabs...");
+          router.replace("/(tabs)/profile");
+        }, 1000);
       } else {
         console.error(JSON.stringify(signInAttempt, null, 2));
         Alert.alert(
@@ -72,11 +87,11 @@ export default function SignInScreen() {
           "Unable to sign in. Please check your credentials."
         );
       }
-    } catch (err) {
-      console.error(JSON.stringify(err, null, 2));
+    } catch (error: any) {
+      console.error(JSON.stringify(error, null, 2));
       Alert.alert(
         "Sign In Failed",
-        err.errors?.[0]?.message ||
+        error.errors?.[0]?.message ||
           "Please check your credentials and try again."
       );
     } finally {
@@ -212,7 +227,7 @@ export default function SignInScreen() {
               disabled={isSubmitting}
             >
               <LinearGradient
-                colors={cyberpunkTheme.colors.gradients.primary}
+                colors={cyberpunkTheme.colors.gradients.primary as [string, string]}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 0 }}
                 className='rounded-xl py-4 items-center'

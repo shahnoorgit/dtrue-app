@@ -1,18 +1,15 @@
-import { Redirect, Stack } from "expo-router";
-import { useAuth } from "@clerk/clerk-expo";
+import { Stack } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import { View, Dimensions } from "react-native";
 import { cyberpunkTheme } from "@/constants/theme";
-import { useRedirectIfSignedIn } from "@/hook/useUserRedirect";
 
 export default function AuthRoutesLayout() {
   const { width } = Dimensions.get("window");
-  useRedirectIfSignedIn("/(tabs)");
   return (
     <View className='flex-1'>
       {/* Cyberpunk background with animated gradient */}
       <LinearGradient
-        colors={cyberpunkTheme.colors.gradients.background}
+        colors={cyberpunkTheme.colors.gradients.background as [string, string]}
         className='absolute inset-0'
       />
 
