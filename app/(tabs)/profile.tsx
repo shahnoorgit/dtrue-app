@@ -38,7 +38,7 @@ const ProfilePage = () => {
 
   // Mock user data
   const userData = {
-    name: "Alex Ramirez",
+    name: "Alex Ramirezon",
     handle: "@debatemaster",
     followers: 12453,
     bio: "Digital philosopher. Evidence enthusiast. Seeking truth through structured dialogue.",

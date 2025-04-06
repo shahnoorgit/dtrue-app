@@ -12,10 +12,12 @@
       "supportsTablet": true
     },
     "android": {
+      "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/logo.png",
+        "foregroundImage": "./assets/images/splashscreen.png",
         "backgroundColor": "#ffffff"
-      }
+      },
+      "package": "com.letsdebate.letsdebate"
     },
     "web": {
       "bundler": "metro",
@@ -27,7 +29,7 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/logo.png",
+          "image": "./assets/images/splashscreen.png",
           "imageWidth": 200,
           "resizeMode": "contain",
           "backgroundColor": "#ffffff"
@@ -36,6 +38,14 @@
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "router": {
+        "origin": false
+      },
+      "eas": {
+        "projectId": "523ffbc3-de2b-437d-b5e1-653bab30395f"
+      }
     }
   }
 }

@@ -1,6 +1,12 @@
 import React, { useEffect, useState, useRef } from "react";
 import { StatusBar, View, Text, TouchableOpacity } from "react-native";
-import { SplashScreen, Slot, useRouter, useSegments, useRootNavigationState } from "expo-router";
+import {
+  SplashScreen,
+  Slot,
+  useRouter,
+  useSegments,
+  useRootNavigationState,
+} from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import { ClerkProvider, useAuth } from "@clerk/clerk-expo";
 import { tokenCache } from "@clerk/clerk-expo/token-cache";
@@ -228,7 +234,7 @@ function AuthFlow() {
     setApiError(null);
 
     // Only check user status if there's a userId
-    if (userId && typeof userId === 'string') {
+    if (userId && typeof userId === "string") {
       checkUserStatus(userId);
     } else {
       // If no userId, user is not signed in
@@ -249,16 +255,16 @@ function AuthFlow() {
       SplashScreen.hideAsync().catch((e) =>
         console.error("Failed to hide splash screen:", e)
       );
-      
+
       // Log the state for debugging
       console.log("AUTH NAVIGATION: Ready to navigate", {
         userStatus,
         isSignedIn,
         hasRedirected: hasRedirectedRef.current,
         segments: segments,
-        navState: navigationState?.key
+        navState: navigationState?.key,
       });
-      
+
       // Force navigation after a longer delay to ensure app is ready
       setTimeout(() => {
         if (userStatus === UserStatus.NOT_SIGNED_IN) {
@@ -268,11 +274,11 @@ function AuthFlow() {
         } else if (userStatus === UserStatus.SIGNED_IN_NOT_IN_DB) {
           console.log("AUTH CHECK: Navigating to boarding");
           hasRedirectedRef.current = true;
-          router.replace("/(auth)/boarding");
+          router.replace("/(auth)/(boarding)/boarding");
         } else if (userStatus === UserStatus.SIGNED_IN_IN_DB) {
           console.log("AUTH CHECK: User verified, navigating to tabs");
           hasRedirectedRef.current = true;
-          
+
           // Navigate to the main app tab
           router.replace("/(tabs)/profile");
         }
@@ -280,7 +286,16 @@ function AuthFlow() {
     } catch (error) {
       console.error("Navigation error:", error);
     }
-  }, [mounted, isCheckingComplete, userStatus, router, apiError, isSignedIn, navigationState?.key, segments]);
+  }, [
+    mounted,
+    isCheckingComplete,
+    userStatus,
+    router,
+    apiError,
+    isSignedIn,
+    navigationState?.key,
+    segments,
+  ]);
 
   // If database check failed, show an error overlay.
   if (apiError && !apiError.isRetrying && isCheckingComplete) {

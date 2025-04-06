@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "80623972712",
+    "project_id": "debate-c32d7",
+    "storage_bucket": "debate-c32d7.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:80623972712:android:38d52436966dcf14f366dd",
+        "android_client_info": {
+          "package_name": "com.letsdebate.letsdebate"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBjaCUjydwICq80FrmUMyPlSxdghqKn3iE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
