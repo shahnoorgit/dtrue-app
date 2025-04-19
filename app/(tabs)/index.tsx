@@ -1,435 +1,355 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   View,
   Text,
-  ScrollView,
-  TouchableOpacity,
-  Image,
-  Animated,
-  Pressable,
+  FlatList,
+  ActivityIndicator,
   Dimensions,
-  StyleSheet,
   SafeAreaView,
+  RefreshControl,
+  Pressable,
+  Platform,
+  Animated,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
+import { BlurView } from "expo-blur";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
-import { cyberpunkTheme } from "@/constants/theme";
+import axios from "axios";
 import * as Haptics from "expo-haptics";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { cyberpunkTheme } from "@/constants/theme";
+import DebateCard from "@/components/tabs/debate_card/DebateCard";
+import { useAuth } from "@clerk/clerk-expo";
 
-const DebateFeed = () => {
-  const [activeFilter, setActiveFilter] = useState("trending");
-  const [screenHeight, setScreenHeight] = useState(
-    Dimensions.get("window").height
+// Constants for caching and layout
+const DEBATES_STORAGE_KEY = "cached_debates";
+const DEBATES_TIMESTAMP_KEY = "cached_debates_timestamp";
+const CURSOR_STORAGE_KEY = "cached_cursor";
+const SCROLL_POSITION_KEY = "saved_scroll_offset";
+const CACHE_EXPIRY = 1000 * 60 * 60; // 1 hour
+const tabBarHeight = 70;
+const screenHeight = Dimensions.get("window").height;
+
+export default function DebateFeed() {
+  const [debates, setDebates] = useState([]);
+  const [cursor, setCursor] = useState(null);
+  const [hasNextPage, setHasNextPage] = useState(true);
+  const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const { getToken } = useAuth();
+  const tokenRef = useRef(null);
+  const momentumRef = useRef(true); // Tracks if scroll is momentum-based
+  const scrollY = useRef(new Animated.Value(0)).current;
+  const flatListRef = useRef(null);
+  const scrollOffsetRef = useRef(0);
+  const isInitialMount = useRef(true);
+
+  // Initialize: load cached debates and fetch fresh data
+  useEffect(() => {
+    const initialize = async () => {
+      const cachedDebates = await loadCachedDebates();
+      if (cachedDebates.length > 0) setDebates(cachedDebates);
+
+      const cachedCursor = await AsyncStorage.getItem(CURSOR_STORAGE_KEY);
+      if (cachedCursor) setCursor(cachedCursor);
+
+      tokenRef.current = await getToken({ template: "lets_debate_jwt" });
+      fetchDebates(null, true); // Fetch without cursor for initial load
+    };
+    initialize();
+
+    // Cleanup: save scroll position and cursor on unmount
+    return () => {
+      AsyncStorage.multiSet([
+        [CURSOR_STORAGE_KEY, cursor || ""],
+        [SCROLL_POSITION_KEY, scrollOffsetRef.current.toString()],
+      ]);
+    };
+  }, []);
+
+  // Restore scroll position after initial load
+  useEffect(() => {
+    if (isInitialMount.current && debates.length > 0 && flatListRef.current) {
+      const restoreScroll = async () => {
+        const savedOffset = await AsyncStorage.getItem(SCROLL_POSITION_KEY);
+        if (savedOffset) {
+          flatListRef.current.scrollToOffset({
+            offset: parseFloat(savedOffset),
+            animated: false,
+          });
+        }
+      };
+      restoreScroll();
+      isInitialMount.current = false;
+    }
+  }, [debates]);
+
+  // Cache debates when updated
+  useEffect(() => {
+    if (debates.length > 0 && !refreshing && !loadingMore && !loading) {
+      cacheDebates(debates);
+    }
+  }, [debates, refreshing, loadingMore, loading]);
+
+  // Load cached debates from storage
+  const loadCachedDebates = async () => {
+    try {
+      const timestamp = parseInt(
+        (await AsyncStorage.getItem(DEBATES_TIMESTAMP_KEY)) || "0"
+      );
+      if (Date.now() - timestamp > CACHE_EXPIRY) return [];
+
+      const cachedData = await AsyncStorage.getItem(DEBATES_STORAGE_KEY);
+      return cachedData ? JSON.parse(cachedData) : [];
+    } catch (error) {
+      console.warn("Error loading cached debates:", error);
+      return [];
+    }
+  };
+
+  // Save debates to cache
+  const cacheDebates = async (data) => {
+    try {
+      await AsyncStorage.multiSet([
+        [DEBATES_STORAGE_KEY, JSON.stringify(data)],
+        [DEBATES_TIMESTAMP_KEY, Date.now().toString()],
+      ]);
+    } catch (error) {
+      console.warn("Error caching debates:", error);
+    }
+  };
+
+  // Fetch debates with cursor-based pagination
+  const fetchDebates = useCallback(
+    async (fetchCursor = null, shouldRefresh = false) => {
+      if (!tokenRef.current) return;
+
+      fetchCursor === null ? setLoading(true) : setLoadingMore(true);
+      try {
+        const url = `${
+          process.env.EXPO_PUBLIC_BASE_URL
+        }/debate-room/feed?limit=10${
+          fetchCursor ? `&cursor=${fetchCursor}` : ""
+        }`;
+        const { data } = await axios.get(url, {
+          headers: { Authorization: `Bearer ${tokenRef.current}` },
+        });
+
+        if (data?.success) {
+          const newDebates = data.data.data;
+          const nextCursor = data.data.nextCursor;
+          const hasNext = data.data.pagination?.hasNextPage;
+
+          setDebates((prev) =>
+            shouldRefresh ? newDebates : [...prev, ...newDebates]
+          );
+          setCursor(nextCursor);
+          setHasNextPage(hasNext);
+
+          // Save cursor to AsyncStorage
+          if (nextCursor) {
+            await AsyncStorage.setItem(CURSOR_STORAGE_KEY, nextCursor);
+          }
+        }
+      } catch (error) {
+        console.error("Error fetching debates:", error);
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
+        setLoadingMore(false);
+      }
+    },
+    []
   );
-  const [tabBarHeight, setTabBarHeight] = useState(70); // Approximate height of tab bar
 
-  // Update dimensions on rotation or window changes
-  useEffect(() => {
-    const subscription = Dimensions.addEventListener("change", ({ window }) => {
-      setScreenHeight(window.height);
-    });
-    return () => subscription.remove();
-  }, []);
+  // Handle pull-to-refresh
+  const handleRefresh = useCallback(() => {
+    if (!loading && !refreshing) {
+      setRefreshing(true);
+      fetchDebates(null, true); // Fetch without cursor for refresh
+    }
+  }, [fetchDebates, loading, refreshing]);
 
-  useEffect(() => {
-    console.log("FEED SCREEN: Feed tab loaded successfully");
-  }, []);
+  // Handle infinite scroll
+  const onEndReachedCallback = useCallback(() => {
+    if (
+      !momentumRef.current &&
+      hasNextPage &&
+      !loading &&
+      !loadingMore &&
+      !refreshing
+    ) {
+      fetchDebates(cursor); // Use current cursor to fetch next page
+      momentumRef.current = true;
+    }
+  }, [fetchDebates, cursor, hasNextPage, loading, loadingMore, refreshing]);
 
-  // Animation for button presses
-  const createButtonAnimation = () => {
-    const scaleAnim = useRef(new Animated.Value(1)).current;
-    const handlePressIn = () => {
-      Animated.timing(scaleAnim, {
-        toValue: 0.95,
-        duration: 100,
-        useNativeDriver: true,
-      }).start();
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    };
-    const handlePressOut = () => {
-      Animated.timing(scaleAnim, {
-        toValue: 1,
-        duration: 200,
-        useNativeDriver: true,
-      }).start();
-    };
-    return { scaleAnim, handlePressIn, handlePressOut };
-  };
+  // Render debate card
+  const renderItem = useCallback(
+    ({ item }) => (
+      <DebateCard
+        debate={item}
+        onJoinPress={() => console.log("Join:", item.id)}
+      />
+    ),
+    []
+  );
 
-  const headerButtonAnim = createButtonAnimation();
-  const filterButtonAnim = createButtonAnimation();
-  const debateButtonAnim = createButtonAnimation();
-
-  // Dummy data (unchanged)
-  const debates = [
-    {
-      id: 1,
-      creator: {
-        name: "NeuralNomad",
-        avatar: "https://i.pravatar.cc/150?img=1",
-        verified: true,
-        followers: 24893,
-      },
-      topic:
-        "Should quantum computing be regulated before it breaks current encryption?",
-      category: "Technology",
-      timeRemaining: 18,
-      participants: 128,
-      positions: { for: 58, against: 42 },
-      tags: ["#QuantumTech", "#Cybersecurity", "#Regulation"],
-      keyArgument: {
-        author: "CryptoDefender",
-        text: "Current banking systems rely on encryption...",
-      },
-    },
-    {
-      id: 2,
-      creator: {
-        name: "NeuralNomad",
-        avatar: "https://i.pravatar.cc/150?img=1",
-        verified: true,
-        followers: 24893,
-      },
-      topic:
-        "Should quantum computing be regulated before it breaks current encryption?",
-      category: "Technology",
-      timeRemaining: 18,
-      participants: 128,
-      positions: { for: 58, against: 42 },
-      tags: ["#QuantumTech", "#Cybersecurity", "#Regulation"],
-      keyArgument: {
-        author: "CryptoDefender",
-        text: "Current banking systems rely on encryption...",
-      },
-    },
-    {
-      id: 3,
-      creator: {
-        name: "NeuralNomad",
-        avatar: "https://i.pravatar.cc/150?img=1",
-        verified: true,
-        followers: 24893,
-      },
-      topic:
-        "Should quantum computing be regulated before it breaks current encryption?",
-      category: "Technology",
-      timeRemaining: 18,
-      participants: 128,
-      positions: { for: 58, against: 42 },
-      tags: ["#QuantumTech", "#Cybersecurity", "#Regulation"],
-      keyArgument: {
-        author: "CryptoDefender",
-        text: "Current banking systems rely on encryption...",
-      },
-    },
-  ];
-
-  const filterOptions = [
-    { id: "trending", label: "Trending" },
-    { id: "popular", label: "Popular" },
-    { id: "new", label: "New" },
-    { id: "closing", label: "Closing Soon" },
-  ];
-
-  const formatTimeRemaining = (hours) => {
-    if (hours < 1) return "Ending soon";
-    if (hours < 24) return `${hours}h remaining`;
-    return `${Math.floor(hours / 24)}d ${hours % 24}h remaining`;
-  };
-
-  const getUrgencyColor = (hours) => {
-    if (hours < 6) return cyberpunkTheme.colors.secondary; // #FF00E5
-    if (hours < 24) return cyberpunkTheme.colors.accent; // #FFC700
-    return cyberpunkTheme.colors.primary; // #00FF94
-  };
+  const keyExtractor = useCallback((item) => item.id.toString(), []);
 
   return (
-    <View
-      className='flex-1 bg-[#080F12]'
+    <SafeAreaView
       style={{
-        height: screenHeight - tabBarHeight, // Account for tab bar height
+        flex: 1,
+        backgroundColor: "#080F12",
+        height: screenHeight - tabBarHeight,
       }}
     >
-      {/* Fixed Header */}
-      <View className='bg-[#080F12] z-10'>
-        {/* App Header */}
-        <View className='flex-row justify-between items-center px-6 pt-8 pb-4 border-b border-[rgba(0,255,148,0.2)]'>
-          <Text className='text-[#00FF94] text-lg font-bold tracking-wide'>
-            Let's Debate
-          </Text>
-          <View className='flex-row items-center'>
-            <Animated.View
-              style={{ transform: [{ scale: headerButtonAnim.scaleAnim }] }}
-            >
-              <Pressable
-                className='relative ml-4'
-                onPressIn={headerButtonAnim.handlePressIn}
-                onPressOut={headerButtonAnim.handlePressOut}
-              >
-                <Icon
-                  name='account-group-outline'
-                  size={22}
-                  color={cyberpunkTheme.colors.text.muted}
-                />
-                <View className='absolute -top-0.5 -right-0.5 bg-[#FF00E5] rounded-full w-2 h-2' />
-              </Pressable>
-            </Animated.View>
-            <Animated.View
-              style={{ transform: [{ scale: headerButtonAnim.scaleAnim }] }}
-            >
-              <Pressable
-                className='relative ml-5'
-                onPressIn={headerButtonAnim.handlePressIn}
-                onPressOut={headerButtonAnim.handlePressOut}
-              >
-                <Icon
-                  name='bell-outline'
-                  size={22}
-                  color={cyberpunkTheme.colors.text.muted}
-                />
-                <View className='absolute -top-0.5 -right-0.5 bg-[#FF00E5] rounded-full w-2 h-2' />
-              </Pressable>
-            </Animated.View>
-          </View>
-        </View>
-
-        {/* Filter Bar - Fixed Height */}
-        <View className='h-14 border-b border-[rgba(0,255,148,0.1)]'>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={{
-              paddingHorizontal: 24,
-              height: 56, // Fixed height
-              alignItems: "center",
+      {/* Fixed Transparent Header */}
+      <Animated.View
+        style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          right: 0,
+          zIndex: 10,
+          paddingHorizontal: 24,
+          paddingTop: 32,
+          paddingBottom: 16,
+        }}
+      >
+        <BlurView
+          intensity={142}
+          tint='dark'
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            borderBottomWidth: 1,
+            borderColor: "rgba(0,255,148,0.2)",
+          }}
+        >
+          <LinearGradient
+            colors={["rgba(8, 15, 18, 0.85)", "rgba(0, 255, 148, 0.05)"]}
+            style={{ flex: 1 }}
+          />
+        </BlurView>
+        <View
+          style={{
+            flexDirection: "row",
+            justifyContent: "space-between",
+            alignItems: "center",
+          }}
+        >
+          <Text
+            style={{
+              color: cyberpunkTheme.colors.primary,
+              fontSize: 18,
+              fontWeight: "bold",
             }}
           >
-            {filterOptions.map((option) => (
-              <Animated.View
-                key={option.id}
-                style={{ transform: [{ scale: filterButtonAnim.scaleAnim }] }}
-              >
-                <Pressable
-                  className={`mr-6 px-1 pb-2 border-b-2 ${
-                    activeFilter === option.id
-                      ? "border-[#00FF94]"
-                      : "border-transparent"
-                  }`}
-                  onPress={() => setActiveFilter(option.id)}
-                  onPressIn={filterButtonAnim.handlePressIn}
-                  onPressOut={filterButtonAnim.handlePressOut}
-                >
-                  <Text
-                    className={`text-sm ${
-                      activeFilter === option.id
-                        ? "text-[#00FF94] font-bold"
-                        : "text-[#8F9BB3] font-medium"
-                    } tracking-tight`}
-                  >
-                    {option.label}
-                  </Text>
-                </Pressable>
-              </Animated.View>
-            ))}
-          </ScrollView>
+            Let's Debate
+          </Text>
+          <View style={{ flexDirection: "row" }}>
+            <Pressable
+              onPress={() =>
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+              }
+              style={{ marginRight: 16 }}
+            >
+              <Icon
+                name='account-group-outline'
+                size={22}
+                color={cyberpunkTheme.colors.text.muted}
+              />
+            </Pressable>
+            <Pressable
+              onPress={() =>
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+              }
+            >
+              <Icon
+                name='bell-outline'
+                size={22}
+                color={cyberpunkTheme.colors.text.muted}
+              />
+            </Pressable>
+          </View>
         </View>
-      </View>
+      </Animated.View>
 
-      {/* Debate Feed - Scrollable Content */}
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={{
-          paddingVertical: 12,
-          paddingBottom: tabBarHeight, // Add padding at bottom to ensure content isn't hidden behind tab bar
-        }}
-        style={{ flex: 1 }}
-      >
-        {debates.map((debate) => (
-          <View
-            key={debate.id}
-            className='mx-6 mb-6 rounded-xl bg-[#03120F] border border-[rgba(0,255,148,0.4)] shadow-md shadow-[#00FF94] shadow-opacity-30 shadow-radius-10 elevation-8 overflow-hidden'
-          >
-            {/* Urgency Bar */}
-            <View
-              className='h-1'
-              style={{ backgroundColor: getUrgencyColor(debate.timeRemaining) }}
+      {/* Debate List */}
+      {loading && cursor === null ? (
+        <View
+          style={{
+            flex: 1,
+            justifyContent: "center",
+            alignItems: "center",
+            padding: 20,
+          }}
+        >
+          <ActivityIndicator
+            size='large'
+            color={cyberpunkTheme.colors.primary}
+          />
+        </View>
+      ) : (
+        <FlatList
+          ref={flatListRef}
+          data={debates}
+          renderItem={renderItem}
+          keyExtractor={keyExtractor}
+          ItemSeparatorComponent={() => <View style={{ height: 16 }} />} // Vertical gap between cards
+          onScroll={(event) => {
+            Animated.event(
+              [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+              { useNativeDriver: false }
+            )(event);
+            scrollOffsetRef.current = event.nativeEvent.contentOffset.y;
+          }}
+          onMomentumScrollBegin={() => (momentumRef.current = false)}
+          onEndReached={onEndReachedCallback}
+          onEndReachedThreshold={0.5}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={handleRefresh}
+              tintColor={cyberpunkTheme.colors.primary}
             />
-
-            {/* Debate Content */}
-            <View className='p-6'>
-              {/* Creator Info */}
-              <View className='flex-row items-center mb-3'>
-                <Image
-                  source={{ uri: debate.creator.avatar }}
-                  className='w-9 h-9 rounded-full border-2 border-[#00FF94]'
-                />
-                <View className='ml-3 flex-1'>
-                  <View className='flex-row items-center'>
-                    <Text className='text-[#E0F0EA] font-bold text-sm'>
-                      {debate.creator.name}
-                    </Text>
-                    {debate.creator.verified && (
-                      <View className='ml-1 bg-[#00FF94] rounded w-3 h-3 items-center justify-center'>
-                        <Text className='text-[#03120F] text-[8px] font-bold'>
-                          ✓
-                        </Text>
-                      </View>
-                    )}
-                  </View>
-                  <Text className='text-[#8F9BB3] text-xs'>
-                    {debate.creator.followers.toLocaleString()} followers
-                  </Text>
-                </View>
-                <View className='bg-[rgba(0,255,148,0.1)] px-3 py-1 rounded-md'>
-                  <Text className='text-[#00FF94] text-xs font-semibold'>
-                    {debate.category}
-                  </Text>
-                </View>
-              </View>
-
-              {/* Topic */}
-              <Text className='text-[#E0F0EA] text-base font-bold mb-4 leading-6'>
-                {debate.topic}
-              </Text>
-
-              {/* Tags */}
-              <View className='flex-row flex-wrap mb-4'>
-                {debate.tags.map((tag) => (
-                  <Text
-                    key={tag}
-                    className='text-[#00FF94] text-xs mr-3 mb-1 opacity-70'
-                  >
-                    {tag}
-                  </Text>
-                ))}
-              </View>
-
-              {/* Stats */}
-              <View className='flex-row justify-between mb-4'>
-                <View className='bg-[#080F12] rounded-md py-2 px-3 flex-row items-center w-[48%] border border-[rgba(0,255,148,0.2)]'>
-                  <Icon
-                    name='clock-outline'
-                    size={16}
-                    color={getUrgencyColor(debate.timeRemaining)}
-                    className='opacity-90'
-                  />
-                  <Text className='ml-2 text-[#E0F0EA] text-xs font-medium'>
-                    {formatTimeRemaining(debate.timeRemaining)}
-                  </Text>
-                </View>
-                <View className='bg-[#080F12] rounded-md py-2 px-3 flex-row items-center w-[48%] border border-[rgba(0,255,148,0.2)]'>
-                  <Icon
-                    name='account-group-outline'
-                    size={16}
-                    color={cyberpunkTheme.colors.primary}
-                    className='opacity-90'
-                  />
-                  <Text className='ml-2 text-[#E0F0EA] text-xs font-medium'>
-                    {debate.participants} participants
-                  </Text>
-                </View>
-              </View>
-
-              {/* Position Distribution */}
-              <View className='mb-4'>
-                <Text className='text-[#8F9BB3] text-xs font-medium mb-2'>
-                  Position Distribution
-                </Text>
-                <View className='flex-row h-2 rounded-sm overflow-hidden bg-[#080F12]'>
-                  <View
-                    className='bg-[#00FF94] opacity-70'
-                    style={{ width: `${debate.positions.for}%` }}
-                  />
-                  <View
-                    className='bg-[#FF00E5] opacity-70'
-                    style={{ width: `${debate.positions.against}%` }}
-                  />
-                </View>
-                <View className='flex-row justify-between mt-2'>
-                  <Text className='text-[#00FF94] text-xs font-semibold'>
-                    {debate.positions.for}% For
-                  </Text>
-                  <Text className='text-[#FF00E5] text-xs font-semibold'>
-                    {debate.positions.against}% Against
-                  </Text>
-                </View>
-              </View>
-
-              {/* Key Argument */}
-              <View className='bg-[#080F12] p-4 rounded-md mb-4 border-l-4 border-[#00FF94]'>
-                <View className='flex-row justify-between items-center mb-2'>
-                  <Text className='text-[#00FF94] text-xs font-bold tracking-tight opacity-85'>
-                    FEATURED ARGUMENT
-                  </Text>
-                </View>
-                <Text className='text-[#E0F0EA] text-xs italic mb-2 leading-5'>
-                  "{debate.keyArgument.text}"
-                </Text>
-                <Text className='text-[#8F9BB3] text-xs font-medium'>
-                  by {debate.keyArgument.author}
-                </Text>
-              </View>
-
-              {/* Join Debate Button */}
-              <Animated.View
+          }
+          removeClippedSubviews={Platform.OS === "android"}
+          initialNumToRender={10}
+          maxToRenderPerBatch={8}
+          windowSize={10}
+          ListFooterComponent={() =>
+            loadingMore ? (
+              <ActivityIndicator
+                size='small'
+                color={cyberpunkTheme.colors.primary}
+                style={{ marginVertical: 16 }}
+              />
+            ) : !hasNextPage && debates.length > 0 ? (
+              <Text
                 style={{
-                  transform: [{ scale: debateButtonAnim.scaleAnim }],
-                  marginBottom: 24,
+                  textAlign: "center",
+                  color: "#8F9BB3",
+                  marginVertical: 16,
                 }}
               >
-                <Pressable
-                  onPressIn={debateButtonAnim.handlePressIn}
-                  onPressOut={debateButtonAnim.handlePressOut}
-                >
-                  <LinearGradient
-                    colors={cyberpunkTheme.colors.gradients.primary}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 0 }}
-                    className='rounded-md py-3 shadow-md shadow-[#00FF94] shadow-opacity-15 shadow-radius-10 elevation-3'
-                  >
-                    <Text className='text-[#03120F] font-bold text-center text-sm tracking-tight'>
-                      JOIN DEBATE
-                    </Text>
-                  </LinearGradient>
-                </Pressable>
-              </Animated.View>
-
-              {/* Action Buttons */}
-              <View className='flex-row justify-between items-center'>
-                <TouchableOpacity className='flex-row items-center bg-transparent px-3 py-2 rounded-sm'>
-                  <Icon
-                    name='share-variant-outline'
-                    size={16}
-                    color={cyberpunkTheme.colors.text.muted}
-                  />
-                  <Text className='ml-1 text-[#8F9BB3] text-xs font-medium'>
-                    Share
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity className='flex-row items-center bg-transparent px-3 py-2 rounded-sm'>
-                  <Icon
-                    name='bookmark-outline'
-                    size={16}
-                    color={cyberpunkTheme.colors.text.muted}
-                  />
-                  <Text className='ml-1 text-[#8F9BB3] text-xs font-medium'>
-                    Save
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity className='flex-row items-center bg-transparent px-3 py-2 rounded-sm'>
-                  <Icon
-                    name='dots-horizontal'
-                    size={16}
-                    color={cyberpunkTheme.colors.text.muted}
-                  />
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
-        ))}
-      </ScrollView>
-    </View>
+                You've reached the end of the debates
+              </Text>
+            ) : null
+          }
+          contentContainerStyle={{
+            paddingTop: 90,
+            paddingBottom: tabBarHeight,
+          }}
+        />
+      )}
+    </SafeAreaView>
   );
-};
-
-export default DebateFeed;
+}
