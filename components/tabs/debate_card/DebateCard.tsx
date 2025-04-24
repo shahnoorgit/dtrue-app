@@ -1,381 +1,539 @@
-import { cyberpunkTheme } from "@/constants/theme";
-import { LinearGradient } from "expo-linear-gradient";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
-  Image,
-  Pressable,
-  Text,
   View,
-  StyleSheet,
+  Text,
+  Pressable,
+  Animated,
+  Easing,
+  Image,
   Dimensions,
+  Alert,
 } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
+import { cyberpunkTheme } from "@/constants/theme";
+import axios from "axios";
+import { useNavigation } from "@react-navigation/native";
+import { useAuthToken } from "@/hook/clerk/useFetchjwtToken";
+import { router } from "expo-router";
 
 const { width } = Dimensions.get("window");
-const CARD_WIDTH = width - 32;
+// Slightly wider card
+const CARD_WIDTH = width - 24; // Changed from 32 to 24 for wider card
 const IMAGE_HEIGHT = CARD_WIDTH * 0.6;
 
 const DebateCard = ({ debate, onJoinPress }) => {
-  const formatTimeRemaining = (hours) => {
+  const [loading, setLoading] = useState(false);
+  const navigation = useNavigation();
+  const [token, refreshToken] = useAuthToken();
+
+  // Create animations only once
+  const spinValue = useMemo(() => new Animated.Value(0), []);
+  const pulseValue = useMemo(() => new Animated.Value(0), []);
+
+  // Memoize interpolations
+  const spin = useMemo(
+    () =>
+      spinValue.interpolate({
+        inputRange: [0, 1],
+        outputRange: ["0deg", "360deg"],
+      }),
+    [spinValue]
+  );
+
+  const glowOpacity = useMemo(
+    () =>
+      pulseValue.interpolate({
+        inputRange: [0.5, 1],
+        outputRange: [0.3, 0.6],
+      }),
+    [pulseValue]
+  );
+
+  // Start and stop animations based on loading state
+  useEffect(() => {
+    let spinAnimation;
+    let pulseAnimation;
+
+    if (loading) {
+      // Rotation animation
+      spinAnimation = Animated.loop(
+        Animated.timing(spinValue, {
+          toValue: 1,
+          duration: 1500,
+          easing: Easing.linear,
+          useNativeDriver: true,
+        })
+      );
+      spinAnimation.start();
+
+      // Pulse animation for glow effect
+      pulseAnimation = Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulseValue, {
+            toValue: 1,
+            duration: 1000,
+            useNativeDriver: false,
+          }),
+          Animated.timing(pulseValue, {
+            toValue: 0.5,
+            duration: 1000,
+            useNativeDriver: false,
+          }),
+        ])
+      );
+      pulseAnimation.start();
+    }
+
+    // Cleanup animations when component unmounts or loading state changes
+    return () => {
+      if (spinAnimation) spinAnimation.stop();
+      if (pulseAnimation) pulseAnimation.stop();
+    };
+  }, [loading, spinValue, pulseValue]);
+
+  // Memoize helper functions to prevent recreation on each render
+  const formatTimeRemaining = useCallback((hours) => {
     if (hours < 1) return "Ending soon";
     if (hours < 24) return `${hours}h remaining`;
     return `${Math.floor(hours / 24)}d ${hours % 24}h remaining`;
-  };
+  }, []);
 
-  const getUrgencyColor = (hours) => {
+  const getUrgencyColor = useCallback((hours) => {
     if (hours < 6) return cyberpunkTheme.colors.secondary;
     if (hours < 24) return cyberpunkTheme.colors.accent;
     return cyberpunkTheme.colors.primary;
-  };
+  }, []);
 
-  const calculateTimeRemaining = (createdAt, durationHours) => {
+  const calculateTimeRemaining = useCallback((createdAt, durationHours) => {
     const creationTime = new Date(createdAt).getTime();
     const expiryTime = creationTime + durationHours * 60 * 60 * 1000;
     const remainingMs = expiryTime - new Date().getTime();
     return Math.max(0, Math.ceil(remainingMs / (60 * 60 * 1000)));
-  };
+  }, []);
 
-  const formatCategory = (category) =>
-    category
-      .replace(/_/g, " ")
-      .toLowerCase()
-      .replace(/\b\w/g, (c) => c.toUpperCase());
-
-  const getMainCategory = (categories) =>
-    categories && categories.length > 0
-      ? formatCategory(categories[0])
-      : "General";
-
-  const timeRemaining = calculateTimeRemaining(
-    debate.createdAt,
-    debate.duration
+  const formatCategory = useCallback(
+    (category) =>
+      category
+        ?.replace(/_/g, " ")
+        ?.toLowerCase()
+        ?.replace(/\b\w/g, (c) => c.toUpperCase()) || "",
+    []
   );
+
+  // Memoize computed values that depend on debate data
+  const timeRemaining = useMemo(
+    () => calculateTimeRemaining(debate.createdAt, debate.duration),
+    [debate.createdAt, debate.duration, calculateTimeRemaining]
+  );
+
+  const mainCategory = useMemo(
+    () =>
+      debate.categories && debate.categories.length > 0
+        ? formatCategory(debate.categories[0])
+        : "General",
+    [debate.categories, formatCategory]
+  );
+
+  const urgencyColor = useMemo(
+    () => getUrgencyColor(timeRemaining),
+    [timeRemaining, getUrgencyColor]
+  );
+
+  // Optimize join handler
+  const handleJoinPress = useCallback(async () => {
+    if (!token) {
+      Alert.alert("Please wait", "Authenticating...");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const response = await axios.post(
+        `${process.env.EXPO_PUBLIC_BASE_URL}/debate-participant`,
+        { roomId: debate.id },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      if (response.status !== 201) {
+        throw new Error("Unexpected status: " + response.status);
+      }
+
+      router.push({
+        pathname: "/(chat-room)",
+        params: {
+          debateId: debate.id,
+          debateImage: debate.image,
+        },
+      });
+    } catch (error) {
+      const status = error.response?.status;
+      if (status === 404) {
+        // Token might be expired/invalid — refresh and retry once
+        await refreshToken();
+        return handleJoinPress();
+      }
+      console.error("Error joining debate:", error);
+      Alert.alert(
+        "Error",
+        error.response?.data?.message ||
+          "Failed to join debate. Please try again."
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, [token, refreshToken, debate.id]);
+
+  // Memoized CyberpunkSpinner component to avoid recreation
+  const CyberpunkSpinner = useMemo(() => {
+    if (!loading) return null;
+
+    return (
+      <View className='absolute inset-0 flex items-center justify-center bg-[#03120F] bg-opacity-90 z-10 rounded-lg'>
+        <View className='items-center'>
+          <View className='relative w-20 h-20 mb-4'>
+            {/* Outer glow */}
+            <Animated.View
+              style={{ opacity: glowOpacity }}
+              className='absolute inset-0 bg-[#00FF94] rounded-full opacity-20'
+            />
+
+            {/* Outer ring */}
+            <View className='absolute inset-0 border-2 border-[#00FF94] rounded-full' />
+
+            {/* Middle ring with gradient */}
+            <View className='absolute inset-0 m-1.5 border-2 border-[#0097B5] rounded-full' />
+
+            {/* Animated spinner arm */}
+            <Animated.View
+              style={{ transform: [{ rotate: spin }] }}
+              className='absolute inset-0'
+            >
+              <View className='w-full h-full items-center justify-center'>
+                <LinearGradient
+                  colors={["#00FF94", "#0097B5"]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  className='w-1 h-10 rounded-full absolute top-0'
+                />
+                <View className='w-2 h-2 rounded-full bg-[#00FF94] absolute top-0' />
+              </View>
+            </Animated.View>
+
+            {/* Inner circle with icon */}
+            <View className='absolute inset-0 m-4 bg-[#03120F] rounded-full flex items-center justify-center'>
+              <Icon name='atom' size={24} color='#00FF94' />
+            </View>
+          </View>
+
+          <Text className='text-[#00FF94] font-bold text-base tracking-wider'>
+            JOINING DEBATE
+          </Text>
+
+          <View className='flex-row mt-1'>
+            <Text className='text-[#00FF94] text-lg'>.</Text>
+            <Text className='text-[#00FF94] text-lg'>.</Text>
+            <Text className='text-[#00FF94] text-lg'>.</Text>
+          </View>
+        </View>
+      </View>
+    );
+  }, [loading, glowOpacity, spin]);
 
   return (
     <Pressable
-      style={({ pressed }) => [
-        styles.card,
-        { opacity: pressed ? 0.9 : 1 },
-        { borderColor: getUrgencyColor(timeRemaining) },
+      style={[
+        {
+          width: CARD_WIDTH,
+          borderRadius: 16,
+          backgroundColor: "#03120F",
+          borderWidth: 2,
+          borderColor: urgencyColor,
+          elevation: 8,
+          shadowColor: "#00FF94",
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: 0.25,
+          shadowRadius: 12,
+          marginVertical: 16,
+          marginHorizontal: 12, // Adjusted for wider card
+          overflow: "hidden",
+          opacity: loading ? 0.95 : 1,
+        },
       ]}
-      onPress={() => onJoinPress(debate)}
+      onPress={() => !loading && onJoinPress && onJoinPress(debate)}
+      disabled={loading}
     >
-      <View style={styles.imageWrapper}>
+      {/* Loading spinner overlay */}
+      {CyberpunkSpinner}
+
+      <View
+        style={{
+          position: "relative",
+          overflow: "hidden",
+          borderTopLeftRadius: 14,
+          borderTopRightRadius: 14,
+        }}
+      >
         <Image
           source={{ uri: debate.image }}
-          style={styles.thumbnail}
+          style={{ width: "100%", height: IMAGE_HEIGHT }}
           resizeMode='cover'
         />
         <LinearGradient
           colors={["transparent", "rgba(3, 18, 15, 0.8)"]}
-          style={styles.imageGradient}
+          style={{
+            position: "absolute",
+            bottom: 0,
+            left: 0,
+            right: 0,
+            height: IMAGE_HEIGHT / 2,
+          }}
         />
         <View
-          style={[
-            styles.categoryBadge,
-            { backgroundColor: cyberpunkTheme.colors.primary },
-          ]}
+          style={{
+            position: "absolute",
+            top: 16,
+            left: 16,
+            paddingHorizontal: 10,
+            paddingVertical: 6,
+            borderRadius: 6,
+            elevation: 3,
+            backgroundColor: cyberpunkTheme.colors.primary,
+          }}
         >
-          <Text style={styles.categoryText}>
-            {getMainCategory(debate.categories)}
+          <Text style={{ color: "#03120F", fontSize: 12, fontWeight: "700" }}>
+            {mainCategory}
           </Text>
         </View>
       </View>
 
-      <View style={styles.content}>
-        <View style={styles.headerRow}>
-          <View style={styles.creatorInfo}>
+      <View style={{ padding: 10 }}>
+        <View
+          style={{
+            flexDirection: "row",
+            justifyContent: "space-between",
+            alignItems: "center",
+            marginBottom: 8,
+          }}
+        >
+          <View style={{ flexDirection: "row", alignItems: "center" }}>
             <Image
               source={{ uri: debate.creator.image }}
-              style={styles.avatar}
+              style={{
+                width: 40,
+                height: 40,
+                borderRadius: 20,
+                borderWidth: 2,
+                borderColor: cyberpunkTheme.colors.primary,
+              }}
             />
             <View style={{ marginLeft: 8 }}>
-              <Text style={styles.username}>{debate.creator.username}</Text>
-              <Text style={styles.role}>Creator</Text>
+              <Text
+                style={{ color: "#E0F0EA", fontWeight: "bold", fontSize: 14 }}
+              >
+                {debate.creator.username}
+              </Text>
+              <Text style={{ color: "#8F9BB3", fontSize: 11 }}>Creator</Text>
             </View>
           </View>
-          <View style={styles.participantBadge}>
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              backgroundColor: cyberpunkTheme.colors.primary,
+              paddingHorizontal: 10,
+              paddingVertical: 5,
+              borderRadius: 12,
+            }}
+          >
             <Icon
               name='account-group'
               size={12}
               color='#03120F'
               style={{ marginRight: 4 }}
             />
-            <Text style={styles.participants}>
+            <Text style={{ color: "#03120F", fontSize: 12, fontWeight: "700" }}>
               {debate.participantCount} Joined
             </Text>
           </View>
         </View>
 
-        <Text style={styles.title}>{debate.title}</Text>
+        <Text
+          style={{
+            color: "#E0F0EA",
+            fontWeight: "bold",
+            fontSize: 20,
+            marginBottom: 10,
+            lineHeight: 26,
+          }}
+        >
+          {debate.title}
+        </Text>
 
-        <View style={styles.tagsRow}>
+        <View
+          style={{ flexDirection: "row", flexWrap: "wrap", marginBottom: 10 }}
+        >
           {debate.subCategories &&
             debate.subCategories.slice(0, 3).map((tag) => (
-              <View key={tag} style={styles.tagBubble}>
-                <Text style={styles.tagText}>
+              <View
+                key={tag}
+                style={{
+                  backgroundColor: "rgba(0,255,148,0.15)",
+                  paddingHorizontal: 10,
+                  paddingVertical: 6,
+                  borderRadius: 6,
+                  marginRight: 8,
+                  marginBottom: 2,
+                  borderWidth: 1,
+                  borderColor: "rgba(0,255,148,0.3)",
+                }}
+              >
+                <Text
+                  style={{
+                    color: cyberpunkTheme.colors.primary,
+                    fontSize: 11,
+                    fontWeight: "600",
+                  }}
+                >
                   #{formatCategory(tag).replace(/\s+/g, "")}
                 </Text>
               </View>
             ))}
         </View>
 
-        <View style={styles.statsRow}>
-          <View style={styles.statItem}>
+        <View
+          style={{
+            flexDirection: "row",
+            justifyContent: "space-between",
+            marginBottom: 15,
+          }}
+        >
+          <View style={{ flexDirection: "row", alignItems: "center" }}>
             <Icon
               name='clock-outline'
               size={16}
-              color={getUrgencyColor(timeRemaining)}
+              color={urgencyColor}
               style={{ opacity: 0.9 }}
             />
             <Text
-              style={[
-                styles.statText,
-                { color: getUrgencyColor(timeRemaining) },
-              ]}
+              style={{
+                marginLeft: 6,
+                color: urgencyColor,
+                fontSize: 12,
+                fontWeight: "500",
+              }}
             >
               {formatTimeRemaining(timeRemaining)}
             </Text>
           </View>
-          <View style={styles.statItem}>
+          <View style={{ flexDirection: "row", alignItems: "center" }}>
             <Icon
               name='vote-outline'
               size={16}
               color={cyberpunkTheme.colors.primary}
               style={{ opacity: 0.9 }}
             />
-            <Text style={styles.statText}>{debate.vote_count} votes</Text>
+            <Text
+              style={{
+                marginLeft: 6,
+                color: "#E0F0EA",
+                fontSize: 12,
+                fontWeight: "500",
+              }}
+            >
+              {debate.vote_count} votes
+            </Text>
           </View>
         </View>
 
-        <View style={styles.distributionContainer}>
-          <View style={styles.distribution}>
+        <View style={{ marginBottom: 10 }}>
+          <View
+            style={{
+              flexDirection: "row",
+              height: 10,
+              borderRadius: 5,
+              overflow: "hidden",
+              marginBottom: 2,
+            }}
+          >
             <View
-              style={[
-                styles.distBar,
-                { flex: debate.agreedCount, backgroundColor: "#00CC47" },
-              ]}
+              style={{
+                height: 10,
+                flex: debate.agreedCount || 1,
+                backgroundColor: "#00CC47",
+              }}
             />
             <View
-              style={[
-                styles.distBar,
-                { flex: debate.disagreedCount, backgroundColor: "#FF3D71" },
-              ]}
+              style={{
+                height: 10,
+                flex: debate.disagreedCount || 1,
+                backgroundColor: "#FF3D71",
+              }}
             />
           </View>
 
-          <View style={styles.distLabels}>
-            <View style={styles.distLabelContainer}>
-              <View style={styles.forDot} />
-              <Text style={styles.forLabel}>{debate.agreedCount} Agreed</Text>
+          <View
+            style={{ flexDirection: "row", justifyContent: "space-between" }}
+          >
+            <View style={{ flexDirection: "row", alignItems: "center" }}>
+              <View
+                style={{
+                  width: 8,
+                  height: 8,
+                  borderRadius: 4,
+                  backgroundColor: "#00CC47",
+                  marginRight: 6,
+                }}
+              />
+              <Text
+                style={{ color: "#00CC47", fontSize: 12, fontWeight: "600" }}
+              >
+                {debate.agreedCount} Agreed
+              </Text>
             </View>
-            <View style={styles.distLabelContainer}>
-              <View style={styles.againstDot} />
-              <Text style={styles.againstLabel}>
+            <View style={{ flexDirection: "row", alignItems: "center" }}>
+              <View
+                style={{
+                  width: 8,
+                  height: 8,
+                  borderRadius: 4,
+                  backgroundColor: "#FF3D71",
+                  marginRight: 6,
+                }}
+              />
+              <Text
+                style={{ color: "#FF3D71", fontSize: 12, fontWeight: "600" }}
+              >
                 {debate.disagreedCount} Disagreed
               </Text>
             </View>
           </View>
         </View>
 
-        <LinearGradient
-          colors={cyberpunkTheme.colors.gradients.primary}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
-          style={styles.joinButton}
-        >
-          <Text style={styles.joinText}>JOIN DEBATE</Text>
-        </LinearGradient>
+        <Pressable onPress={handleJoinPress} disabled={loading}>
+          <LinearGradient
+            colors={cyberpunkTheme.colors.gradients.primary}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={{
+              paddingVertical: 12,
+              marginTop: 8,
+              borderRadius: 8,
+              alignItems: "center",
+            }}
+          >
+            <Text style={{ color: "#03120F", fontSize: 14, fontWeight: "700" }}>
+              {loading ? "CONNECTING..." : "JOIN DEBATE"}
+            </Text>
+          </LinearGradient>
+        </Pressable>
       </View>
     </Pressable>
   );
 };
-
-const styles = StyleSheet.create({
-  card: {
-    width: CARD_WIDTH,
-    borderRadius: 16,
-    backgroundColor: "#03120F",
-    borderWidth: 2,
-    elevation: 8,
-    shadowColor: "#00FF94",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 12,
-    marginVertical: 16,
-    marginHorizontal: 16,
-    overflow: "hidden",
-  },
-  imageWrapper: {
-    position: "relative",
-    overflow: "hidden",
-    borderTopLeftRadius: 14,
-    borderTopRightRadius: 14,
-  },
-  thumbnail: {
-    width: "100%",
-    height: IMAGE_HEIGHT,
-  },
-  imageGradient: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: IMAGE_HEIGHT / 2,
-  },
-  categoryBadge: {
-    position: "absolute",
-    top: 16,
-    left: 16,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 6,
-    elevation: 3,
-  },
-  categoryText: {
-    color: "#03120F",
-    fontSize: 12,
-    fontWeight: "700",
-  },
-  content: {
-    padding: 10,
-  },
-  headerRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 8,
-  },
-  creatorInfo: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    borderWidth: 2,
-    borderColor: cyberpunkTheme.colors.primary,
-  },
-  username: {
-    color: "#E0F0EA",
-    fontWeight: "bold",
-    fontSize: 14,
-  },
-  role: {
-    color: "#8F9BB3",
-    fontSize: 11,
-  },
-  participantBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: cyberpunkTheme.colors.primary,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 12,
-  },
-  participants: {
-    color: "#03120F",
-    fontSize: 12,
-    fontWeight: "700",
-  },
-  title: {
-    color: "#E0F0EA",
-    fontWeight: "bold",
-    fontSize: 20,
-    marginBottom: 10,
-    lineHeight: 26,
-  },
-  tagsRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    marginBottom: 10,
-  },
-  tagBubble: {
-    backgroundColor: "rgba(0,255,148,0.15)",
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 6,
-    marginRight: 8,
-    marginBottom: 2,
-    borderWidth: 1,
-    borderColor: "rgba(0,255,148,0.3)",
-  },
-  tagText: {
-    color: cyberpunkTheme.colors.primary,
-    fontSize: 11,
-    fontWeight: "600",
-  },
-  statsRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 15,
-  },
-  statItem: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  statText: {
-    marginLeft: 6,
-    color: "#E0F0EA",
-    fontSize: 12,
-    fontWeight: "500",
-  },
-  distributionContainer: {
-    marginBottom: 10,
-  },
-  distribution: {
-    flexDirection: "row",
-    height: 10,
-    borderRadius: 5,
-    overflow: "hidden",
-    marginBottom: 2,
-  },
-  distBar: {
-    height: 10,
-  },
-  distLabels: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-  },
-  distLabelContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  forDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: "#00CC47",
-    marginRight: 6,
-  },
-  againstDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: "#FF3D71",
-    marginRight: 6,
-  },
-  forLabel: {
-    color: "#00CC47",
-    fontSize: 12,
-    fontWeight: "600",
-  },
-  againstLabel: {
-    color: "#FF3D71",
-    fontSize: 12,
-    fontWeight: "600",
-  },
-  joinButton: {
-    paddingVertical: 12,
-    marginTop: 8,
-    borderRadius: 8,
-    alignItems: "center",
-  },
-  joinText: {
-    color: "#03120F",
-    fontSize: 14,
-    fontWeight: "700",
-  },
-});
 
 export default DebateCard;
