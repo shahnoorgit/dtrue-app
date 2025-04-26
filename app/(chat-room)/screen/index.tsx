@@ -23,7 +23,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import axios from "axios";
 import { LinearGradient } from "expo-linear-gradient";
-import { useAuthToken } from "../../hook/clerk/useFetchjwtToken";
+import { useAuthToken } from "../../../hook/clerk/useFetchjwtToken";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 // Simplified cyberpunk theme without glow effects
@@ -39,7 +39,7 @@ const theme = {
 };
 
 export default function DebateRoom() {
-  const { debateId, debateImage } = useLocalSearchParams();
+  const { debateId, debateImage, clerkId } = useLocalSearchParams();
   const router = useRouter();
   const [token, refreshToken] = useAuthToken();
   const flatRef = useRef<FlatList>(null);
@@ -48,6 +48,7 @@ export default function DebateRoom() {
 
   // UI state
   const [debateTitle, setDebateTitle] = useState(`Debate ${debateId}`);
+  const [initialDataLoaded, setInitialDataLoaded] = useState(false);
   const [debateDescription, setDebateDescription] = useState("");
   const [opinions, setOpinions] = useState<any[]>([]);
   const [loadingOpinions, setLoadingOpinions] = useState(true);
@@ -58,6 +59,11 @@ export default function DebateRoom() {
   const [showModal, setShowModal] = useState(true);
   const [endTime, setEndTime] = useState<Date | null>(null);
   const [timeRemaining, setTimeRemaining] = useState<number>(0);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [isNextPage, setNextPage] = useState(null);
+
+  const [page, setPage] = useState(1);
+  const [sort, setSort] = useState<"score" | "votes" | "date">("date");
 
   // Timer effect
   useEffect(() => {
@@ -83,9 +89,11 @@ export default function DebateRoom() {
   // Format time remaining
   const formatTimeRemaining = () => {
     if (!timeRemaining) return "00:00:00";
+
     const hours = Math.floor(timeRemaining / 3600);
     const minutes = Math.floor((timeRemaining % 3600) / 60);
     const seconds = timeRemaining % 60;
+
     return [
       hours.toString().padStart(2, "0"),
       minutes.toString().padStart(2, "0"),
@@ -93,14 +101,17 @@ export default function DebateRoom() {
     ].join(":");
   };
 
-  // Show modal on first join
   useEffect(() => {
-    const timer = setTimeout(() => {
-      if (debateDescription) {
+    // Only trigger once when debate description is first loaded
+    if (debateDescription && !initialDataLoaded) {
+      // Only show modal on first join/load, not on subsequent data refreshes
+      setInitialDataLoaded(true);
+      // Only show modal automatically on first app launch
+      if (!global.hasSeenDebateModal) {
+        global.hasSeenDebateModal = true;
         setShowModal(true);
       }
-    }, 500);
-    return () => clearTimeout(timer);
+    }
   }, [debateDescription]);
 
   // Fetch debate metadata
@@ -114,9 +125,16 @@ export default function DebateRoom() {
       if (data.success) {
         setDebateTitle(data.data.title);
         setDebateDescription(data.data.description || "");
-        if (data.data.endTime) {
-          setEndTime(new Date(data.data.endTime));
+
+        // Calculate end time based on creation time and duration
+        if (data.data.createdAt && data.data.duration) {
+          const creationDate = new Date(data.data.createdAt);
+          const endDate = new Date(creationDate);
+          // Add duration hours to creation date
+          endDate.setHours(endDate.getHours() + data.data.duration);
+          setEndTime(endDate);
         } else {
+          // Fallback for testing - just to be safe
           const demoEndTime = new Date();
           demoEndTime.setHours(demoEndTime.getHours() + 1);
           setEndTime(demoEndTime);
@@ -130,19 +148,46 @@ export default function DebateRoom() {
     }
   }, [debateId, token]);
 
+  // Timer effect - keep this as is
+  useEffect(() => {
+    if (endTime) {
+      const updateTimer = () => {
+        const now = new Date();
+        const diff = Math.max(
+          0,
+          Math.floor((endTime.getTime() - now.getTime()) / 1000)
+        );
+        setTimeRemaining(diff);
+
+        // If time is up, you might want to disable certain features
+        if (diff <= 0) {
+          // Handle debate ended state
+          // For example, disable input, show message, etc.
+        }
+      };
+
+      updateTimer();
+      timerRef.current = setInterval(updateTimer, 1000);
+
+      return () => {
+        if (timerRef.current) clearInterval(timerRef.current);
+      };
+    }
+  }, [endTime]);
+
   // Fetch opinions
   const fetchOpinions = useCallback(async () => {
     if (!debateId || !token) return;
     setLoadingOpinions(true);
     try {
-      const { data } = await axios.post(
-        `${process.env.EXPO_PUBLIC_BASE_URL}/debate-room`,
-        { roomId: debateId },
+      const { data } = await axios.get(
+        `${process.env.EXPO_PUBLIC_BASE_URL}/debate-participant/opinion/${debateId}?page=${page}&orderBy=${sort}`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
       if (data.success) {
-        setOpinions(data.data);
-        setSubmitted(data.data.some((o: any) => o.userId === global.userId));
+        setOpinions(data.data.data);
+        setSubmitted(data.data.some((o: any) => o.user.clerkId === clerkId));
+        setNextPage(data.data.nextPage);
       }
     } catch (err: any) {
       if (err.response?.status === 401) {
@@ -152,7 +197,7 @@ export default function DebateRoom() {
     } finally {
       setLoadingOpinions(false);
     }
-  }, [debateId, token]);
+  }, [debateId, token, page, sort]);
 
   // Initialize data on token ready
   useEffect(() => {
@@ -167,16 +212,17 @@ export default function DebateRoom() {
     if (!userOpinion.trim() || !stance || isLoading) return;
     setIsLoading(true);
     try {
-      const { data } = await axios.post(
-        `${process.env.EXPO_PUBLIC_BASE_URL}/submit-opinion`,
+      const { data } = await axios.put(
+        `${process.env.EXPO_PUBLIC_BASE_URL}/debate-participant/opinion`,
         {
-          debateRoomId: debateId,
+          roomId: debateId,
           opinion: userOpinion.trim(),
-          agreed: stance === "agree",
+          isAgree: stance === "agree" ? true : false,
         },
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      if (data.success) {
+      console.log(data.data);
+      if (data.statusCode === 200) {
         setUserOpinion("");
         setStance(null);
         setSubmitted(true);
@@ -205,68 +251,156 @@ export default function DebateRoom() {
 
   // Opinion renderer - simplified without glow effects
   const renderOpinion = useCallback(({ item }: { item: any }) => {
-    const mine = item.userId === global.userId;
     const isAgreed = item.agreed;
 
     return (
-      <View
-        style={{
-          marginHorizontal: 8,
-          marginVertical: 4,
-          alignSelf: mine ? "flex-end" : "flex-start",
-          maxWidth: "80%",
-          borderRadius: 12,
-          backgroundColor: isAgreed
-            ? "rgba(0, 255, 148, 0.08)"
-            : "rgba(255, 0, 229, 0.08)",
-          borderLeftWidth: 2,
-          borderLeftColor: isAgreed
-            ? theme.colors.primary
-            : theme.colors.secondary,
-          padding: 10,
-        }}
+      <TouchableOpacity
+        onPress={() => console.log(item.userId)}
+        activeOpacity={0.8}
       >
         <View
           style={{
-            flexDirection: "row",
-            alignItems: "center",
-            marginBottom: 4,
+            marginHorizontal: 8,
+            marginVertical: 4,
+            alignSelf: isAgreed ? "flex-end" : "flex-start",
+            maxWidth: "80%",
+            borderRadius: 12,
+            backgroundColor: isAgreed
+              ? "rgba(0, 255, 148, 0.08)"
+              : "rgba(255, 0, 229, 0.08)",
+            borderLeftWidth: 2,
+            borderLeftColor: isAgreed
+              ? theme.colors.primary
+              : theme.colors.secondary,
+            padding: 10,
           }}
         >
-          <Image
-            source={{ uri: item.user.image }}
+          <View
             style={{
-              width: 24,
-              height: 24,
-              borderRadius: 12,
-              marginRight: 8,
-              borderWidth: 1,
-              borderColor: isAgreed
-                ? "rgba(0, 255, 148, 0.4)"
-                : "rgba(255, 0, 229, 0.4)",
-            }}
-          />
-          <Text style={{ color: theme.colors.text, fontWeight: "600" }}>
-            {item.user.username}
-          </Text>
-          <Text
-            style={{
-              color: theme.colors.textMuted,
-              fontSize: 12,
-              marginLeft: "auto",
+              flexDirection: "row",
+              alignItems: "center",
+              marginBottom: 4,
             }}
           >
-            {new Date(item.createdAt).toLocaleTimeString("en-US", {
-              hour: "numeric",
-              minute: "2-digit",
-              hour12: true,
-            })}
+            <Image
+              source={{ uri: item.user.image }}
+              style={{
+                width: 24,
+                height: 24,
+                borderRadius: 12,
+                marginRight: 8,
+                borderWidth: 1,
+                borderColor: isAgreed
+                  ? "rgba(0, 255, 148, 0.4)"
+                  : "rgba(255, 0, 229, 0.4)",
+              }}
+            />
+            <Text style={{ color: theme.colors.text, fontWeight: "600" }}>
+              {item.user.username}
+            </Text>
+            <Text
+              style={{
+                color: theme.colors.textMuted,
+                fontSize: 12,
+                marginLeft: "auto",
+              }}
+            >
+              {new Date(item.createdAt).toLocaleTimeString("en-US", {
+                hour: "numeric",
+                minute: "2-digit",
+                hour12: true,
+              })}
+            </Text>
+          </View>
+
+          <Text style={{ color: theme.colors.text, lineHeight: 20 }}>
+            {item.opinion}
           </Text>
+
+          {/* Added vote count and AI review information */}
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "space-between",
+              marginTop: 8,
+            }}
+          >
+            {/* Upvotes */}
+            <View style={{ flexDirection: "row", alignItems: "center" }}>
+              <Ionicons
+                name='thumbs-up'
+                size={12}
+                color={theme.colors.textMuted}
+                style={{ marginRight: 4 }}
+              />
+              <Text
+                style={{
+                  color: theme.colors.textMuted,
+                  fontSize: 12,
+                }}
+              >
+                {item.upvotes}
+              </Text>
+            </View>
+
+            {/* AI Review Status */}
+            {item.aiFlagged ? (
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  backgroundColor: "rgba(255, 60, 60, 0.1)",
+                  paddingHorizontal: 6,
+                  paddingVertical: 2,
+                  borderRadius: 8,
+                }}
+              >
+                <Ionicons
+                  name='alert-circle'
+                  size={10}
+                  color='rgba(255, 60, 60, 0.8)'
+                  style={{ marginRight: 2 }}
+                />
+                <Text
+                  style={{
+                    color: "rgba(255, 60, 60, 0.8)",
+                    fontSize: 10,
+                  }}
+                >
+                  Flagged
+                </Text>
+              </View>
+            ) : item.is_aiFeedback ? (
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  backgroundColor: "rgba(60, 130, 255, 0.1)",
+                  paddingHorizontal: 6,
+                  paddingVertical: 2,
+                  borderRadius: 8,
+                }}
+              >
+                <MaterialCommunityIcons
+                  name='check-circle'
+                  size={10}
+                  color='rgba(60, 130, 255, 0.8)'
+                  style={{ marginRight: 2 }}
+                />
+                <Text
+                  style={{
+                    color: "rgba(60, 130, 255, 0.8)",
+                    fontSize: 10,
+                  }}
+                >
+                  AI: {item.aiScore}
+                </Text>
+              </View>
+            ) : null}
+          </View>
         </View>
-        <Text style={{ color: theme.colors.text, lineHeight: 20 }}>
-          {item.opinion}
-        </Text>
-      </View>
+      </TouchableOpacity>
     );
   }, []);
 
@@ -445,6 +579,15 @@ export default function DebateRoom() {
             paddingVertical: 8,
             paddingBottom: submitted ? 16 : 80,
           }}
+          onEndReached={() => isNextPage && setPage((prev) => prev + 1)}
+          onEndReachedThreshold={0.5}
+          ListFooterComponent={
+            isLoadingMore && (
+              <View style={{ paddingVertical: 16 }}>
+                <ActivityIndicator size='small' color='green' />
+              </View>
+            )
+          }
           ListEmptyComponent={
             <View
               style={{

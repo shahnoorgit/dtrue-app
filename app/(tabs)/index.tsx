@@ -123,10 +123,12 @@ export default function DebateFeed() {
 
   // Fetch debates with cursor-based pagination
   const fetchDebates = useCallback(
-    async (fetchCursor = null, shouldRefresh = false) => {
+    async (fetchCursor: string | null = null, shouldRefresh = false) => {
       if (!tokenRef.current) return;
 
+      // flip the loading flags
       fetchCursor === null ? setLoading(true) : setLoadingMore(true);
+
       try {
         const url = `${
           process.env.EXPO_PUBLIC_BASE_URL
@@ -148,20 +150,33 @@ export default function DebateFeed() {
           setCursor(nextCursor);
           setHasNextPage(hasNext);
 
-          // Save cursor to AsyncStorage
+          // persist the new cursor
           if (nextCursor) {
             await AsyncStorage.setItem(CURSOR_STORAGE_KEY, nextCursor);
           }
         }
-      } catch (error) {
-        console.error("Error fetching debates:", error);
+      } catch (error: any) {
+        // if it was a 404, assume token expired: grab a fresh one and retry once
+        if (error.response?.status === 404) {
+          console.log("Got 404—refreshing token and retrying feed fetch");
+          try {
+            // re-fetch the JWT
+            tokenRef.current = await getToken({ template: "lets_debate_jwt" });
+            // retry the exact same request
+            return fetchDebates(fetchCursor, shouldRefresh);
+          } catch (tokeErr) {
+            console.error("Error refreshing token:", tokeErr);
+          }
+        } else {
+          console.error("Error fetching debates:", error);
+        }
       } finally {
         setLoading(false);
         setRefreshing(false);
         setLoadingMore(false);
       }
     },
-    []
+    [getToken] // make sure getToken is in your dependency array
   );
 
   // Handle pull-to-refresh

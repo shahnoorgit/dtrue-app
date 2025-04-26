@@ -16,6 +16,7 @@ import axios from "axios";
 import { useNavigation } from "@react-navigation/native";
 import { useAuthToken } from "@/hook/clerk/useFetchjwtToken";
 import { router } from "expo-router";
+import { useAuth } from "@clerk/clerk-expo";
 
 const { width } = Dimensions.get("window");
 // Slightly wider card
@@ -24,6 +25,7 @@ const IMAGE_HEIGHT = CARD_WIDTH * 0.6;
 
 const DebateCard = ({ debate, onJoinPress }) => {
   const [loading, setLoading] = useState(false);
+  const { userId } = useAuth();
   const navigation = useNavigation();
   const [token, refreshToken] = useAuthToken();
 
@@ -164,8 +166,9 @@ const DebateCard = ({ debate, onJoinPress }) => {
       }
 
       router.push({
-        pathname: "/(chat-room)",
+        pathname: "/(chat-room)/screen",
         params: {
+          clerkId: userId,
           debateId: debate.id,
           debateImage: debate.image,
         },
