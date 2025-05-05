@@ -212,7 +212,7 @@ export default function DebateFeed() {
     []
   );
 
-  const keyExtractor = useCallback((item) => item.id.toString(), []);
+  const keyExtractor = useCallback((item, idx) => idx.toString(), []);
 
   return (
     <SafeAreaView

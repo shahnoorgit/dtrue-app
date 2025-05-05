@@ -1,5 +1,7 @@
 import { cyberpunkTheme } from "@/constants/theme";
-import { useCallback } from "react";
+import { useFetchWithToken } from "@/hook/api/useFetchWithToken.";
+import { useAuthToken } from "@/hook/clerk/useFetchjwtToken";
+import { useState } from "react";
 import { Image, Text } from "react-native";
 import { View } from "react-native";
 import { TouchableOpacity } from "react-native";
@@ -18,10 +20,12 @@ const theme = {
 
 export function RenderOpinion({ item }: { item: any }) {
   const isAgreed = item.agreed;
+  const [token, refreshToken] = useAuthToken();
+  const [likes, setLikes] = useState(item.upvotes);
 
   // Handle opinion press
   const handleOpinionPress = () => {
-    console.log(item.userId);
+    setLikes(likes + 1);
   };
 
   return (
@@ -131,7 +135,7 @@ export function RenderOpinion({ item }: { item: any }) {
                 fontWeight: "500",
               }}
             >
-              {item.upvotes}
+              {likes}
             </Text>
           </View>
 

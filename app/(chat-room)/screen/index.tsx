@@ -18,6 +18,7 @@ import {
   Modal,
   Pressable,
   Platform,
+  Button,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
@@ -61,6 +62,7 @@ export default function DebateRoom() {
   const [timeRemaining, setTimeRemaining] = useState<number>(0);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [isNextPage, setNextPage] = useState(null);
+  const [likedUserIds, setLikedUserIds] = useState<string[]>([]);
 
   const [page, setPage] = useState(1);
   const [sort, setSort] = useState<"score" | "votes" | "date">("date");
@@ -104,9 +106,7 @@ export default function DebateRoom() {
   useEffect(() => {
     // Only trigger once when debate description is first loaded
     if (debateDescription && !initialDataLoaded) {
-      // Only show modal on first join/load, not on subsequent data refreshes
       setInitialDataLoaded(true);
-      // Only show modal automatically on first app launch
       if (!global.hasSeenDebateModal) {
         global.hasSeenDebateModal = true;
         setShowModal(true);
@@ -114,66 +114,51 @@ export default function DebateRoom() {
     }
   }, [debateDescription]);
 
-  // Fetch debate metadata
-  const fetchDebateRoom = useCallback(async () => {
+  // Fetch debate metadata and liked user IDs
+  const fetchDebateRoomAndLikedUserIds = useCallback(async () => {
     if (!debateId || !token) return;
+
     try {
-      const { data } = await axios.get(
+      const debateRoomResponse = await axios.get(
         `${process.env.EXPO_PUBLIC_BASE_URL}/debate-room/get-room/${debateId}`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      if (data.success) {
-        setDebateTitle(data.data.title);
-        setDebateDescription(data.data.description || "");
 
-        // Calculate end time based on creation time and duration
-        if (data.data.createdAt && data.data.duration) {
-          const creationDate = new Date(data.data.createdAt);
+      if (debateRoomResponse.data.success) {
+        const roomData = debateRoomResponse.data.data;
+        setDebateTitle(roomData.title);
+        setDebateDescription(roomData.description || "");
+
+        if (roomData.createdAt && roomData.duration) {
+          const creationDate = new Date(roomData.createdAt);
           const endDate = new Date(creationDate);
-          // Add duration hours to creation date
-          endDate.setHours(endDate.getHours() + data.data.duration);
+          endDate.setHours(endDate.getHours() + roomData.duration);
           setEndTime(endDate);
         } else {
-          // Fallback for testing - just to be safe
           const demoEndTime = new Date();
           demoEndTime.setHours(demoEndTime.getHours() + 1);
           setEndTime(demoEndTime);
         }
       }
+
+      const likedUserIdsResponse = await axios.get(
+        `${process.env.EXPO_PUBLIC_BASE_URL}/debate-participant/opinion/liked_by/${debateId}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      console.log(likedUserIdsResponse.data.data, "gjjdhaks");
+
+      if (likedUserIdsResponse.data.success) {
+        setLikedUserIds(likedUserIdsResponse.data.data || []);
+      }
     } catch (err: any) {
+      console.error(err);
       if (err.response?.status === 401) {
         await refreshToken();
-        fetchDebateRoom();
+        fetchDebateRoomAndLikedUserIds();
       }
     }
   }, [debateId, token]);
-
-  // Timer effect - keep this as is
-  useEffect(() => {
-    if (endTime) {
-      const updateTimer = () => {
-        const now = new Date();
-        const diff = Math.max(
-          0,
-          Math.floor((endTime.getTime() - now.getTime()) / 1000)
-        );
-        setTimeRemaining(diff);
-
-        // If time is up, you might want to disable certain features
-        if (diff <= 0) {
-          // Handle debate ended state
-          // For example, disable input, show message, etc.
-        }
-      };
-
-      updateTimer();
-      timerRef.current = setInterval(updateTimer, 1000);
-
-      return () => {
-        if (timerRef.current) clearInterval(timerRef.current);
-      };
-    }
-  }, [endTime]);
 
   // Fetch opinions
   const fetchOpinions = useCallback(async () => {
@@ -184,6 +169,7 @@ export default function DebateRoom() {
         `${process.env.EXPO_PUBLIC_BASE_URL}/debate-participant/opinion/${debateId}?page=${page}&orderBy=${sort}`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
+
       if (data.success) {
         setOpinions(data.data.data);
         setSubmitted(data.data.some((o: any) => o.user.clerkId === clerkId));
@@ -202,7 +188,7 @@ export default function DebateRoom() {
   // Initialize data on token ready
   useEffect(() => {
     if (token) {
-      fetchDebateRoom();
+      fetchDebateRoomAndLikedUserIds();
       fetchOpinions();
     }
   }, [token]);
@@ -221,7 +207,6 @@ export default function DebateRoom() {
         },
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      console.log(data.data);
       if (data.statusCode === 200) {
         setUserOpinion("");
         setStance(null);
@@ -241,6 +226,35 @@ export default function DebateRoom() {
     }
   }, [debateId, token, userOpinion, stance]);
 
+  // Handle like/unlike
+  const handleLike = async (userId: string) => {
+    if (!token) return;
+    try {
+      const { data } = await axios.put(
+        `${process.env.EXPO_PUBLIC_BASE_URL}/debate-participant/opinion/like/${userId}/${debateId}`,
+        {},
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      if (data.success) {
+        setOpinions((prevOpinions) =>
+          prevOpinions.map((op) =>
+            op.userId === userId ? { ...op, upvotes: data.data.likes } : op
+          )
+        );
+        if (data.data.action === "liked") {
+          setLikedUserIds((prev) => [...prev, userId]);
+        } else if (data.data.action === "unliked") {
+          setLikedUserIds((prev) => prev.filter((id) => id !== userId));
+        }
+      }
+    } catch (err: any) {
+      if (err.response?.status === 401) {
+        await refreshToken();
+        handleLike(userId);
+      }
+    }
+  };
+
   // Vote stats calculation
   const agreedCount = useMemo(
     () => opinions.filter((o) => o.agreed).length,
@@ -249,160 +263,160 @@ export default function DebateRoom() {
   const totalVotes = Math.max(1, opinions.length);
   const agreePct = agreedCount / totalVotes;
 
-  // Opinion renderer - simplified without glow effects
-  const renderOpinion = useCallback(({ item }: { item: any }) => {
-    const isAgreed = item.agreed;
-
-    return (
-      <TouchableOpacity
-        onPress={() => console.log(item.userId)}
-        activeOpacity={0.8}
-      >
-        <View
-          style={{
-            marginHorizontal: 8,
-            marginVertical: 4,
-            alignSelf: isAgreed ? "flex-end" : "flex-start",
-            maxWidth: "80%",
-            borderRadius: 12,
-            backgroundColor: isAgreed
-              ? "rgba(0, 255, 148, 0.08)"
-              : "rgba(255, 0, 229, 0.08)",
-            borderLeftWidth: 2,
-            borderLeftColor: isAgreed
-              ? theme.colors.primary
-              : theme.colors.secondary,
-            padding: 10,
-          }}
+  // Opinion renderer
+  const renderOpinion = useCallback(
+    ({ item }: { item: any }) => {
+      const isAgreed = item.agreed;
+      const isLiked = likedUserIds.includes(item.userId);
+      return (
+        <TouchableOpacity
+          onPress={() => handleLike(item.userId)}
+          activeOpacity={0.8}
         >
           <View
             style={{
-              flexDirection: "row",
-              alignItems: "center",
-              marginBottom: 4,
+              marginHorizontal: 8,
+              marginVertical: 4,
+              alignSelf: isAgreed ? "flex-end" : "flex-start",
+              maxWidth: "80%",
+              borderRadius: 12,
+              backgroundColor: isAgreed
+                ? "rgba(0, 255, 148, 0.08)"
+                : "rgba(255, 0, 229, 0.08)",
+              borderLeftWidth: 2,
+              borderLeftColor: isAgreed
+                ? theme.colors.primary
+                : theme.colors.secondary,
+              padding: 10,
             }}
           >
-            <Image
-              source={{ uri: item.user.image }}
+            <View
               style={{
-                width: 24,
-                height: 24,
-                borderRadius: 12,
-                marginRight: 8,
-                borderWidth: 1,
-                borderColor: isAgreed
-                  ? "rgba(0, 255, 148, 0.4)"
-                  : "rgba(255, 0, 229, 0.4)",
-              }}
-            />
-            <Text style={{ color: theme.colors.text, fontWeight: "600" }}>
-              {item.user.username}
-            </Text>
-            <Text
-              style={{
-                color: theme.colors.textMuted,
-                fontSize: 12,
-                marginLeft: "auto",
+                flexDirection: "row",
+                alignItems: "center",
+                marginBottom: 4,
               }}
             >
-              {new Date(item.createdAt).toLocaleTimeString("en-US", {
-                hour: "numeric",
-                minute: "2-digit",
-                hour12: true,
-              })}
-            </Text>
-          </View>
-
-          <Text style={{ color: theme.colors.text, lineHeight: 20 }}>
-            {item.opinion}
-          </Text>
-
-          {/* Added vote count and AI review information */}
-          <View
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              justifyContent: "space-between",
-              marginTop: 8,
-            }}
-          >
-            {/* Upvotes */}
-            <View style={{ flexDirection: "row", alignItems: "center" }}>
-              <Ionicons
-                name='thumbs-up'
-                size={12}
-                color={theme.colors.textMuted}
-                style={{ marginRight: 4 }}
+              <Image
+                source={{ uri: item.user.image }}
+                style={{
+                  width: 24,
+                  height: 24,
+                  borderRadius: 12,
+                  marginRight: 8,
+                  borderWidth: 1,
+                  borderColor: isAgreed
+                    ? "rgba(0, 255, 148, 0.4)"
+                    : "rgba(255, 0, 229, 0.4)",
+                }}
               />
+              <Text style={{ color: theme.colors.text, fontWeight: "600" }}>
+                {item.user.username}
+              </Text>
               <Text
                 style={{
                   color: theme.colors.textMuted,
                   fontSize: 12,
+                  marginLeft: "auto",
                 }}
               >
-                {item.upvotes}
+                {new Date(item.createdAt).toLocaleTimeString("en-US", {
+                  hour: "numeric",
+                  minute: "2-digit",
+                  hour12: true,
+                })}
               </Text>
             </View>
 
-            {/* AI Review Status */}
-            {item.aiFlagged ? (
-              <View
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  backgroundColor: "rgba(255, 60, 60, 0.1)",
-                  paddingHorizontal: 6,
-                  paddingVertical: 2,
-                  borderRadius: 8,
-                }}
-              >
+            <Text style={{ color: theme.colors.text, lineHeight: 20 }}>
+              {item.opinion}
+            </Text>
+
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "space-between",
+                marginTop: 8,
+              }}
+            >
+              <View style={{ flexDirection: "row", alignItems: "center" }}>
                 <Ionicons
-                  name='alert-circle'
-                  size={10}
-                  color='rgba(255, 60, 60, 0.8)'
-                  style={{ marginRight: 2 }}
+                  name={isLiked ? "thumbs-up" : "thumbs-up-outline"}
+                  size={12}
+                  color={isLiked ? "#FF0055" : theme.colors.textMuted}
+                  style={{ marginRight: 4 }}
                 />
                 <Text
                   style={{
-                    color: "rgba(255, 60, 60, 0.8)",
-                    fontSize: 10,
+                    color: isLiked ? "#FF0055" : theme.colors.textMuted,
+                    fontSize: 12,
                   }}
                 >
-                  Flagged
+                  {item.upvotes}
                 </Text>
               </View>
-            ) : item.is_aiFeedback ? (
-              <View
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  backgroundColor: "rgba(60, 130, 255, 0.1)",
-                  paddingHorizontal: 6,
-                  paddingVertical: 2,
-                  borderRadius: 8,
-                }}
-              >
-                <MaterialCommunityIcons
-                  name='check-circle'
-                  size={10}
-                  color='rgba(60, 130, 255, 0.8)'
-                  style={{ marginRight: 2 }}
-                />
-                <Text
+
+              {item.aiFlagged ? (
+                <View
                   style={{
-                    color: "rgba(60, 130, 255, 0.8)",
-                    fontSize: 10,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    backgroundColor: "rgba(255, 60, 60, 0.1)",
+                    paddingHorizontal: 6,
+                    paddingVertical: 2,
+                    borderRadius: 8,
                   }}
                 >
-                  AI: {item.aiScore}
-                </Text>
-              </View>
-            ) : null}
+                  <Ionicons
+                    name='alert-circle'
+                    size={10}
+                    color='rgba(255, 60, 60, 0.8)'
+                    style={{ marginRight: 2 }}
+                  />
+                  <Text
+                    style={{
+                      color: "rgba(255, 60, 60, 0.8)",
+                      fontSize: 10,
+                    }}
+                  >
+                    Flagged
+                  </Text>
+                </View>
+              ) : item.is_aiFeedback ? (
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    backgroundColor: "rgba(60, 130, 255, 0.1)",
+                    paddingHorizontal: 6,
+                    paddingVertical: 2,
+                    borderRadius: 8,
+                  }}
+                >
+                  <MaterialCommunityIcons
+                    name='check-circle'
+                    size={10}
+                    color='rgba(60, 130, 255, 0.8)'
+                    style={{ marginRight: 2 }}
+                  />
+                  <Text
+                    style={{
+                      color: "rgba(60, 130, 255, 0.8)",
+                      fontSize: 10,
+                    }}
+                  >
+                    AI: {item.aiScore}
+                  </Text>
+                </View>
+              ) : null}
+            </View>
           </View>
-        </View>
-      </TouchableOpacity>
-    );
-  }, []);
+        </TouchableOpacity>
+      );
+    },
+    [handleLike, likedUserIds]
+  );
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.background }}>
@@ -569,7 +583,7 @@ export default function DebateRoom() {
         <FlatList
           ref={flatRef}
           data={opinions}
-          keyExtractor={(item) => item.id}
+          keyExtractor={(item, idx) => idx.toString()}
           renderItem={renderOpinion}
           initialNumToRender={10}
           maxToRenderPerBatch={10}
@@ -761,7 +775,7 @@ export default function DebateRoom() {
         >
           <View>
             <LinearGradient
-              colors={["#03120F", "#080F12"]} // Fully opaque
+              colors={["#03120F", "#080F12"]}
               style={{
                 borderTopLeftRadius: 24,
                 borderTopRightRadius: 24,

@@ -1,4 +1,3 @@
-// hooks/useAuthToken.ts
 import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@clerk/clerk-expo";
 import AsyncStorage from "@react-native-async-storage/async-storage";
