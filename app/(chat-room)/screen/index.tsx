@@ -26,18 +26,11 @@ import axios from "axios";
 import { LinearGradient } from "expo-linear-gradient";
 import { useAuthToken } from "../../../hook/clerk/useFetchjwtToken";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-
-// Simplified cyberpunk theme without glow effects
-const theme = {
-  colors: {
-    primary: "#00FF94",
-    secondary: "#FF00E5",
-    background: "#080F12",
-    backgroundDarker: "#03120F",
-    text: "#FFFFFF",
-    textMuted: "#8F9BB3",
-  },
-};
+import { theme } from "../theme";
+import Header from "../components/Header";
+import OpinionsList from "../components/OpinionsList";
+import InputBar from "../components/InputBar";
+import ModalSheet from "../components/ModalSheet";
 
 export default function DebateRoom() {
   const { debateId, debateImage, clerkId } = useLocalSearchParams();
@@ -63,6 +56,7 @@ export default function DebateRoom() {
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [isNextPage, setNextPage] = useState(null);
   const [likedUserIds, setLikedUserIds] = useState<string[]>([]);
+  const [userOpinionId, setUserOpinionId] = useState<string | null>(null);
 
   const [page, setPage] = useState(1);
   const [sort, setSort] = useState<"score" | "votes" | "date">("date");
@@ -87,21 +81,6 @@ export default function DebateRoom() {
       };
     }
   }, [endTime]);
-
-  // Format time remaining
-  const formatTimeRemaining = () => {
-    if (!timeRemaining) return "00:00:00";
-
-    const hours = Math.floor(timeRemaining / 3600);
-    const minutes = Math.floor((timeRemaining % 3600) / 60);
-    const seconds = timeRemaining % 60;
-
-    return [
-      hours.toString().padStart(2, "0"),
-      minutes.toString().padStart(2, "0"),
-      seconds.toString().padStart(2, "0"),
-    ].join(":");
-  };
 
   useEffect(() => {
     // Only trigger once when debate description is first loaded
@@ -146,8 +125,6 @@ export default function DebateRoom() {
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
-      console.log(likedUserIdsResponse.data.data, "gjjdhaks");
-
       if (likedUserIdsResponse.data.success) {
         setLikedUserIds(likedUserIdsResponse.data.data || []);
       }
@@ -169,6 +146,13 @@ export default function DebateRoom() {
         `${process.env.EXPO_PUBLIC_BASE_URL}/debate-participant/opinion/${debateId}?page=${page}&orderBy=${sort}`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
+
+      if (data.data.currentUserOpinion) {
+        setSubmitted(true);
+        setUserOpinion(data.data.currentUserOpinion.opinion);
+        setStance(data.data.currentUserOpinion.agreed ? "agree" : "disagree");
+        setUserOpinionId(data.data.currentUserOpinion.user.clerkId);
+      }
 
       if (data.success) {
         setOpinions(data.data.data);
@@ -311,7 +295,9 @@ export default function DebateRoom() {
                 }}
               />
               <Text style={{ color: theme.colors.text, fontWeight: "600" }}>
-                {item.user.username}
+                {userOpinionId == item?.user.clerkId
+                  ? "You"
+                  : item.user.username}
               </Text>
               <Text
                 style={{
@@ -406,7 +392,7 @@ export default function DebateRoom() {
                       fontSize: 10,
                     }}
                   >
-                    AI: {item.aiScore}
+                    AI: {item.aiScore || 0}
                   </Text>
                 </View>
               ) : null}
@@ -426,526 +412,56 @@ export default function DebateRoom() {
       />
 
       {/* Improved header alignment */}
-      <LinearGradient
-        colors={["rgba(3, 18, 15, 0.95)", "rgba(8, 15, 18, 0.9)"]}
-        style={{
-          paddingTop: insets.top,
-          paddingBottom: 8,
-          borderBottomWidth: 1,
-          borderBottomColor: "rgba(0, 255, 148, 0.2)",
-        }}
-      >
-        <View
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            paddingHorizontal: 12,
-            height: 54,
-          }}
-        >
-          <TouchableOpacity
-            onPress={() => router.back()}
-            style={{ padding: 8, borderRadius: 16 }}
-          >
-            <Ionicons
-              name='arrow-back'
-              size={22}
-              color={theme.colors.primary}
-            />
-          </TouchableOpacity>
+      <Header
+        timeRemaining={timeRemaining}
+        setShowModal={setShowModal}
+        agreePct={agreePct}
+        opinions={opinions}
+        debateTitle={debateTitle}
+        debateImage={Array.isArray(debateImage) ? debateImage[0] : debateImage}
+        insets={insets}
+      />
 
-          {debateImage && (
-            <Image
-              source={{ uri: String(debateImage) }}
-              style={{
-                width: 38,
-                height: 38,
-                borderRadius: 19,
-                marginRight: 10,
-                borderWidth: 1,
-                borderColor: "rgba(0, 255, 148, 0.4)",
-              }}
-            />
-          )}
-
-          <TouchableOpacity
-            style={{ flex: 1 }}
-            onPress={() => setShowModal(true)}
-          >
-            <Text
-              style={{
-                color: theme.colors.text,
-                fontWeight: "bold",
-                fontSize: 16,
-              }}
-              numberOfLines={1}
-            >
-              {debateTitle}
-            </Text>
-            <View style={{ flexDirection: "row", alignItems: "center" }}>
-              <Text style={{ color: theme.colors.textMuted, fontSize: 12 }}>
-                {opinions.length} opinions • Tap for details
-              </Text>
-
-              <View
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  backgroundColor: "rgba(0, 255, 148, 0.1)",
-                  paddingHorizontal: 6,
-                  paddingVertical: 2,
-                  borderRadius: 10,
-                  marginLeft: 8,
-                }}
-              >
-                <Ionicons
-                  name='time-outline'
-                  size={12}
-                  color={theme.colors.primary}
-                />
-                <Text
-                  style={{
-                    color: theme.colors.primary,
-                    fontSize: 11,
-                    marginLeft: 2,
-                    fontWeight: "500",
-                  }}
-                >
-                  {formatTimeRemaining()}
-                </Text>
-              </View>
-            </View>
-          </TouchableOpacity>
-        </View>
-
-        {/* Progress bar - simplified */}
-        <View
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            paddingHorizontal: 16,
-            marginTop: 4,
-          }}
-        >
-          <Text
-            style={{
-              color: theme.colors.primary,
-              fontSize: 12,
-              width: 24,
-              fontWeight: "bold",
-            }}
-          >
-            {Math.round(agreePct * 100)}%
-          </Text>
-
-          <View
-            style={{
-              flex: 1,
-              height: 4,
-              backgroundColor: "rgba(255, 0, 229, 0.2)",
-              borderRadius: 8,
-              overflow: "hidden",
-              marginHorizontal: 6,
-            }}
-          >
-            <View
-              style={{
-                height: "100%",
-                width: `${agreePct * 100}%`,
-                backgroundColor: theme.colors.primary,
-                borderRadius: 8,
-              }}
-            />
-          </View>
-
-          <Text
-            style={{
-              color: theme.colors.secondary,
-              fontSize: 12,
-              width: 24,
-              textAlign: "right",
-              fontWeight: "bold",
-            }}
-          >
-            {Math.round((1 - agreePct) * 100)}%
-          </Text>
-        </View>
-      </LinearGradient>
-
-      {/* Opinions list */}
-      {loadingOpinions ? (
-        <View
-          style={{ flex: 1, justifyContent: "center", alignItems: "center" }}
-        >
-          <ActivityIndicator size='large' color={theme.colors.primary} />
-        </View>
-      ) : (
-        <FlatList
-          ref={flatRef}
-          data={opinions}
-          keyExtractor={(item, idx) => idx.toString()}
-          renderItem={renderOpinion}
-          initialNumToRender={10}
-          maxToRenderPerBatch={10}
-          windowSize={10}
-          removeClippedSubviews={Platform.OS === "android"}
-          contentContainerStyle={{
-            paddingVertical: 8,
-            paddingBottom: submitted ? 16 : 80,
-          }}
-          onEndReached={() => isNextPage && setPage((prev) => prev + 1)}
-          onEndReachedThreshold={0.5}
-          ListFooterComponent={
-            isLoadingMore && (
-              <View style={{ paddingVertical: 16 }}>
-                <ActivityIndicator size='small' color='green' />
-              </View>
-            )
-          }
-          ListEmptyComponent={
-            <View
-              style={{
-                justifyContent: "center",
-                alignItems: "center",
-                paddingVertical: 60,
-              }}
-            >
-              <Ionicons
-                name='chatbubble-ellipses-outline'
-                size={64}
-                color='rgba(0, 255, 148, 0.3)'
-              />
-              <Text
-                style={{
-                  color: theme.colors.text,
-                  textAlign: "center",
-                  marginTop: 12,
-                  maxWidth: "80%",
-                }}
-              >
-                Be the first to share your opinion
-              </Text>
-            </View>
-          }
-        />
-      )}
-
-      {/* Input bar */}
-      {!submitted && (
-        <LinearGradient
-          colors={["rgba(3, 18, 15, 0.95)", "rgba(8, 15, 18, 0.9)"]}
-          style={{
-            position: "absolute",
-            bottom: 0,
-            left: 0,
-            right: 0,
-            padding: 12,
-            paddingBottom: Math.max(12, insets.bottom),
-            borderTopWidth: 1,
-            borderTopColor: "rgba(0, 255, 148, 0.2)",
-          }}
-        >
-          <View
-            style={{
-              flexDirection: "row",
-              justifyContent: "center",
-              marginBottom: 8,
-            }}
-          >
-            {(["agree", "disagree"] as const).map((opt) => (
-              <TouchableOpacity
-                key={opt}
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  marginHorizontal: 4,
-                  paddingHorizontal: 12,
-                  paddingVertical: 6,
-                  borderRadius: 16,
-                  borderWidth: 1,
-                  backgroundColor:
-                    stance === opt
-                      ? opt === "agree"
-                        ? "rgba(0, 255, 148, 0.15)"
-                        : "rgba(255, 0, 229, 0.15)"
-                      : "transparent",
-                  borderColor:
-                    stance === opt
-                      ? opt === "agree"
-                        ? theme.colors.primary
-                        : theme.colors.secondary
-                      : "rgba(143, 155, 179, 0.3)",
-                }}
-                onPress={() => setStance(opt)}
-              >
-                <MaterialCommunityIcons
-                  name={opt === "agree" ? "thumb-up" : "thumb-down"}
-                  size={16}
-                  color={
-                    stance === opt
-                      ? opt === "agree"
-                        ? theme.colors.primary
-                        : theme.colors.secondary
-                      : "#888"
-                  }
-                  style={{ marginRight: 4 }}
-                />
-                <Text
-                  style={{
-                    color:
-                      stance === opt
-                        ? opt === "agree"
-                          ? theme.colors.primary
-                          : theme.colors.secondary
-                        : theme.colors.text,
-                    fontWeight: stance === opt ? "600" : "400",
-                  }}
-                >
-                  {opt.charAt(0).toUpperCase() + opt.slice(1)}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-
-          <View style={{ flexDirection: "row", alignItems: "center" }}>
-            <TextInput
-              value={userOpinion}
-              onChangeText={setUserOpinion}
-              placeholder='Your opinion…'
-              placeholderTextColor='rgba(143, 155, 179, 0.6)'
-              multiline
-              style={{
-                flex: 1,
-                backgroundColor: "rgba(8, 15, 18, 0.6)",
-                borderRadius: 20,
-                paddingHorizontal: 14,
-                paddingVertical: 8,
-                color: theme.colors.text,
-                maxHeight: 80,
-                borderWidth: 1,
-                borderColor: "rgba(0, 255, 148, 0.3)",
-              }}
-            />
-            <TouchableOpacity
-              onPress={onSubmit}
-              disabled={!userOpinion.trim() || !stance || isLoading}
-              style={{
-                marginLeft: 8,
-                padding: 10,
-                borderRadius: 20,
-                backgroundColor:
-                  userOpinion.trim() && stance && !isLoading
-                    ? theme.colors.primary
-                    : "rgba(8, 15, 18, 0.6)",
-                opacity: userOpinion.trim() && stance && !isLoading ? 1 : 0.5,
-              }}
-            >
-              {isLoading ? (
-                <ActivityIndicator size='small' color='#080F12' />
-              ) : (
-                <Ionicons
-                  name='send'
-                  size={18}
-                  color={
-                    userOpinion.trim() && stance
-                      ? "#080F12"
-                      : "rgba(143, 155, 179, 0.6)"
-                  }
-                />
-              )}
-            </TouchableOpacity>
-          </View>
-        </LinearGradient>
+      {!loadingOpinions && (
+        <>
+          <OpinionsList
+            loadingOpinions={loadingOpinions}
+            flatRef={flatRef}
+            opinions={opinions}
+            renderOpinion={renderOpinion}
+            submitted={submitted}
+            isNextPage={isNextPage}
+            setPage={setPage}
+            isLoadingMore={isLoadingMore}
+          />
+          <InputBar
+            showModal={showModal}
+            insets={insets}
+            isLoading={isLoading}
+            setStance={setStance}
+            stance={stance}
+            onSubmit={onSubmit}
+            setUserOpinion={setUserOpinion}
+            submitted={submitted}
+            userOpinion={userOpinion}
+          />
+        </>
       )}
 
       {/* Debate description modal - fully opaque */}
-      <Modal
-        visible={showModal}
-        transparent={true}
-        animationType='slide'
-        onRequestClose={() => setShowModal(false)}
-      >
-        <Pressable
-          style={{
-            flex: 1,
-            backgroundColor: "rgba(0,0,0,0.5)",
-            justifyContent: "flex-end",
-          }}
-          onPress={() => setShowModal(false)}
-        >
-          <View>
-            <LinearGradient
-              colors={["#03120F", "#080F12"]}
-              style={{
-                borderTopLeftRadius: 24,
-                borderTopRightRadius: 24,
-                padding: 20,
-                paddingBottom: Math.max(20, insets.bottom),
-                maxHeight: "70%",
-                borderTopWidth: 1,
-                borderTopColor: "rgba(0, 255, 148, 0.3)",
-              }}
-            >
-              <View
-                style={{
-                  width: 40,
-                  height: 4,
-                  backgroundColor: "rgba(255,255,255,0.3)",
-                  borderRadius: 2,
-                  alignSelf: "center",
-                  marginBottom: 16,
-                }}
-              />
-
-              <View
-                style={{
-                  flexDirection: "row",
-                  marginBottom: 16,
-                  alignItems: "center",
-                }}
-              >
-                {debateImage && (
-                  <Image
-                    source={{ uri: String(debateImage) }}
-                    style={{
-                      width: 50,
-                      height: 50,
-                      borderRadius: 25,
-                      marginRight: 12,
-                      borderWidth: 1,
-                      borderColor: "rgba(0, 255, 148, 0.4)",
-                    }}
-                  />
-                )}
-
-                <View style={{ flex: 1 }}>
-                  <Text
-                    style={{
-                      color: theme.colors.primary,
-                      fontSize: 18,
-                      fontWeight: "bold",
-                      marginBottom: 4,
-                    }}
-                  >
-                    {debateTitle}
-                  </Text>
-
-                  <View style={{ flexDirection: "row", alignItems: "center" }}>
-                    <Text
-                      style={{ color: theme.colors.textMuted, fontSize: 13 }}
-                    >
-                      Time remaining:
-                    </Text>
-                    <Text
-                      style={{
-                        color: theme.colors.primary,
-                        fontSize: 13,
-                        fontWeight: "600",
-                        marginLeft: 6,
-                      }}
-                    >
-                      {formatTimeRemaining()}
-                    </Text>
-                  </View>
-                </View>
-              </View>
-
-              <Text
-                style={{
-                  color: theme.colors.text,
-                  lineHeight: 22,
-                  marginBottom: 16,
-                }}
-              >
-                {debateDescription ||
-                  "No description available for this debate."}
-              </Text>
-
-              <View
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  marginVertical: 16,
-                  paddingHorizontal: 8,
-                }}
-              >
-                <Text
-                  style={{
-                    color: theme.colors.primary,
-                    fontSize: 14,
-                    width: 36,
-                    fontWeight: "bold",
-                  }}
-                >
-                  {Math.round(agreePct * 100)}%
-                </Text>
-
-                <View
-                  style={{
-                    flex: 1,
-                    height: 6,
-                    backgroundColor: "rgba(255, 0, 229, 0.2)",
-                    borderRadius: 8,
-                    overflow: "hidden",
-                    marginHorizontal: 10,
-                  }}
-                >
-                  <View
-                    style={{
-                      height: "100%",
-                      width: `${agreePct * 100}%`,
-                      backgroundColor: theme.colors.primary,
-                      borderRadius: 8,
-                    }}
-                  />
-                </View>
-
-                <Text
-                  style={{
-                    color: theme.colors.secondary,
-                    fontSize: 14,
-                    width: 36,
-                    textAlign: "right",
-                    fontWeight: "bold",
-                  }}
-                >
-                  {Math.round((1 - agreePct) * 100)}%
-                </Text>
-              </View>
-
-              <View
-                style={{
-                  flexDirection: "row",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  borderTopWidth: 1,
-                  borderTopColor: "rgba(255,255,255,0.1)",
-                  paddingTop: 16,
-                  marginTop: 8,
-                }}
-              >
-                <Text style={{ color: theme.colors.textMuted }}>
-                  {opinions.length} opinions shared
-                </Text>
-
-                <TouchableOpacity
-                  onPress={() => setShowModal(false)}
-                  style={{
-                    paddingHorizontal: 20,
-                    paddingVertical: 8,
-                    backgroundColor: theme.colors.primary,
-                    borderRadius: 16,
-                  }}
-                >
-                  <Text style={{ color: "#080F12", fontWeight: "600" }}>
-                    Got it
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            </LinearGradient>
-          </View>
-        </Pressable>
-      </Modal>
+      {showModal && (
+        <ModalSheet
+          agreePct={agreePct}
+          setShowModal={setShowModal}
+          debateDescription={debateDescription}
+          debateImage={debateImage}
+          debateTitle={debateTitle}
+          timeRemaining={timeRemaining}
+          opinions={opinions}
+          insets={insets}
+          debateId={debateId}
+        />
+      )}
     </SafeAreaView>
   );
 }
