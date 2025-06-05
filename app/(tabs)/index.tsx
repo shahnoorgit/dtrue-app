@@ -176,7 +176,7 @@ export default function DebateFeed() {
         setLoadingMore(false);
       }
     },
-    [getToken] // make sure getToken is in your dependency array
+    [getToken]
   );
 
   // Handle pull-to-refresh
