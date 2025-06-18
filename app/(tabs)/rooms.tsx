@@ -418,7 +418,7 @@ const Rooms = () => {
       : `${remainingMinutes}m left`;
   };
 
-  const navigateToDebate = (debate, isJoined) => {
+  const navigateToDebate = (debate, time, isJoined) => {
     if (!debate || !debate.id) {
       Alert.alert("Error", "Cannot open this debate room");
       return;
@@ -426,6 +426,11 @@ const Rooms = () => {
 
     // If it's a 'mine' debate that hasn't been joined yet, join first
     if (activeTab === "mine" && !isJoined) {
+      console.log(time);
+      if (time == "Ended") {
+        Alert.alert("Debate is Closed Cant join the debate");
+        return;
+      }
       joinDebateRoom(debate.id);
       return;
     }
@@ -543,7 +548,7 @@ const Rooms = () => {
           isJoined && styles.joinedCard,
           isNotJoined && styles.notJoinedCard,
         ]}
-        onPress={() => navigateToDebate(debate, isJoined)}
+        onPress={() => navigateToDebate(debate, timeRemaining, isJoined)}
         activeOpacity={0.7}
         disabled={isJoiningThis}
       >

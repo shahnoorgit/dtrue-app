@@ -11,6 +11,7 @@ import {
   Animated,
   ActivityIndicator,
   KeyboardAvoidingView,
+  Alert,
 } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
@@ -27,6 +28,7 @@ import {
 } from "../../../enums/boarding";
 import { cyberpunkTheme } from "@/constants/theme";
 import { useCreateUser } from "@/hook/useCreateUser";
+import { useAuthToken } from "@/hook/clerk/useFetchjwtToken";
 
 // Interest Modal Component using NativeWind classes
 const InterestModal = ({
@@ -519,43 +521,67 @@ const useUsernameValidator = () => {
   };
 };
 
-// Custom hook for image handling
+// Custom hook for image handling with R2 upload
 const useImageHandler = () => {
   const [profileImage, setProfileImage] = useState(null);
   const [profileImageUrl, setProfileImageUrl] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [token, refreshToken] = useAuthToken();
 
-  const uploadToCloudinary = async (imageUri) => {
+  const requestPermission = async (
+    permissionFn: () => Promise<any>,
+    errorMsg: string
+  ) => {
+    if (Platform.OS !== "web") {
+      const { status } = await permissionFn();
+      if (status !== "granted") {
+        Alert.alert("Permission Required", errorMsg);
+        return false;
+      }
+    }
+    return true;
+  };
+
+  const uploadToR2 = async (imageUri) => {
     setIsUploading(true);
     try {
-      const formData = new FormData();
-      const filename = imageUri.split("/").pop();
-      let match = /\.(\w+)$/.exec(filename || "");
-      let type = match ? `image/${match[1]}` : "image";
-      formData.append("file", { uri: imageUri, name: filename, type });
-      formData.append("upload_preset", "lets_debate");
-      const response = await fetch(
-        "https://api.cloudinary.com/v1_1/shahnoorcloudinary/image/upload",
+      // 1. Generate a unique file key
+      const name = imageUri.split("/").pop() || "profile.jpg";
+      const key = `profiles/${Date.now()}_${name}`;
+
+      // 2. Get signed URL from backend
+      const { data } = await axios.get(
+        `${process.env.EXPO_PUBLIC_BASE_URL}/uploads/signed-url`,
         {
-          method: "POST",
-          body: formData,
-          headers: {
-            Accept: "application/json",
-            "Content-Type": "multipart/form-data",
-          },
+          params: { filename: key, type: "image/jpeg" },
+          headers: { Authorization: `Bearer ${token}` },
         }
       );
-      const data = await response.json();
-      if (data.secure_url) {
-        setProfileImageUrl(data.secure_url);
-        console.log("Image uploaded to Cloudinary:", data.secure_url);
-      } else {
-        console.error("Upload failed:", data);
-        alert("Failed to upload image. Please try again.");
+      const signedUrl: string = data.data.signedUrl;
+
+      // 3. Upload directly to R2
+      try {
+        const blob = await fetch(imageUri).then((r) => r.blob());
+        const uploadRes = await fetch(signedUrl, {
+          method: "PUT",
+          headers: { "Content-Type": "image/jpeg" },
+          body: blob,
+        });
+        if (!uploadRes.ok) throw new Error("Upload failed");
+      } catch (error) {
+        console.error("Image upload error:", error);
+        throw error;
       }
+
+      // 4. Construct public CDN URL
+      const publicUrl = `https://r2-image-cdn.letsdebate0.workers.dev/letsdebate-media/${key}`;
+      setProfileImageUrl(publicUrl);
+      setProfileImage(imageUri);
+      console.log("Image uploaded to R2:", publicUrl);
     } catch (error) {
-      console.error("Error uploading to Cloudinary:", error);
-      alert(
+      console.error("Error uploading to R2:", error);
+      Alert.alert(
+        "Upload Error",
         "Error uploading image. Please check your connection and try again."
       );
     } finally {
@@ -564,14 +590,14 @@ const useImageHandler = () => {
   };
 
   const pickImage = async () => {
-    if (Platform.OS !== "web") {
-      const { status } =
-        await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (status !== "granted") {
-        alert("Sorry, we need camera roll permissions to make this work!");
-        return;
-      }
-    }
+    if (
+      !(await requestPermission(
+        ImagePicker.requestMediaLibraryPermissionsAsync,
+        "Sorry, we need camera roll permissions to make this work!"
+      ))
+    )
+      return;
+
     let result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
@@ -579,27 +605,26 @@ const useImageHandler = () => {
       quality: 1,
     });
     if (!result.canceled) {
-      setProfileImage(result.assets[0].uri);
-      uploadToCloudinary(result.assets[0].uri);
+      await uploadToR2(result.assets[0].uri);
     }
   };
 
   const takePhoto = async () => {
-    if (Platform.OS !== "web") {
-      const { status } = await ImagePicker.requestCameraPermissionsAsync();
-      if (status !== "granted") {
-        alert("Sorry, we need camera permissions to make this work!");
-        return;
-      }
-    }
+    if (
+      !(await requestPermission(
+        ImagePicker.requestCameraPermissionsAsync,
+        "Sorry, we need camera permissions to make this work!"
+      ))
+    )
+      return;
+
     let result = await ImagePicker.launchCameraAsync({
       allowsEditing: true,
       aspect: [1, 1],
       quality: 1,
     });
     if (!result.canceled) {
-      setProfileImage(result.assets[0].uri);
-      uploadToCloudinary(result.assets[0].uri);
+      await uploadToR2(result.assets[0].uri);
     }
   };
 
@@ -709,7 +734,7 @@ export default function OnboardingScreen() {
   const goToNextStep = useCallback(() => {
     if (currentStep === 0) {
       if (Object.keys(selectedCategories).length === 0) {
-        alert("Please select at least one category");
+        Alert.alert("Validation", "Please select at least one category");
         return;
       }
       setCurrentStep(1);
@@ -739,12 +764,16 @@ export default function OnboardingScreen() {
           } else {
             console.error("Failed to create user");
             setIsSubmitting(false);
-            alert("Failed to create user profile. Please try again.");
+            Alert.alert(
+              "Error",
+              "Failed to create user profile. Please try again."
+            );
           }
         } catch (error) {
           console.error("Error creating user:", error);
           setIsSubmitting(false);
-          alert(
+          Alert.alert(
+            "Error",
             "An error occurred while creating your profile. Please try again."
           );
         }

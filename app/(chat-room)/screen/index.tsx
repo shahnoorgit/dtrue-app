@@ -8,19 +8,14 @@ import React, {
 import {
   View,
   Text,
-  TextInput,
   TouchableOpacity,
   FlatList,
   Image,
   ActivityIndicator,
   SafeAreaView,
   StatusBar,
-  Modal,
-  Pressable,
-  Platform,
-  Button,
 } from "react-native";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useLocalSearchParams } from "expo-router";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import axios from "axios";
 import { LinearGradient } from "expo-linear-gradient";
@@ -31,10 +26,10 @@ import Header from "../components/Header";
 import OpinionsList from "../components/OpinionsList";
 import InputBar from "../components/InputBar";
 import ModalSheet from "../components/ModalSheet";
+import DebateEndedResults from "./ResultsScreen";
 
 export default function DebateRoom() {
   const { debateId, debateImage, clerkId } = useLocalSearchParams();
-  const router = useRouter();
   const [token, refreshToken] = useAuthToken();
   const flatRef = useRef<FlatList>(null);
   const insets = useSafeAreaInsets();
@@ -57,6 +52,9 @@ export default function DebateRoom() {
   const [isNextPage, setNextPage] = useState(null);
   const [likedUserIds, setLikedUserIds] = useState<string[]>([]);
   const [userOpinionId, setUserOpinionId] = useState<string | null>(null);
+  const [isDebateActive, setIsDebateActive] = useState<boolean | null>(null);
+  const [endedRoomResults, setEndedRoomResults] = useState<any>(null);
+  const [loadingInitial, setLoadingInitial] = useState(true);
 
   const [page, setPage] = useState(1);
   const [sort, setSort] = useState<"score" | "votes" | "date">("date");
@@ -93,6 +91,25 @@ export default function DebateRoom() {
     }
   }, [debateDescription]);
 
+  const fetchEndedRoomResults = useCallback(async () => {
+    if (!debateId || !token) return;
+
+    try {
+      const response = await axios.get(
+        `${process.env.EXPO_PUBLIC_BASE_URL}/debate-room/ended-room-results/${debateId}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      if (response.data.success) {
+        setEndedRoomResults(response.data.data);
+      }
+    } catch (err: any) {
+      console.error("Failed to fetch ended room results:", err);
+    } finally {
+      setLoadingInitial(false);
+    }
+  }, [debateId, token]);
+
   // Fetch debate metadata and liked user IDs
   const fetchDebateRoomAndLikedUserIds = useCallback(async () => {
     if (!debateId || !token) return;
@@ -108,15 +125,22 @@ export default function DebateRoom() {
         setDebateTitle(roomData.title);
         setDebateDescription(roomData.description || "");
 
-        if (roomData.createdAt && roomData.duration) {
-          const creationDate = new Date(roomData.createdAt);
-          const endDate = new Date(creationDate);
-          endDate.setHours(endDate.getHours() + roomData.duration);
-          setEndTime(endDate);
+        setIsDebateActive(roomData.active);
+
+        if (roomData.active) {
+          if (roomData.createdAt && roomData.duration) {
+            const creationDate = new Date(roomData.createdAt);
+            const endDate = new Date(creationDate);
+            endDate.setHours(endDate.getHours() + roomData.duration);
+            setEndTime(endDate);
+          } else {
+            const demoEndTime = new Date();
+            demoEndTime.setHours(demoEndTime.getHours() + 1);
+            setEndTime(demoEndTime);
+          }
         } else {
-          const demoEndTime = new Date();
-          demoEndTime.setHours(demoEndTime.getHours() + 1);
-          setEndTime(demoEndTime);
+          fetchEndedRoomResults();
+          return;
         }
       }
 
@@ -139,7 +163,8 @@ export default function DebateRoom() {
 
   // Fetch opinions
   const fetchOpinions = useCallback(async () => {
-    if (!debateId || !token) return;
+    if (!debateId || !token || !isDebateActive) return;
+
     setLoadingOpinions(true);
     try {
       const { data } = await axios.get(
@@ -166,20 +191,23 @@ export default function DebateRoom() {
       }
     } finally {
       setLoadingOpinions(false);
+      setLoadingInitial(false);
     }
-  }, [debateId, token, page, sort]);
+  }, [debateId, token, page, sort, isDebateActive]);
 
   // Initialize data on token ready
   useEffect(() => {
     if (token) {
       fetchDebateRoomAndLikedUserIds();
-      fetchOpinions();
+      if (isDebateActive) {
+        fetchOpinions();
+      }
     }
-  }, [token]);
+  }, [token, isDebateActive]);
 
   // Submit opinion
   const onSubmit = useCallback(async () => {
-    if (!userOpinion.trim() || !stance || isLoading) return;
+    if (!userOpinion.trim() || !stance || isLoading || !isDebateActive) return;
     setIsLoading(true);
     try {
       const { data } = await axios.put(
@@ -208,11 +236,11 @@ export default function DebateRoom() {
     } finally {
       setIsLoading(false);
     }
-  }, [debateId, token, userOpinion, stance]);
+  }, [debateId, token, userOpinion, stance, isDebateActive]);
 
   // Handle like/unlike
   const handleLike = async (userId: string) => {
-    if (!token) return;
+    if (!token || !isDebateActive) return;
     try {
       const { data } = await axios.put(
         `${process.env.EXPO_PUBLIC_BASE_URL}/debate-participant/opinion/like/${userId}/${debateId}`,
@@ -256,6 +284,7 @@ export default function DebateRoom() {
         <TouchableOpacity
           onPress={() => handleLike(item.userId)}
           activeOpacity={0.8}
+          disabled={!isDebateActive}
         >
           <View
             style={{
@@ -401,9 +430,81 @@ export default function DebateRoom() {
         </TouchableOpacity>
       );
     },
-    [handleLike, likedUserIds]
+    [handleLike, likedUserIds, isDebateActive]
   );
 
+  if (loadingInitial || isDebateActive === null) {
+    return (
+      <SafeAreaView
+        style={{ flex: 1, backgroundColor: theme.colors.background }}
+      >
+        <StatusBar barStyle='light-content' />
+        <View
+          style={{
+            flex: 1,
+            justifyContent: "center",
+            alignItems: "center",
+            padding: 16,
+          }}
+        >
+          <ActivityIndicator size='large' color={theme.colors.primary} />
+
+          <Text
+            style={{
+              marginTop: 20,
+              fontSize: 16,
+              color: theme.colors.text,
+              fontWeight: "600",
+            }}
+          >
+            Loading Debate...
+          </Text>
+
+          <Text
+            style={{
+              marginTop: 6,
+              fontSize: 13,
+              color: theme.colors.textMuted,
+            }}
+          >
+            Gathering strong opinions.
+          </Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // Show ended debate results
+  if (!isDebateActive && endedRoomResults) {
+    return (
+      <SafeAreaView
+        style={{ flex: 1, backgroundColor: theme.colors.background }}
+      >
+        <StatusBar barStyle='light-content' />
+        <Header
+          timeRemaining={0}
+          setShowModal={setShowModal}
+          agreePct={endedRoomResults.agreementRatio}
+          opinions={[]}
+          debateTitle={debateTitle}
+          debateImage={
+            Array.isArray(debateImage) ? debateImage[0] : debateImage
+          }
+          insets={insets}
+          isDebateEnded={true}
+        />
+
+        <DebateEndedResults
+          results={endedRoomResults}
+          insets={insets}
+          debateTitle={debateTitle}
+          debateImage={debateImage}
+        />
+      </SafeAreaView>
+    );
+  }
+
+  // Show active debate room
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.background }}>
       <StatusBar
@@ -411,7 +512,6 @@ export default function DebateRoom() {
         backgroundColor={theme.colors.backgroundDarker}
       />
 
-      {/* Improved header alignment */}
       <Header
         timeRemaining={timeRemaining}
         setShowModal={setShowModal}
@@ -422,7 +522,7 @@ export default function DebateRoom() {
         insets={insets}
       />
 
-      {!loadingOpinions && (
+      {!loadingOpinions ? (
         <>
           <OpinionsList
             loadingOpinions={loadingOpinions}
@@ -446,9 +546,14 @@ export default function DebateRoom() {
             userOpinion={userOpinion}
           />
         </>
+      ) : (
+        <View
+          style={{ flex: 1, justifyContent: "center", alignItems: "center" }}
+        >
+          <ActivityIndicator size='large' color={theme.colors.primary} />
+        </View>
       )}
 
-      {/* Debate description modal - fully opaque */}
       {showModal && (
         <ModalSheet
           agreePct={agreePct}

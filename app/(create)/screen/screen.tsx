@@ -42,7 +42,7 @@ const DebateRoomImageSelector = ({
       className='w-full h-96 border-2 rounded-2xl justify-center items-center mb-4 overflow-hidden'
       style={{
         borderColor: cyberpunkTheme.borders.glowing.borderColor,
-        backgroundColor: "rgba(31, 41, 55, 0.5)", // Dark backdrop for image area
+        backgroundColor: "rgba(31, 41, 55, 0.5)",
       }}
     >
       {uploading ? (
@@ -67,13 +67,12 @@ const DebateRoomImageSelector = ({
   </View>
 );
 
-// Main Screen
 export default function CreateDebateRoomScreen() {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [selectedDuration, setSelectedDuration] = useState(24);
-  const [imageUri, setImageUri] = useState(null);
-  const [cloudUrl, setCloudUrl] = useState(null);
+  const [imageUri, setImageUri] = useState<string | null>(null);
+  const [cloudUrl, setCloudUrl] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [errors, setErrors] = useState({ title: "", description: "" });
@@ -81,7 +80,10 @@ export default function CreateDebateRoomScreen() {
 
   const router = useRouter();
 
-  const requestPermission = async (permissionFn, errorMsg) => {
+  const requestPermission = async (
+    permissionFn: () => Promise<any>,
+    errorMsg: string
+  ) => {
     if (Platform.OS !== "web") {
       const { status } = await permissionFn();
       if (status !== "granted") {
@@ -92,32 +94,44 @@ export default function CreateDebateRoomScreen() {
     return true;
   };
 
-  const uploadToCloudinary = async (uri) => {
+  const uploadToR2 = async (uri: string) => {
     setUploading(true);
     try {
-      const form = new FormData();
-      const name = uri.split("/").pop();
-      const match = /\.(\w+)$/.exec(name || "");
-      form.append("file", {
-        uri,
-        name,
-        type: match ? `image/${match[1]}` : "image/jpeg",
-      });
-      form.append("upload_preset", "lets_debate");
+      // 1. Generate a unique file key
+      const name = uri.split("/").pop() || "upload.jpg";
+      const key = `uploads/${Date.now()}_${name}`;
 
-      const res = await fetch(
-        "https://api.cloudinary.com/v1_1/shahnoorcloudinary/image/upload",
-        { method: "POST", body: form }
+      // 2. Get signed URL from backend
+      const { data } = await axios.get(
+        `${process.env.EXPO_PUBLIC_BASE_URL}/uploads/signed-url`,
+        {
+          params: { filename: key, type: "image/jpeg" },
+          headers: { Authorization: `Bearer ${token}` },
+        }
       );
-      const data = await res.json();
-      if (data.secure_url) setCloudUrl(data.secure_url);
-      else {
-        console.error("Cloudinary Error:", data);
-        Alert.alert("Upload Failed", "Unable to upload image.");
+      const signedUrl: string = data.data.signedUrl;
+
+      // 3. Upload directly to R2
+      try {
+        const blob = await fetch(uri).then((r) => r.blob());
+        const uploadRes = await fetch(signedUrl, {
+          method: "PUT",
+          headers: { "Content-Type": "image/jpeg" },
+          body: blob,
+        });
+        if (!uploadRes.ok) throw new Error("Upload failed");
+      } catch (error) {
+        console.error("Image upload error:", error);
+        throw error;
       }
+
+      // 4. Construct public CDN URL
+      const publicUrl = `https://r2-image-cdn.letsdebate0.workers.dev/letsdebate-media/${key}`;
+      setCloudUrl(publicUrl);
+      setImageUri(uri);
     } catch (err) {
       console.error(err);
-      Alert.alert("Upload Error", "Check your connection and try again.");
+      Alert.alert("Upload Error", "Unable to upload image. Please try again.");
     } finally {
       setUploading(false);
     }
@@ -138,9 +152,7 @@ export default function CreateDebateRoomScreen() {
       quality: 1,
     });
     if (!result.canceled) {
-      const uri = result.assets[0].uri;
-      setImageUri(uri);
-      await uploadToCloudinary(uri);
+      await uploadToR2(result.assets[0].uri);
     }
   };
 
@@ -158,9 +170,7 @@ export default function CreateDebateRoomScreen() {
       quality: 1,
     });
     if (!result.canceled) {
-      const uri = result.assets[0].uri;
-      setImageUri(uri);
-      await uploadToCloudinary(uri);
+      await uploadToR2(result.assets[0].uri);
     }
   };
 
@@ -189,28 +199,33 @@ export default function CreateDebateRoomScreen() {
     try {
       const { data } = await axios.post(
         `${process.env.EXPO_PUBLIC_BASE_URL}/debate-room`,
-        { title, description, image: cloudUrl, duration: selectedDuration },
+        {
+          title,
+          description,
+          image: cloudUrl,
+          duration: selectedDuration,
+        },
         {
           headers: {
             Authorization: `Bearer ${token}`,
           },
         }
       );
-      if (data.status == 401) {
-        refreshToken();
-        handleSubmit();
+      if (data.status === 401) {
+        await refreshToken();
+        return handleSubmit();
       }
       if (data.success) {
         Alert.alert("Success", "Debate created!", [
           { text: "OK", onPress: () => router.push("/(tabs)/debates") },
         ]);
       }
-    } catch (err) {
+    } catch (err: any) {
       if (err.response?.status === 400) {
         Alert.alert("Notice", "You already have an active debate.");
       } else {
-        Alert.alert("Error", "Failed to create debate room.");
         console.error(err);
+        Alert.alert("Error", "Failed to create debate room.");
       }
     } finally {
       setSubmitting(false);
@@ -221,7 +236,7 @@ export default function CreateDebateRoomScreen() {
     <SafeAreaView className='flex-1 bg-[#0A0A1A]'>
       <StatusBar style='light' backgroundColor='#0A0A1A' />
 
-      {/* Header with Back Button */}
+      {/* Header */}
       <View className='flex-row items-center px-4 py-2 mb-2'>
         <TouchableOpacity
           onPress={() => router.back()}
@@ -265,6 +280,7 @@ export default function CreateDebateRoomScreen() {
             onCapture={takePhoto}
           />
 
+          {/* Title Field */}
           <View className='mb-4'>
             <View className='flex-row items-center bg-gray-800 border border-gray-700 rounded-xl p-4'>
               <Icon
@@ -281,13 +297,14 @@ export default function CreateDebateRoomScreen() {
                 maxLength={50}
               />
             </View>
-            {errors.title ? (
+            {errors.title && (
               <Text className='text-red-400 text-sm mt-1 pl-2'>
                 {errors.title}
               </Text>
-            ) : null}
+            )}
           </View>
 
+          {/* Description Field */}
           <View className='mb-4'>
             <View className='flex-row items-start bg-gray-800 border border-gray-700 rounded-xl p-4'>
               <Icon
@@ -306,13 +323,14 @@ export default function CreateDebateRoomScreen() {
                 maxLength={250}
               />
             </View>
-            {errors.description ? (
+            {errors.description && (
               <Text className='text-red-400 text-sm mt-1 pl-2'>
                 {errors.description}
               </Text>
-            ) : null}
+            )}
           </View>
 
+          {/* Duration Selector */}
           <View className='mb-4'>
             <Text className='text-white text-lg mb-2 pl-2'>
               Select Debate Duration
@@ -344,7 +362,7 @@ export default function CreateDebateRoomScreen() {
         </ScrollView>
       </KeyboardAvoidingView>
 
-      {/* Sticky Create Button */}
+      {/* Create Button */}
       <View className='absolute rounded-xl bottom-0 left-0 right-0 p-4 bg-[#0A0A1A]'>
         <TouchableOpacity
           onPress={handleSubmit}
