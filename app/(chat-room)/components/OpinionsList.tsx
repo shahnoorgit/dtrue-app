@@ -11,7 +11,7 @@ import { theme } from "../theme";
 
 interface OpinionListProps {
   loadingOpinions: boolean;
-  flatRef: React.RefObject<FlatList>;
+  flatRef: React.RefObject<FlatList<any>>;
   opinions: any[];
   renderOpinion: ({ item }: { item: any }) => JSX.Element;
   submitted: boolean;
@@ -31,7 +31,15 @@ const OpinionsList = ({
   isLoadingMore,
 }: OpinionListProps) => {
   const renderEmptyComponent = () => (
-    <View style={{ alignItems: "center", paddingVertical: 60 }}>
+    <View
+      style={{
+        flex: 1,
+        justifyContent: "center",
+        alignItems: "center",
+        paddingVertical: 60,
+        transform: [{ scaleY: -1 }, { scaleX: -1 }], // 🔥 flip back
+      }}
+    >
       <Ionicons
         name='chatbubble-ellipses-outline'
         size={64}
@@ -73,20 +81,20 @@ const OpinionsList = ({
       renderItem={({ item }) => (
         <View style={{ marginVertical: 8 }}>{renderOpinion({ item })}</View>
       )}
+      inverted
       initialNumToRender={10}
       maxToRenderPerBatch={10}
       windowSize={10}
-      inverted // scroll from bottom to top
       removeClippedSubviews={Platform.OS === "android"}
       contentContainerStyle={{
-        paddingTop: submitted ? 16 : 200, // visually bottom
-        paddingBottom: 16, // visually top
+        paddingTop: submitted ? 16 : 200,
+        paddingBottom: 16,
         paddingHorizontal: 12,
       }}
       onEndReached={() => isNextPage && setPage((prev) => prev + 1)}
       onEndReachedThreshold={0.5}
       ListFooterComponent={renderFooter}
-      ListEmptyComponent={renderEmptyComponent}
+      ListEmptyComponent={renderEmptyComponent} // ✅ flipped visually
     />
   );
 };

@@ -325,6 +325,7 @@ const Rooms = () => {
         if (!response.ok) {
           if (response.status === 401) {
             refreshToken();
+            fetchDebateRooms();
             return;
           }
 
