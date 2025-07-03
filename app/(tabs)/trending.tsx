@@ -126,55 +126,6 @@ const TrendingDebatesPage = () => {
     fetchTrendingDebates();
   }, [fetchTrendingDebates]);
 
-  const handleJoinDebate = useCallback(
-    async (debate) => {
-      if (!token || !debate) return;
-
-      setJoiningDebateId(debate.id);
-
-      try {
-        const response = await fetch(
-          `${process.env.EXPO_PUBLIC_BASE_URL}/debate-participant`,
-          {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${token}`,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({ roomId: debate.id }),
-          }
-        );
-
-        if (response.status === 401) {
-          refreshToken();
-          return;
-        }
-
-        if (response.ok) {
-          if (response.status == 201) {
-            console.log(debate.id, debate.image, userId, "Flaggerrrrrr");
-            router.push({
-              pathname: "/(chat-room)/screen",
-              params: {
-                clerkId: userId,
-                debateId: debate.id,
-                debateImage: debate.image || "",
-              },
-            });
-          }
-        } else {
-          throw new Error("Failed to join debate");
-        }
-      } catch (error) {
-        console.error("Error joining debate:", error);
-        Alert.alert("Error", "Failed to join the debate. Please try again.");
-      } finally {
-        setJoiningDebateId(null);
-      }
-    },
-    [token, router]
-  );
-
   const openDebate = useCallback(async (debate) => {
     if (!debate) return;
     router.push({
@@ -285,16 +236,9 @@ const TrendingDebatesPage = () => {
 
           {/* Action Button */}
           <TouchableOpacity
-            style={[
-              styles.actionButton,
-              item.joined ? styles.viewButton : styles.joinButton,
-            ]}
+            style={[styles.actionButton, styles.viewButton]}
             onPress={() => {
-              if (item.joined) {
-                openDebate(item);
-              } else {
-                handleJoinDebate(item);
-              }
+              openDebate(item);
             }}
             disabled={joiningDebateId === item.id}
           >
@@ -302,14 +246,8 @@ const TrendingDebatesPage = () => {
               <ActivityIndicator size='small' color={THEME.colors.text} />
             ) : (
               <>
-                <Ionicons
-                  name={item.joined ? "eye" : "add-circle"}
-                  size={20}
-                  color={THEME.colors.text}
-                />
-                <Text style={styles.actionButtonText}>
-                  {item.joined ? "VIEW DEBATE" : "JOIN NOW"}
-                </Text>
+                <Ionicons name={"eye"} size={20} color={THEME.colors.text} />
+                <Text style={styles.actionButtonText}>{"ENTER DEBATE"}</Text>
               </>
             )}
           </TouchableOpacity>

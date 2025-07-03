@@ -1,51 +1,77 @@
 {
   "expo": {
-    "name": "moviesaga",
-    "slug": "moviesaga",
+    "name": "Dtrue",
+    "slug": "dtrue",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/logo.png",
-    "scheme": "myapp",
+    "splash": {
+      "image": "./assets/images/splash.png",
+      "resizeMode": "cover",
+      "backgroundColor": "#0A0E13"
+    },
+    "assetBundlePatterns": ["**/*"],
     "userInterfaceStyle": "automatic",
+    "jsEngine": "hermes",
     "newArchEnabled": true,
+
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSAppTransportSecurity": {
+          "NSAllowsArbitraryLoads": true
+        }
+      }
     },
+
     "android": {
-      "googleServicesFile": "./google-services.json",
+      "package": "com.shahnoor.dtrue",
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/splashscreen.png",
-        "backgroundColor": "#ffffff"
+        "foregroundImage": "./assets/images/logo.png",
+        "backgroundColor": "#0A0E13"
       },
-      "package": "com.letsdebate.letsdebate"
+      "jsEngine": "hermes"
     },
+
     "web": {
       "bundler": "metro",
       "output": "static",
       "favicon": "./assets/images/favicon.png"
     },
+
     "plugins": [
       "expo-router",
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/splashscreen.png",
-          "imageWidth": 200,
-          "resizeMode": "contain",
-          "backgroundColor": "#ffffff"
+          "image": "./assets/images/splash.png",
+          "resizeMode": "cover",
+          "backgroundColor": "#0A0E13"
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "usesCleartextTraffic": true
+          }
         }
       ]
     ],
+
     "experiments": {
       "typedRoutes": true
     },
+
     "extra": {
       "router": {
         "origin": false
       },
       "eas": {
-        "projectId": "523ffbc3-de2b-437d-b5e1-653bab30395f"
+        "projectId": "161ac660-74b1-4723-b57c-ba70d81bc91e"
       }
-    }
+    },
+
+    "owner": "shahnoor_mujawar"
   }
 }

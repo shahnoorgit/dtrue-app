@@ -17,6 +17,7 @@ import { useNavigation } from "@react-navigation/native";
 import { useAuthToken } from "@/hook/clerk/useFetchjwtToken";
 import { router } from "expo-router";
 import { useAuth } from "@clerk/clerk-expo";
+import { theme } from "@/app/(chat-room)/theme";
 
 const { width } = Dimensions.get("window");
 // Slightly wider card
@@ -253,18 +254,12 @@ const DebateCard = ({ debate, onJoinPress }) => {
         {
           width: CARD_WIDTH,
           borderRadius: 16,
-          backgroundColor: "#03120F",
-          borderWidth: 2,
-          borderColor: urgencyColor,
-          elevation: 8,
-          shadowColor: "#00FF94",
-          shadowOffset: { width: 0, height: 4 },
-          shadowOpacity: 0.25,
-          shadowRadius: 12,
+          backgroundColor: theme.colors.background,
+          borderWidth: 1,
+          borderColor: "#cccccc",
           marginVertical: 16,
           marginHorizontal: 12, // Adjusted for wider card
           overflow: "hidden",
-          opacity: loading ? 0.95 : 1,
         },
       ]}
       onPress={() => !loading && onJoinPress && onJoinPress(debate)}
@@ -286,16 +281,7 @@ const DebateCard = ({ debate, onJoinPress }) => {
           style={{ width: "100%", height: IMAGE_HEIGHT }}
           resizeMode='cover'
         />
-        <LinearGradient
-          colors={["transparent", "rgba(3, 18, 15, 0.8)"]}
-          style={{
-            position: "absolute",
-            bottom: 0,
-            left: 0,
-            right: 0,
-            height: IMAGE_HEIGHT / 2,
-          }}
-        />
+
         <View
           style={{
             position: "absolute",
@@ -305,7 +291,7 @@ const DebateCard = ({ debate, onJoinPress }) => {
             paddingVertical: 6,
             borderRadius: 6,
             elevation: 3,
-            backgroundColor: cyberpunkTheme.colors.primary,
+            backgroundColor: "#cccccc",
           }}
         >
           <Text style={{ color: "#03120F", fontSize: 12, fontWeight: "700" }}>
@@ -330,8 +316,6 @@ const DebateCard = ({ debate, onJoinPress }) => {
                 width: 40,
                 height: 40,
                 borderRadius: 20,
-                borderWidth: 2,
-                borderColor: cyberpunkTheme.colors.primary,
               }}
             />
             <View style={{ marginLeft: 8 }}>
@@ -347,7 +331,7 @@ const DebateCard = ({ debate, onJoinPress }) => {
             style={{
               flexDirection: "row",
               alignItems: "center",
-              backgroundColor: cyberpunkTheme.colors.primary,
+              backgroundColor: cyberpunkTheme.colors.primaryDark,
               paddingHorizontal: 10,
               paddingVertical: 5,
               borderRadius: 12,
@@ -385,20 +369,20 @@ const DebateCard = ({ debate, onJoinPress }) => {
               <View
                 key={tag}
                 style={{
-                  backgroundColor: "rgba(0,255,148,0.15)",
+                  backgroundColor: theme.colors.backgroundDarker,
                   paddingHorizontal: 10,
                   paddingVertical: 6,
                   borderRadius: 6,
                   marginRight: 8,
                   marginBottom: 2,
                   borderWidth: 1,
-                  borderColor: "rgba(0,255,148,0.3)",
+                  borderColor: "#cccccc",
                 }}
               >
                 <Text
                   style={{
-                    color: cyberpunkTheme.colors.primary,
-                    fontSize: 11,
+                    color: "#E0F0EA",
+                    fontSize: 10,
                     fontWeight: "600",
                   }}
                 >
@@ -419,13 +403,13 @@ const DebateCard = ({ debate, onJoinPress }) => {
             <Icon
               name='clock-outline'
               size={16}
-              color={urgencyColor}
+              color={"#E0F0EA"}
               style={{ opacity: 0.9 }}
             />
             <Text
               style={{
                 marginLeft: 6,
-                color: urgencyColor,
+                color: "#E0F0EA",
                 fontSize: 12,
                 fontWeight: "500",
               }}
@@ -437,7 +421,7 @@ const DebateCard = ({ debate, onJoinPress }) => {
             <Icon
               name='vote-outline'
               size={16}
-              color={cyberpunkTheme.colors.primary}
+              color={"#E0F0EA"}
               style={{ opacity: 0.9 }}
             />
             <Text
@@ -457,24 +441,26 @@ const DebateCard = ({ debate, onJoinPress }) => {
           <View
             style={{
               flexDirection: "row",
-              height: 10,
-              borderRadius: 5,
+              height: 8,
+              borderRadius: 4,
+              backgroundColor: "#222", // dark track
               overflow: "hidden",
-              marginBottom: 2,
+              marginBottom: 4,
             }}
           >
+            {/* Agreed segment */}
             <View
               style={{
-                height: 10,
                 flex: debate.agreedCount || 1,
-                backgroundColor: "#00CC47",
+                backgroundColor: "#FFF", // bright white
               }}
             />
+
+            {/* Disagreed segment */}
             <View
               style={{
-                height: 10,
                 flex: debate.disagreedCount || 1,
-                backgroundColor: "#FF3D71",
+                backgroundColor: "#888", // mid grey
               }}
             />
           </View>
@@ -488,13 +474,11 @@ const DebateCard = ({ debate, onJoinPress }) => {
                   width: 8,
                   height: 8,
                   borderRadius: 4,
-                  backgroundColor: "#00CC47",
+                  backgroundColor: "#FFF",
                   marginRight: 6,
                 }}
               />
-              <Text
-                style={{ color: "#00CC47", fontSize: 12, fontWeight: "600" }}
-              >
+              <Text style={{ color: "#FFF", fontSize: 12, fontWeight: "600" }}>
                 {debate.agreedCount} Agreed
               </Text>
             </View>
@@ -504,13 +488,11 @@ const DebateCard = ({ debate, onJoinPress }) => {
                   width: 8,
                   height: 8,
                   borderRadius: 4,
-                  backgroundColor: "#FF3D71",
+                  backgroundColor: "#888",
                   marginRight: 6,
                 }}
               />
-              <Text
-                style={{ color: "#FF3D71", fontSize: 12, fontWeight: "600" }}
-              >
+              <Text style={{ color: "#888", fontSize: 12, fontWeight: "600" }}>
                 {debate.disagreedCount} Disagreed
               </Text>
             </View>

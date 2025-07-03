@@ -567,10 +567,7 @@ const Rooms = () => {
         <View style={styles.debateInfo}>
           <View style={styles.titleRow}>
             <Text
-              style={[
-                styles.debateTitle,
-                isJoined && { color: THEME.colors.primary },
-              ]}
+              style={[styles.debateTitle, isJoined && { color: "#FFFFFF" }]}
               numberOfLines={1}
             >
               {debate.title || "Untitled Debate"}
@@ -663,7 +660,7 @@ const Rooms = () => {
     return (
       <View style={styles.container}>
         <View style={styles.header}>
-          <Text style={styles.headerTitle}>Debate Rooms</Text>
+          <Text style={styles.headerTitle}>Rooms</Text>
           <View style={styles.newDebateButton}>
             <Ionicons
               name='add-circle'
@@ -690,7 +687,7 @@ const Rooms = () => {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Debate Rooms</Text>
+        <Text style={styles.headerTitle}>Rooms</Text>
         <TouchableOpacity
           style={styles.newDebateButton}
           onPress={getCreateRoomEligibility}
@@ -820,17 +817,18 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   activeTab: {
-    backgroundColor: THEME.colors.primary + "22",
+    backgroundColor: "#f0f0f0", // light modern grey
     borderWidth: 1,
-    borderColor: THEME.colors.primary + "55",
+    borderColor: "#d0d0d0", // subtle grey border
+    borderRadius: 8,
   },
   tabText: {
-    color: THEME.colors.textMuted,
+    color: "#6e6e6e", // soft muted grey text
     fontWeight: "500",
     fontSize: 14,
   },
   activeTabText: {
-    color: THEME.colors.primary,
+    color: "#000000", // solid black for emphasis
     fontWeight: "600",
   },
   listContainer: {
@@ -848,7 +846,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     borderWidth: 1,
-    borderColor: "#00FF9455",
+    borderColor: "#f0f0f0", // light modern grey border
   },
   debateImage: {
     width: 60,
@@ -880,7 +878,7 @@ const styles = StyleSheet.create({
   timeRemaining: {
     fontSize: 12,
     fontWeight: "600",
-    color: THEME.colors.primary,
+    color: THEME.colors.textMuted,
   },
   usersCount: {
     flexDirection: "row",
@@ -988,7 +986,7 @@ const styles = StyleSheet.create({
     paddingVertical: 24,
     paddingHorizontal: 20,
     borderWidth: 1,
-    borderColor: THEME.colors.primary + "55",
+    borderColor: "#f0f0f0", // light modern grey border,
     shadowColor: THEME.colors.primary,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
@@ -1034,36 +1032,22 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   joinedCard: {
-    borderColor: THEME.colors.primary,
-    borderWidth: 2,
-    backgroundColor: THEME.colors.backgroundDarker + "EE", // Slightly brighter
-    shadowColor: THEME.colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
+    borderColor: "#f0f0f0",
+    backgroundColor: THEME.colors.background + "EE", // Slightly brighter
   },
 
   notJoinedCard: {
-    borderColor: "#FF6B6B55", // Soft red border
-    borderWidth: 1,
-    backgroundColor: THEME.colors.backgroundDarker + "AA", // Slightly dimmed
-    opacity: 0.8,
+    borderColor: "#cccccc", // Soft red border
+    backgroundColor: THEME.colors.background,
   },
 
   // Enhanced image styles
   joinedImage: {
     borderWidth: 2,
-    borderColor: THEME.colors.primary,
-    shadowColor: THEME.colors.primary,
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
   },
 
   notJoinedImage: {
-    opacity: 0.7,
-    borderWidth: 1,
     borderColor: "#FF6B6B33",
   },
 
@@ -1102,11 +1086,11 @@ const styles = StyleSheet.create({
   },
 
   joinedText: {
-    color: THEME.colors.primary,
+    color: "#FFFFFF",
   },
 
   notJoinedText: {
-    color: "#FF6B6B",
+    color: "#FFFFFF",
   },
 
   // Join prompt arrow for not joined cards

@@ -280,7 +280,7 @@ function AuthFlow() {
           hasRedirectedRef.current = true;
 
           // Navigate to the main app tab
-          router.replace("/(tabs)/profile");
+          router.replace("/(tabs)");
         }
       }, 1000); // Increased delay to 1 second for more reliable navigation
     } catch (error) {
