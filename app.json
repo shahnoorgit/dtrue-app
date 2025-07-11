@@ -10,11 +10,12 @@
       "resizeMode": "cover",
       "backgroundColor": "#0A0E13"
     },
-    "assetBundlePatterns": ["**/*"],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "userInterfaceStyle": "automatic",
     "jsEngine": "hermes",
     "newArchEnabled": true,
-
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
@@ -23,7 +24,6 @@
         }
       }
     },
-
     "android": {
       "package": "com.shahnoor.dtrue",
       "adaptiveIcon": {
@@ -32,13 +32,11 @@
       },
       "jsEngine": "hermes"
     },
-
     "web": {
       "bundler": "metro",
       "output": "static",
       "favicon": "./assets/images/favicon.png"
     },
-
     "plugins": [
       "expo-router",
       [
@@ -56,13 +54,12 @@
             "usesCleartextTraffic": true
           }
         }
-      ]
+      ],
+      "expo-localization"
     ],
-
     "experiments": {
       "typedRoutes": true
     },
-
     "extra": {
       "router": {
         "origin": false
@@ -71,7 +68,6 @@
         "projectId": "161ac660-74b1-4723-b57c-ba70d81bc91e"
       }
     },
-
     "owner": "shahnoor_mujawar"
   }
 }

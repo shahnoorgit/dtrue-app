@@ -5,11 +5,11 @@ import {
   FlatList,
   ActivityIndicator,
   Platform,
+  StyleSheet,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { theme } from "../theme";
 
-interface OpinionListProps {
+interface OpinionsListProps {
   loadingOpinions: boolean;
   flatRef: React.RefObject<FlatList<any>>;
   opinions: any[];
@@ -20,7 +20,7 @@ interface OpinionListProps {
   isLoadingMore: boolean;
 }
 
-const OpinionsList = ({
+const OpinionsList: React.FC<OpinionsListProps> = ({
   loadingOpinions,
   flatRef,
   opinions,
@@ -29,46 +29,29 @@ const OpinionsList = ({
   isNextPage,
   setPage,
   isLoadingMore,
-}: OpinionListProps) => {
+}) => {
   const renderEmptyComponent = () => (
-    <View
-      style={{
-        flex: 1,
-        justifyContent: "center",
-        alignItems: "center",
-        paddingVertical: 60,
-        transform: [{ scaleY: -1 }, { scaleX: -1 }], // 🔥 flip back
-      }}
-    >
+    <View style={styles.emptyContainer}>
       <Ionicons
         name='chatbubble-ellipses-outline'
         size={64}
-        color='rgba(0, 255, 148, 0.3)'
+        color='rgba(255,255,255,0.3)'
       />
-      <Text
-        style={{
-          color: theme.colors.text,
-          textAlign: "center",
-          marginTop: 12,
-          maxWidth: "80%",
-        }}
-      >
-        Be the first to share your opinion
-      </Text>
+      <Text style={styles.emptyText}>Be the first to share your opinion</Text>
     </View>
   );
 
   const renderFooter = () =>
     isLoadingMore ? (
-      <View style={{ paddingVertical: 20 }}>
-        <ActivityIndicator size='small' color={theme.colors.primary} />
+      <View style={styles.footerLoading}>
+        <ActivityIndicator size='small' color='#FFF' />
       </View>
     ) : null;
 
   if (loadingOpinions) {
     return (
-      <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
-        <ActivityIndicator size='large' color={theme.colors.primary} />
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size='large' color='#FFF' />
       </View>
     );
   }
@@ -79,7 +62,7 @@ const OpinionsList = ({
       data={opinions}
       keyExtractor={(_, idx) => idx.toString()}
       renderItem={({ item }) => (
-        <View style={{ marginVertical: 8 }}>{renderOpinion({ item })}</View>
+        <View style={styles.itemContainer}>{renderOpinion({ item })}</View>
       )}
       inverted
       initialNumToRender={10}
@@ -94,9 +77,37 @@ const OpinionsList = ({
       onEndReached={() => isNextPage && setPage((prev) => prev + 1)}
       onEndReachedThreshold={0.5}
       ListFooterComponent={renderFooter}
-      ListEmptyComponent={renderEmptyComponent} // ✅ flipped visually
+      ListEmptyComponent={renderEmptyComponent}
     />
   );
 };
 
 export default OpinionsList;
+
+const styles = StyleSheet.create({
+  loadingContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingVertical: 60,
+    transform: [{ scaleY: -1 }, { scaleX: -1 }],
+  },
+  emptyText: {
+    color: "#FFF",
+    textAlign: "center",
+    marginTop: 12,
+    fontSize: 16,
+    maxWidth: "80%",
+  },
+  itemContainer: {
+    marginVertical: 8,
+  },
+  footerLoading: {
+    paddingVertical: 20,
+  },
+});

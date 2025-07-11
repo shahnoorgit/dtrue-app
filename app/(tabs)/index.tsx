@@ -10,9 +10,8 @@ import {
   Pressable,
   Platform,
   Animated,
+  Image,
 } from "react-native";
-import { LinearGradient } from "expo-linear-gradient";
-import { BlurView } from "expo-blur";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import axios from "axios";
 import * as Haptics from "expo-haptics";
@@ -20,8 +19,10 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { cyberpunkTheme } from "@/constants/theme";
 import DebateCard from "@/components/tabs/debate_card/DebateCard";
 import { useAuth } from "@clerk/clerk-expo";
+import { theme } from "../(chat-room)/theme";
+import { LinearGradient } from "expo-linear-gradient";
+import { useRouter } from "expo-router";
 
-// Constants for caching and layout
 const DEBATES_STORAGE_KEY = "cached_debates";
 const DEBATES_TIMESTAMP_KEY = "cached_debates_timestamp";
 const CURSOR_STORAGE_KEY = "cached_cursor";
@@ -39,14 +40,14 @@ export default function DebateFeed() {
   const [refreshing, setRefreshing] = useState(false);
 
   const { getToken } = useAuth();
+  const router = useRouter();
   const tokenRef = useRef(null);
-  const momentumRef = useRef(true); // Tracks if scroll is momentum-based
+  const momentumRef = useRef(true);
   const scrollY = useRef(new Animated.Value(0)).current;
   const flatListRef = useRef(null);
   const scrollOffsetRef = useRef(0);
   const isInitialMount = useRef(true);
 
-  // Initialize: load cached debates and fetch fresh data
   useEffect(() => {
     const initialize = async () => {
       const cachedDebates = await loadCachedDebates();
@@ -56,11 +57,10 @@ export default function DebateFeed() {
       if (cachedCursor) setCursor(cachedCursor);
 
       tokenRef.current = await getToken({ template: "lets_debate_jwt" });
-      fetchDebates(null, true); // Fetch without cursor for initial load
+      fetchDebates(null, true);
     };
     initialize();
 
-    // Cleanup: save scroll position and cursor on unmount
     return () => {
       AsyncStorage.multiSet([
         [CURSOR_STORAGE_KEY, cursor || ""],
@@ -69,7 +69,6 @@ export default function DebateFeed() {
     };
   }, []);
 
-  // Restore scroll position after initial load
   useEffect(() => {
     if (isInitialMount.current && debates.length > 0 && flatListRef.current) {
       const restoreScroll = async () => {
@@ -86,14 +85,12 @@ export default function DebateFeed() {
     }
   }, [debates]);
 
-  // Cache debates when updated
   useEffect(() => {
     if (debates.length > 0 && !refreshing && !loadingMore && !loading) {
       cacheDebates(debates);
     }
   }, [debates, refreshing, loadingMore, loading]);
 
-  // Load cached debates from storage
   const loadCachedDebates = async () => {
     try {
       const timestamp = parseInt(
@@ -109,7 +106,6 @@ export default function DebateFeed() {
     }
   };
 
-  // Save debates to cache
   const cacheDebates = async (data) => {
     try {
       await AsyncStorage.multiSet([
@@ -121,14 +117,10 @@ export default function DebateFeed() {
     }
   };
 
-  // Fetch debates with cursor-based pagination
   const fetchDebates = useCallback(
-    async (fetchCursor: string | null = null, shouldRefresh = false) => {
+    async (fetchCursor = null, shouldRefresh = false) => {
       if (!tokenRef.current) return;
-
-      // flip the loading flags
       fetchCursor === null ? setLoading(true) : setLoadingMore(true);
-
       try {
         const url = `${
           process.env.EXPO_PUBLIC_BASE_URL
@@ -138,31 +130,24 @@ export default function DebateFeed() {
         const { data } = await axios.get(url, {
           headers: { Authorization: `Bearer ${tokenRef.current}` },
         });
-
         if (data?.success) {
           const newDebates = data.data.data;
           const nextCursor = data.data.nextCursor;
           const hasNext = data.data.pagination?.hasNextPage;
-
           setDebates((prev) =>
             shouldRefresh ? newDebates : [...prev, ...newDebates]
           );
           setCursor(nextCursor);
           setHasNextPage(hasNext);
-
-          // persist the new cursor
           if (nextCursor) {
             await AsyncStorage.setItem(CURSOR_STORAGE_KEY, nextCursor);
           }
         }
-      } catch (error: any) {
-        // if it was a 404, assume token expired: grab a fresh one and retry once
+      } catch (error) {
         if (error.response?.status === 404) {
           console.log("Got 404—refreshing token and retrying feed fetch");
           try {
-            // re-fetch the JWT
             tokenRef.current = await getToken({ template: "lets_debate_jwt" });
-            // retry the exact same request
             return fetchDebates(fetchCursor, shouldRefresh);
           } catch (tokeErr) {
             console.error("Error refreshing token:", tokeErr);
@@ -179,15 +164,13 @@ export default function DebateFeed() {
     [getToken]
   );
 
-  // Handle pull-to-refresh
   const handleRefresh = useCallback(() => {
     if (!loading && !refreshing) {
       setRefreshing(true);
-      fetchDebates(null, true); // Fetch without cursor for refresh
+      fetchDebates(null, true);
     }
   }, [fetchDebates, loading, refreshing]);
 
-  // Handle infinite scroll
   const onEndReachedCallback = useCallback(() => {
     if (
       !momentumRef.current &&
@@ -196,12 +179,16 @@ export default function DebateFeed() {
       !loadingMore &&
       !refreshing
     ) {
-      fetchDebates(cursor); // Use current cursor to fetch next page
+      fetchDebates(cursor);
       momentumRef.current = true;
     }
   }, [fetchDebates, cursor, hasNextPage, loading, loadingMore, refreshing]);
 
-  // Render debate card
+  const handleExplorePress = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    router.push("/explore");
+  }, []);
+
   const renderItem = useCallback(
     ({ item }) => (
       <DebateCard
@@ -211,6 +198,101 @@ export default function DebateFeed() {
     ),
     []
   );
+
+  const renderEmptyComponent = useCallback(() => {
+    if (loading) return null;
+    return (
+      <View
+        style={{
+          flex: 1,
+          justifyContent: "center",
+          alignItems: "center",
+          paddingHorizontal: 32,
+          backgroundColor: "#080F12",
+          paddingBottom: tabBarHeight,
+        }}
+      >
+        <View
+          style={{
+            width: 80,
+            height: 80,
+            borderRadius: 40,
+            backgroundColor: "#1A1A1A",
+            justifyContent: "center",
+            alignItems: "center",
+            marginBottom: 24,
+          }}
+        >
+          <Icon
+            name='forum-outline'
+            size={40}
+            color={cyberpunkTheme.colors.primary}
+          />
+        </View>
+
+        <Text
+          style={{
+            color: "#FFF",
+            fontSize: 24,
+            fontWeight: "700",
+            textAlign: "center",
+            marginBottom: 12,
+          }}
+        >
+          All Caught Up!
+        </Text>
+
+        <Text
+          style={{
+            color: "#8F9BB3",
+            fontSize: 16,
+            textAlign: "center",
+            lineHeight: 24,
+            marginBottom: 32,
+          }}
+        >
+          Looks like you’ve joined all debates in your selected categories.
+          Explore more or create your own!
+        </Text>
+
+        <View style={{ width: "auto" }}>
+          <Pressable onPress={handleExplorePress}>
+            {({ pressed }) => (
+              <LinearGradient
+                colors={["#2c2c2c", "#000"]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={{
+                  paddingHorizontal: 24,
+                  paddingVertical: 12,
+                  borderRadius: 25,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  opacity: pressed ? 0.8 : 1,
+                }}
+              >
+                <Icon
+                  name='compass-outline'
+                  size={20}
+                  color='#FFF'
+                  style={{ marginRight: 8 }}
+                />
+                <Text
+                  style={{
+                    color: "#FFF",
+                    fontSize: 16,
+                    fontWeight: "600",
+                  }}
+                >
+                  Explore More Debates
+                </Text>
+              </LinearGradient>
+            )}
+          </Pressable>
+        </View>
+      </View>
+    );
+  }, [loading, handleExplorePress]);
 
   const keyExtractor = useCallback((item, idx) => idx.toString(), []);
 
@@ -222,82 +304,91 @@ export default function DebateFeed() {
         height: screenHeight - tabBarHeight,
       }}
     >
-      {/* Fixed Transparent Header */}
-      <Animated.View
+      <View
         style={{
           position: "absolute",
           top: 0,
           left: 0,
           right: 0,
           zIndex: 10,
-          paddingHorizontal: 24,
-          paddingTop: 32,
-          paddingBottom: 16,
+          paddingHorizontal: 16,
+          paddingTop: Platform.OS === "ios" ? 10 : 20,
+          paddingBottom: 8,
+          backgroundColor: "#000",
+          borderBottomWidth: 0.5,
+          borderColor: theme.colors.backgroundDarker,
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "space-between",
         }}
       >
-        <BlurView
-          intensity={142}
-          tint='dark'
-          style={{
-            position: "absolute",
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            borderBottomWidth: 1,
-            borderColor: "rgba(0,255,148,0.2)",
-          }}
-        >
-          <LinearGradient
-            colors={["rgba(8, 15, 18, 0.85)", "rgba(0, 255, 148, 0.05)"]}
-            style={{ flex: 1 }}
-          />
-        </BlurView>
-        <View
-          style={{
-            flexDirection: "row",
-            justifyContent: "space-between",
-            alignItems: "center",
-          }}
-        >
+        <View style={{ flexDirection: "row", alignItems: "center" }}>
+          <View style={{ width: 40, height: 40, marginRight: 10 }}>
+            <Image
+              source={require("@/assets/images/logo.png")}
+              style={{ width: "100%", height: "100%" }}
+              resizeMode='contain'
+            />
+          </View>
           <Text
             style={{
-              color: cyberpunkTheme.colors.primary,
-              fontSize: 18,
-              fontWeight: "bold",
+              color: "#FFF",
+              fontSize: 20,
+              fontWeight: "700",
+              letterSpacing: 0.4,
             }}
           >
-            Let's Debate
+            Dtrue
           </Text>
-          <View style={{ flexDirection: "row" }}>
-            <Pressable
-              onPress={() =>
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-              }
-              style={{ marginRight: 16 }}
-            >
-              <Icon
-                name='account-group-outline'
-                size={22}
-                color={cyberpunkTheme.colors.text.muted}
-              />
-            </Pressable>
-            <Pressable
-              onPress={() =>
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-              }
-            >
-              <Icon
-                name='bell-outline'
-                size={22}
-                color={cyberpunkTheme.colors.text.muted}
-              />
-            </Pressable>
-          </View>
         </View>
-      </Animated.View>
-
-      {/* Debate List */}
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+          <Pressable
+            onPress={() =>
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+            }
+            style={({ pressed }) => ({
+              width: 36,
+              height: 36,
+              borderRadius: 18,
+              backgroundColor: pressed ? "#2a2a2a" : "#1a1a1a",
+              justifyContent: "center",
+              alignItems: "center",
+              transform: [{ scale: pressed ? 0.95 : 1 }],
+            })}
+          >
+            <Icon name='account-group-outline' size={18} color='#FFF' />
+          </Pressable>
+          <Pressable
+            onPress={() =>
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+            }
+            style={({ pressed }) => ({
+              width: 36,
+              height: 36,
+              borderRadius: 18,
+              backgroundColor: pressed ? "#2a2a2a" : "#1a1a1a",
+              justifyContent: "center",
+              alignItems: "center",
+              transform: [{ scale: pressed ? 0.95 : 1 }],
+            })}
+          >
+            <Icon name='bell-outline' size={18} color='#FFF' />
+            <View
+              style={{
+                position: "absolute",
+                top: 6,
+                right: 6,
+                width: 7,
+                height: 7,
+                borderRadius: 3.5,
+                backgroundColor: "#FF4757",
+                borderWidth: 1,
+                borderColor: "#000",
+              }}
+            />
+          </Pressable>
+        </View>
+      </View>
       {loading && cursor === null ? (
         <View
           style={{
@@ -318,7 +409,8 @@ export default function DebateFeed() {
           data={debates}
           renderItem={renderItem}
           keyExtractor={keyExtractor}
-          ItemSeparatorComponent={() => <View style={{ height: 16 }} />} // Vertical gap between cards
+          ListEmptyComponent={renderEmptyComponent}
+          ItemSeparatorComponent={() => <View style={{ height: 16 }} />}
           onScroll={(event) => {
             Animated.event(
               [{ nativeEvent: { contentOffset: { y: scrollY } } }],
@@ -360,8 +452,9 @@ export default function DebateFeed() {
             ) : null
           }
           contentContainerStyle={{
-            paddingTop: 90,
+            paddingTop: 110,
             paddingBottom: tabBarHeight,
+            flexGrow: 1,
           }}
         />
       )}

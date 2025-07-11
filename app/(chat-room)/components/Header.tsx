@@ -1,13 +1,19 @@
-import { View, Text, TouchableOpacity, Image } from "react-native";
+import React from "react";
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  Image,
+  StyleSheet,
+  SafeAreaView,
+} from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
-import { router } from "expo-router";
-import { theme } from "../theme";
+import { useRouter } from "expo-router";
 import { formatTimeRemaining } from "../utils";
 
 interface HeaderProps {
   timeRemaining: number | null;
-  insets: { top: number; bottom: number };
   debateImage: string | null;
   setShowModal: (show: boolean) => void;
   debateTitle: string;
@@ -15,158 +21,158 @@ interface HeaderProps {
   agreePct: number;
 }
 
-const Header = ({
+const Header: React.FC<HeaderProps> = ({
   timeRemaining,
-  insets,
   debateImage,
   setShowModal,
   debateTitle,
   opinions,
   agreePct,
-}: HeaderProps) => {
+}) => {
+  const router = useRouter();
+  const positivePct = Math.round(agreePct * 100);
+  const negativePct = 100 - positivePct;
+
   return (
     <LinearGradient
-      colors={["rgba(3, 18, 15, 0.95)", "rgba(8, 15, 18, 0.9)"]}
-      style={{
-        paddingTop: insets.top,
-        paddingBottom: 8,
-        borderBottomWidth: 1,
-        borderBottomColor: "rgba(0, 255, 148, 0.2)",
-      }}
+      colors={["#222", "#111"]}
+      start={[0, 0]}
+      end={[0, 1]}
+      style={styles.gradient}
     >
-      <View
-        style={{
-          flexDirection: "row",
-          alignItems: "center",
-          paddingHorizontal: 12,
-          height: 54,
-        }}
-      >
-        <TouchableOpacity
-          onPress={() => router.push('/(tabs)/rooms')}
-          style={{ padding: 8, borderRadius: 16 }}
-        >
-          <Ionicons name='arrow-back' size={22} color={theme.colors.primary} />
-        </TouchableOpacity>
-
-        {debateImage && (
-          <Image
-            source={{ uri: String(debateImage) }}
-            style={{
-              width: 38,
-              height: 38,
-              borderRadius: 19,
-              marginRight: 10,
-              borderWidth: 1,
-              borderColor: "rgba(0, 255, 148, 0.4)",
-            }}
-          />
-        )}
-
-        <TouchableOpacity
-          style={{ flex: 1 }}
-          onPress={() => setShowModal(true)}
-        >
-          <Text
-            style={{
-              color: theme.colors.text,
-              fontWeight: "bold",
-              fontSize: 16,
-            }}
-            numberOfLines={1}
+      <SafeAreaView edges={["top"]} style={styles.safeArea}>
+        <View style={styles.topRow}>
+          <TouchableOpacity
+            onPress={() => router.push("/(tabs)/rooms")}
+            style={styles.backButton}
           >
-            {debateTitle}
-          </Text>
-          <View style={{ flexDirection: "row", alignItems: "center" }}>
-            <Text style={{ color: theme.colors.textMuted, fontSize: 12 }}>
-              {opinions.length} opinions • Tap for details
+            <Ionicons name='arrow-back' size={24} color='#FFF' />
+          </TouchableOpacity>
+
+          {debateImage && (
+            <Image source={{ uri: debateImage }} style={styles.avatar} />
+          )}
+
+          <TouchableOpacity
+            style={styles.titleContainer}
+            onPress={() => setShowModal(true)}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.titleText} numberOfLines={1}>
+              {debateTitle}
             </Text>
-
-            <View
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                backgroundColor: "rgba(0, 255, 148, 0.1)",
-                paddingHorizontal: 6,
-                paddingVertical: 2,
-                borderRadius: 10,
-                marginLeft: 8,
-              }}
-            >
-              <Ionicons
-                name='time-outline'
-                size={12}
-                color={theme.colors.primary}
-              />
-              <Text
-                style={{
-                  color: theme.colors.primary,
-                  fontSize: 11,
-                  marginLeft: 2,
-                  fontWeight: "500",
-                }}
-              >
-                {formatTimeRemaining(timeRemaining!)}
+            <View style={styles.subInfoRow}>
+              <Text style={styles.subInfoText}>
+                {opinions.length} opinions • Tap for details
               </Text>
+              <View style={styles.timerBadge}>
+                <Ionicons name='time-outline' size={14} color='#FFF' />
+                <Text style={styles.timerText}>
+                  {formatTimeRemaining(timeRemaining!)}
+                </Text>
+              </View>
             </View>
-          </View>
-        </TouchableOpacity>
-      </View>
-
-      {/* Progress bar - simplified */}
-      <View
-        style={{
-          flexDirection: "row",
-          alignItems: "center",
-          paddingHorizontal: 16,
-          marginTop: 4,
-        }}
-      >
-        <Text
-          style={{
-            color: theme.colors.primary,
-            fontSize: 12,
-            width: 24,
-            fontWeight: "bold",
-          }}
-        >
-          {Math.round(agreePct * 100)}%
-        </Text>
-
-        <View
-          style={{
-            flex: 1,
-            height: 4,
-            backgroundColor: "rgba(255, 0, 229, 0.2)",
-            borderRadius: 8,
-            overflow: "hidden",
-            marginHorizontal: 6,
-          }}
-        >
-          <View
-            style={{
-              height: "100%",
-              width: `${agreePct * 100}%`,
-              backgroundColor: theme.colors.primary,
-              borderRadius: 8,
-            }}
-          />
+          </TouchableOpacity>
         </View>
 
-        <Text
-          style={{
-            color: theme.colors.secondary,
-            fontSize: 12,
-            width: 24,
-            textAlign: "right",
-            fontWeight: "bold",
-          }}
-        >
-          {Math.round((1 - agreePct) * 100)}%
-        </Text>
-      </View>
+        <View style={styles.progressContainer}>
+          <Text style={styles.progressLabel}>{positivePct}%</Text>
+          <View style={styles.progressBarContainer}>
+            <View style={{ flex: positivePct || 1, backgroundColor: "#FFF" }} />
+            <View style={{ flex: negativePct || 1, backgroundColor: "#888" }} />
+          </View>
+          <Text style={styles.progressLabelSecondary}>{negativePct}%</Text>
+        </View>
+      </SafeAreaView>
     </LinearGradient>
   );
 };
 
 export default Header;
+
+const styles = StyleSheet.create({
+  gradient: {
+    width: "100%",
+    paddingBottom: 8,
+  },
+  safeArea: {},
+  topRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    height: 60,
+  },
+  backButton: {
+    padding: 8,
+    borderRadius: 16,
+  },
+  avatar: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    marginHorizontal: 12,
+    borderWidth: 1,
+    borderColor: "#FFF",
+  },
+  titleContainer: {
+    flex: 1,
+    justifyContent: "center",
+  },
+  titleText: {
+    color: "#FFF",
+    fontWeight: "700",
+    fontSize: 18,
+  },
+  subInfoRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 4,
+  },
+  subInfoText: {
+    color: "#AAA",
+    fontSize: 12,
+  },
+  timerBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#333",
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 12,
+    marginLeft: 10,
+  },
+  timerText: {
+    color: "#FFF",
+    fontSize: 12,
+    marginLeft: 4,
+    fontWeight: "600",
+  },
+  progressContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    marginTop: 10,
+  },
+  progressLabel: {
+    color: "#FFF",
+    fontSize: 12,
+    fontWeight: "700",
+    width: 32,
+    textAlign: "left",
+  },
+  progressBarContainer: {
+    flex: 1,
+    flexDirection: "row",
+    height: 6,
+    borderRadius: 3,
+    overflow: "hidden",
+    marginHorizontal: 8,
+  },
+  progressLabelSecondary: {
+    color: "#FFF",
+    fontSize: 12,
+    fontWeight: "700",
+    width: 32,
+    textAlign: "right",
+  },
+});

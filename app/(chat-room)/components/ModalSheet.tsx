@@ -1,3 +1,4 @@
+import React from "react";
 import {
   View,
   Text,
@@ -5,9 +6,10 @@ import {
   Image,
   Modal,
   Pressable,
+  StyleSheet,
+  SafeAreaView,
 } from "react-native";
-
-import { theme } from "../theme";
+import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { formatTimeRemaining } from "../utils";
 
@@ -23,7 +25,7 @@ interface ModalSheetProps {
   insets: { top: number; bottom: number };
 }
 
-const ModalSheet = ({
+const ModalSheet: React.FC<ModalSheetProps> = ({
   showModal,
   setShowModal,
   debateImage,
@@ -33,198 +35,178 @@ const ModalSheet = ({
   opinions,
   agreePct,
   insets,
-}: ModalSheetProps) => {
+}) => {
+  const positivePct = Math.round(agreePct * 100);
+  const negativePct = 100 - positivePct;
+
   return (
-    <View>
-      <Modal
-        visible={showModal}
-        transparent={true}
-        animationType='slide'
-        onRequestClose={() => setShowModal(false)}
-      >
-        <Pressable
-          style={{
-            flex: 1,
-            backgroundColor: "rgba(0,0,0,0.5)",
-            justifyContent: "flex-end",
-          }}
-          onPress={() => setShowModal(false)}
+    <Modal visible={showModal} transparent animationType='slide'>
+      <SafeAreaView style={styles.container}>
+        <LinearGradient
+          colors={["#222", "#111"]}
+          start={[0, 0]}
+          end={[0, 1]}
+          style={[styles.sheet, { paddingBottom: Math.max(20, insets.bottom) }]}
         >
-          <View>
-            <LinearGradient
-              colors={["#03120F", "#080F12"]}
-              style={{
-                borderTopLeftRadius: 24,
-                borderTopRightRadius: 24,
-                padding: 20,
-                paddingBottom: Math.max(20, insets.bottom),
-                maxHeight: "70%",
-                borderTopWidth: 1,
-                borderTopColor: "rgba(0, 255, 148, 0.3)",
-              }}
-            >
-              <View
-                style={{
-                  width: 40,
-                  height: 4,
-                  backgroundColor: "rgba(255,255,255,0.3)",
-                  borderRadius: 2,
-                  alignSelf: "center",
-                  marginBottom: 16,
-                }}
-              />
+          <View style={styles.handle} />
 
-              <View
-                style={{
-                  flexDirection: "row",
-                  marginBottom: 16,
-                  alignItems: "center",
-                }}
-              >
-                {debateImage && (
-                  <Image
-                    source={{ uri: String(debateImage) }}
-                    style={{
-                      width: 50,
-                      height: 50,
-                      borderRadius: 25,
-                      marginRight: 12,
-                      borderWidth: 1,
-                      borderColor: "rgba(0, 255, 148, 0.4)",
-                    }}
-                  />
-                )}
-
-                <View style={{ flex: 1 }}>
-                  <Text
-                    style={{
-                      color: theme.colors.primary,
-                      fontSize: 18,
-                      fontWeight: "bold",
-                      marginBottom: 4,
-                    }}
-                  >
-                    {debateTitle}
-                  </Text>
-
-                  <View style={{ flexDirection: "row", alignItems: "center" }}>
-                    <Text
-                      style={{ color: theme.colors.textMuted, fontSize: 13 }}
-                    >
-                      Time remaining:
-                    </Text>
-                    <Text
-                      style={{
-                        color: theme.colors.primary,
-                        fontSize: 13,
-                        fontWeight: "600",
-                        marginLeft: 6,
-                      }}
-                    >
-                      {formatTimeRemaining(timeRemaining!)}
-                    </Text>
-                  </View>
-                </View>
-              </View>
-
-              <Text
-                style={{
-                  color: theme.colors.text,
-                  lineHeight: 22,
-                  marginBottom: 16,
-                }}
-              >
-                {debateDescription ||
-                  "No description available for this debate."}
-              </Text>
-
-              <View
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  marginVertical: 16,
-                  paddingHorizontal: 8,
-                }}
-              >
-                <Text
-                  style={{
-                    color: theme.colors.primary,
-                    fontSize: 14,
-                    width: 36,
-                    fontWeight: "bold",
-                  }}
-                >
-                  {Math.round(agreePct * 100)}%
-                </Text>
-
-                <View
-                  style={{
-                    flex: 1,
-                    height: 6,
-                    backgroundColor: "rgba(255, 0, 229, 0.2)",
-                    borderRadius: 8,
-                    overflow: "hidden",
-                    marginHorizontal: 10,
-                  }}
-                >
-                  <View
-                    style={{
-                      height: "100%",
-                      width: `${agreePct * 100}%`,
-                      backgroundColor: theme.colors.primary,
-                      borderRadius: 8,
-                    }}
-                  />
-                </View>
-
-                <Text
-                  style={{
-                    color: theme.colors.secondary,
-                    fontSize: 14,
-                    width: 36,
-                    textAlign: "right",
-                    fontWeight: "bold",
-                  }}
-                >
-                  {Math.round((1 - agreePct) * 100)}%
+          <View style={styles.headerRow}>
+            {debateImage && (
+              <Image source={{ uri: debateImage }} style={styles.avatar} />
+            )}
+            <View style={styles.headerTextContainer}>
+              <Text style={styles.title}>{debateTitle}</Text>
+              <View style={styles.timeRow}>
+                <Ionicons name='time-outline' size={16} color='#FFF' />
+                <Text style={styles.timeText}>
+                  {formatTimeRemaining(timeRemaining!)}
                 </Text>
               </View>
-
-              <View
-                style={{
-                  flexDirection: "row",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  borderTopWidth: 1,
-                  borderTopColor: "rgba(255,255,255,0.1)",
-                  paddingTop: 16,
-                  marginTop: 8,
-                }}
-              >
-                <Text style={{ color: theme.colors.textMuted }}>
-                  {opinions.length} opinions shared
-                </Text>
-
-                <TouchableOpacity
-                  onPress={() => setShowModal(false)}
-                  style={{
-                    paddingHorizontal: 20,
-                    paddingVertical: 8,
-                    backgroundColor: theme.colors.primary,
-                    borderRadius: 16,
-                  }}
-                >
-                  <Text style={{ color: "#080F12", fontWeight: "600" }}>
-                    Got it
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            </LinearGradient>
+            </View>
           </View>
-        </Pressable>
-      </Modal>
-    </View>
+
+          <Text style={styles.description}>
+            {debateDescription || "No description available."}
+          </Text>
+
+          <View style={styles.progressSection}>
+            <Text style={styles.progressLabel}>{positivePct}%</Text>
+            <View style={styles.progressBarContainer}>
+              <View
+                style={[
+                  styles.progressFill,
+                  { flex: positivePct || 1, backgroundColor: "#FFF" },
+                ]}
+              />
+              <View
+                style={[
+                  styles.progressFill,
+                  { flex: negativePct || 1, backgroundColor: "#888" },
+                ]}
+              />
+            </View>
+            <Text style={styles.progressLabel}>{negativePct}%</Text>
+          </View>
+
+          <View style={styles.footerRow}>
+            <Text style={styles.opinionCount}>
+              {opinions.length} opinions shared
+            </Text>
+            <TouchableOpacity
+              onPress={() => setShowModal(false)}
+              style={styles.button}
+            >
+              <Text style={styles.buttonText}>Got it</Text>
+            </TouchableOpacity>
+          </View>
+        </LinearGradient>
+      </SafeAreaView>
+    </Modal>
   );
 };
 
 export default ModalSheet;
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    justifyContent: "flex-end",
+    backgroundColor: "rgba(0,0,0,0.4)", // semi-transparent
+  },
+  sheet: {
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 20,
+    maxHeight: "70%",
+  },
+  handle: {
+    width: 40,
+    height: 4,
+    backgroundColor: "",
+    borderRadius: 2,
+    alignSelf: "center",
+    marginBottom: 16,
+  },
+  headerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  avatar: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    marginRight: 12,
+    borderWidth: 1,
+    borderColor: "#FFF",
+  },
+  headerTextContainer: {
+    flex: 1,
+  },
+  title: {
+    color: "#FFF",
+    fontSize: 18,
+    fontWeight: "bold",
+    marginBottom: 4,
+  },
+  timeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  timeText: {
+    color: "#AAA",
+    fontSize: 14,
+    marginLeft: 6,
+  },
+  description: {
+    color: "#DDD",
+    fontSize: 14,
+    lineHeight: 20,
+    marginBottom: 16,
+  },
+  progressSection: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  progressLabel: {
+    color: "#FFF",
+    fontSize: 14,
+    fontWeight: "700",
+    width: 36,
+    textAlign: "center",
+  },
+  progressBarContainer: {
+    flex: 1,
+    flexDirection: "row",
+    height: 8,
+    borderRadius: 4,
+    overflow: "hidden",
+    marginHorizontal: 10,
+  },
+  progressFill: {
+    height: "100%",
+  },
+  footerRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    borderTopWidth: 1,
+    borderTopColor: "#333",
+    paddingTop: 16,
+  },
+  opinionCount: {
+    color: "#AAA",
+    fontSize: 13,
+  },
+  button: {
+    backgroundColor: "#FFF",
+    paddingHorizontal: 20,
+    paddingVertical: 8,
+    borderRadius: 16,
+  },
+  buttonText: {
+    color: "#111",
+    fontWeight: "600",
+  },
+});
