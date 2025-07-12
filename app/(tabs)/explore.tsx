@@ -35,68 +35,15 @@ const THEME = {
 
 const { width } = Dimensions.get("window");
 
-// Mock data for initial load
-const mockDebates = [
-  {
-    id: "mock-1",
-    score: 0.95,
-    debate: {
-      title: "Is artificial intelligence a threat to humanity?",
-      content:
-        "Exploring the potential risks and benefits of AI development and its impact on society.",
-      summary:
-        "A comprehensive discussion about AI's role in our future, covering both optimistic and pessimistic viewpoints.",
-      image:
-        "https://images.unsplash.com/photo-1677442136019-21780ecad995?w=400&h=200&fit=crop",
-      creator_id: "user-1",
-      creator_image:
-        "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=40&h=40&fit=crop&crop=face",
-    },
-  },
-  {
-    id: "mock-2",
-    score: 0.87,
-    debate: {
-      title: "Should social media platforms be regulated?",
-      content:
-        "Discussing the need for government oversight versus platform self-regulation.",
-      summary:
-        "An engaging debate about balancing free speech with content moderation and user safety.",
-      image:
-        "https://images.unsplash.com/photo-1611605698335-8b1569810432?w=400&h=200&fit=crop",
-      creator_id: "user-2",
-      creator_image:
-        "https://images.unsplash.com/photo-1494790108755-2616b332c58c?w=40&h=40&fit=crop&crop=face",
-    },
-  },
-  {
-    id: "mock-3",
-    score: 0.76,
-    debate: {
-      title: "Climate change: Individual vs Corporate responsibility",
-      content:
-        "Who bears the greater responsibility for addressing climate change?",
-      summary:
-        "A heated debate about whether individuals or corporations should lead climate action.",
-      image:
-        "https://images.unsplash.com/photo-1569163139394-de4e5f43e4e3?w=400&h=200&fit=crop",
-      creator_id: "user-3",
-      creator_image:
-        "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=40&h=40&fit=crop&crop=face",
-    },
-  },
-];
-
 const ExploreDebatesPage = () => {
   // Core state
-  const [debates, setDebates] = useState(mockDebates);
+  const [debates, setDebates] = useState([]);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [searchLoading, setSearchLoading] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [joiningDebateId, setJoiningDebateId] = useState<string | null>(null);
 
-  // ← Added missing searchQuery
   const [searchQuery, setSearchQuery] = useState<string>("");
 
   const [currentPage, setCurrentPage] = useState(1);
@@ -121,15 +68,89 @@ const ExploreDebatesPage = () => {
     };
   }, []);
 
-  // Initial mock display before token arrives
-  useEffect(() => {
-    if (token && !isSearching) {
-      const task = InteractionManager.runAfterInteractions(() => {
-        if (isMountedRef.current) setLoading(false);
-      });
-      return () => task.cancel();
+  // Helper function to normalize debate data structure
+  const normalizeDebateData = (debate: any, isApiFormat: boolean = false) => {
+    if (isApiFormat) {
+      // Convert API format to component format
+      return {
+        id: debate.debateRoomId,
+        title: debate.title,
+        description: debate.title, // Use title as description if no description field
+        debate: {
+          image: debate.image,
+        },
+        creatorName: debate.creatorName,
+        creatorImage: debate.creatorImage,
+        // Store original API data for potential future use
+        apiData: debate,
+      };
+    } else {
+      // Convert search format to component format
+      return {
+        id: debate.id,
+        title: debate.debate.title,
+        description: debate.debate.content, // Use content as description
+        debate: {
+          image: debate.debate.image,
+        },
+        creatorName: debate.debate.creator_name || "Unknown Creator", // Handle missing creator_name
+        creatorImage: debate.debate.creator_image || "", // Handle missing creator_image
+        // Store original search data for potential future use
+        searchData: debate,
+      };
     }
-  }, [token, isSearching]);
+  };
+
+  useEffect(() => {
+    const fetchExploreDebates = async () => {
+      if (!token || searchQuery.trim()) return;
+
+      setLoading(true);
+      setFetchError(null);
+
+      try {
+        const res = await fetch(`${process.env.EXPO_PUBLIC_BASE_URL}/explore`, {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        });
+
+        if (res.status === 401) {
+          refreshToken();
+          return;
+        }
+
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+        const json = await res.json();
+        if (!isMountedRef.current) return;
+
+        if (json.success && json.data?.data) {
+          // Normalize API format debates
+          const normalizedDebates = json.data.data.map((debate: any) =>
+            normalizeDebateData(debate, true)
+          );
+          setDebates(normalizedDebates);
+          setCurrentPage(1);
+          setHasMorePages(json.data.next === true);
+        } else {
+          setDebates([]);
+          setHasMorePages(false);
+        }
+      } catch (err: any) {
+        if (!isMountedRef.current) return;
+        setFetchError(err.message || "Failed to load explore feed");
+      } finally {
+        if (!isMountedRef.current) return;
+        setLoading(false);
+        setRefreshing(false);
+      }
+    };
+
+    fetchExploreDebates();
+  }, [token, searchQuery]);
 
   // Debounce searchQuery
   useEffect(() => {
@@ -141,8 +162,8 @@ const ExploreDebatesPage = () => {
         500
       );
     } else {
-      // reset to mock on clear
-      setDebates(mockDebates);
+      // Reset to API debates on clear
+      setDebates([]);
       setCurrentPage(1);
       setHasMorePages(true);
       setIsSearching(false);
@@ -186,11 +207,16 @@ const ExploreDebatesPage = () => {
         if (!isMountedRef.current) return;
 
         if (json.success && json.data) {
+          // Normalize search format debates (assuming they're already in the correct format)
+          const normalizedDebates = json.data.map((debate: any) =>
+            normalizeDebateData(debate, false)
+          );
+
           if (page === 1) {
-            setDebates(json.data);
+            setDebates(normalizedDebates);
             setCurrentPage(1);
           } else {
-            setDebates((prev) => [...prev, ...json.data]);
+            setDebates((prev) => [...prev, ...normalizedDebates]);
           }
           setHasMorePages(json.data.length === limit);
           setCurrentPage(page);
@@ -222,12 +248,14 @@ const ExploreDebatesPage = () => {
   const handleRefresh = useCallback(() => {
     setRefreshing(true);
     retryCount.current = 0;
-    if (searchQuery.trim()) performSearch(searchQuery.trim(), 1);
-    else {
-      setDebates(mockDebates);
+    if (searchQuery.trim()) {
+      performSearch(searchQuery.trim(), 1);
+    } else {
+      // Refresh API debates
+      setDebates([]);
       setCurrentPage(1);
       setHasMorePages(true);
-      setRefreshing(false);
+      // The useEffect will trigger the API call
     }
   }, [searchQuery, performSearch]);
 
@@ -312,20 +340,20 @@ const ExploreDebatesPage = () => {
 
         <View style={styles.cardContent}>
           <Text style={styles.debateTitle} numberOfLines={2}>
-            {item.debate.title}
+            {item?.title}
           </Text>
           <Text style={styles.debateDescription} numberOfLines={3}>
-            {item.debate.content}
+            {item?.description}
           </Text>
 
           <View style={styles.creatorContainer}>
             <Image
-              source={{ uri: item.debate.creator_image }}
+              source={{ uri: item.creatorImage }}
               style={styles.creatorImage}
             />
             <View>
               <Text style={styles.creatorName}>Debate Creator</Text>
-              <Text style={styles.creatorHandle}>@creator</Text>
+              <Text style={styles.creatorHandle}>{item?.creatorName}</Text>
             </View>
           </View>
 
@@ -446,8 +474,8 @@ const styles = StyleSheet.create({
     padding: 4,
   },
   header: {
-    paddingVertical: 16,
-    padding: 4,
+    paddingVertical: 20,
+    paddingHorizontal: 16,
   },
   headerContent: {
     flexDirection: "row",
@@ -456,13 +484,13 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   headerTitle: {
-    fontSize: 24,
+    fontSize: 28,
     fontWeight: "bold",
     color: THEME.colors.text,
-    marginLeft: 12,
+    marginBottom: 16,
   },
   searchContainer: {
-    paddingHorizontal: 16,
+    paddingHorizontal: 0,
   },
   searchInputContainer: {
     flexDirection: "row",
@@ -501,7 +529,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     overflow: "hidden",
     borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.1)",
+    borderColor: "rgba(255, 255, 255, 0.3)",
   },
   scoreBadge: {
     position: "absolute",
@@ -571,6 +599,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 24,
     borderRadius: 12,
+    borderWidth: 2,
     borderColor: THEME.colors.primary,
     minHeight: 44,
     backgroundColor: THEME.colors.backgroundDarker,
