@@ -19,8 +19,8 @@ import { Ionicons } from "@expo/vector-icons";
 import { useAuthToken } from "@/hook/clerk/useFetchjwtToken";
 import { useRouter } from "expo-router";
 import { useAuth } from "@clerk/clerk-expo";
+import ProfileCard from "@/components/explore/profiles/profile-cards";
 
-// Define theme as a constant outside the component to avoid recreation on re-render
 const THEME = {
   colors: {
     primary: "#00FF94",
@@ -33,11 +33,10 @@ const THEME = {
   },
 };
 
-const { width } = Dimensions.get("window");
-
 const ExploreDebatesPage = () => {
   // Core state
   const [debates, setDebates] = useState([]);
+  const [profiles, setProfiles] = useState([]);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [searchLoading, setSearchLoading] = useState(false);
@@ -45,6 +44,9 @@ const ExploreDebatesPage = () => {
   const [joiningDebateId, setJoiningDebateId] = useState<string | null>(null);
 
   const [searchQuery, setSearchQuery] = useState<string>("");
+  const [searchType, setSearchType] = useState<"debates" | "profiles">(
+    "debates"
+  );
 
   const [currentPage, setCurrentPage] = useState(1);
   const [hasMorePages, setHasMorePages] = useState(true);
@@ -164,16 +166,17 @@ const ExploreDebatesPage = () => {
     } else {
       // Reset to API debates on clear
       setDebates([]);
+      setProfiles([]);
       setCurrentPage(1);
       setHasMorePages(true);
       setIsSearching(false);
       setSearchLoading(false);
     }
     return () => clearTimeout(searchTimeout.current!);
-  }, [searchQuery]);
+  }, [searchQuery, searchType]);
 
-  // Fetch/search function
-  const performSearch = useCallback(
+  // Search for debates
+  const performDebateSearch = useCallback(
     async (query: string, page = 1) => {
       if (!token || !query) return;
 
@@ -207,7 +210,7 @@ const ExploreDebatesPage = () => {
         if (!isMountedRef.current) return;
 
         if (json.success && json.data) {
-          // Normalize search format debates (assuming they're already in the correct format)
+          // Normalize search format debates
           const normalizedDebates = json.data.map((debate: any) =>
             normalizeDebateData(debate, false)
           );
@@ -231,7 +234,7 @@ const ExploreDebatesPage = () => {
         if (retryCount.current < maxRetries) {
           retryCount.current++;
           setTimeout(
-            () => performSearch(query, page),
+            () => performDebateSearch(query, page),
             2000 * retryCount.current
           );
         }
@@ -245,6 +248,76 @@ const ExploreDebatesPage = () => {
     [token, refreshToken]
   );
 
+  // Search for profiles
+  const performProfileSearch = useCallback(
+    async (query: string) => {
+      if (!token || !query) return;
+
+      setFetchError(null);
+      setIsSearching(true);
+      setSearchLoading(true);
+
+      try {
+        const res = await fetch(
+          `${process.env.EXPO_PUBLIC_BASE_URL}/user/${encodeURIComponent(
+            query
+          )}`,
+          {
+            method: "GET",
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "application/json",
+            },
+          }
+        );
+
+        if (res.status === 401) {
+          refreshToken();
+          return;
+        }
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+        const json = await res.json();
+        if (!isMountedRef.current) return;
+
+        if (json.success && json.data) {
+          setProfiles(json.data);
+          retryCount.current = 0;
+        } else {
+          setProfiles([]);
+        }
+      } catch (err: any) {
+        if (!isMountedRef.current) return;
+        setFetchError(err.message || "Profile search failed");
+        if (retryCount.current < maxRetries) {
+          retryCount.current++;
+          setTimeout(
+            () => performProfileSearch(query),
+            2000 * retryCount.current
+          );
+        }
+      } finally {
+        if (!isMountedRef.current) return;
+        setSearchLoading(false);
+        setRefreshing(false);
+        setIsSearching(false);
+      }
+    },
+    [token, refreshToken]
+  );
+
+  // Main search function
+  const performSearch = useCallback(
+    async (query: string, page = 1) => {
+      if (searchType === "debates") {
+        await performDebateSearch(query, page);
+      } else {
+        await performProfileSearch(query);
+      }
+    },
+    [searchType, performDebateSearch, performProfileSearch]
+  );
+
   const handleRefresh = useCallback(() => {
     setRefreshing(true);
     retryCount.current = 0;
@@ -253,6 +326,7 @@ const ExploreDebatesPage = () => {
     } else {
       // Refresh API debates
       setDebates([]);
+      setProfiles([]);
       setCurrentPage(1);
       setHasMorePages(true);
       // The useEffect will trigger the API call
@@ -264,11 +338,19 @@ const ExploreDebatesPage = () => {
       hasMorePages &&
       !searchLoading &&
       searchQuery.trim() &&
+      searchType === "debates" &&
       currentPage < Infinity
     ) {
       performSearch(searchQuery.trim(), currentPage + 1);
     }
-  }, [hasMorePages, searchLoading, searchQuery, currentPage, performSearch]);
+  }, [
+    hasMorePages,
+    searchLoading,
+    searchQuery,
+    searchType,
+    currentPage,
+    performSearch,
+  ]);
 
   const handleJoinDebate = useCallback(
     async (debate: any) => {
@@ -293,13 +375,27 @@ const ExploreDebatesPage = () => {
     [token, router, userId, refreshToken]
   );
 
+  const handleProfilePress = useCallback((profile: any) => {
+    console.log("Profile pressed:", profile.id);
+    // router.push to profile page when ready
+  }, []);
+
+  const handleSearchTypeChange = useCallback((type: "debates" | "profiles") => {
+    setSearchType(type);
+    setDebates([]);
+    setProfiles([]);
+    setCurrentPage(1);
+    setHasMorePages(true);
+    setFetchError(null);
+  }, []);
+
   const renderSearchHeader = () => (
     <View style={styles.searchContainer}>
       <View style={styles.searchInputContainer}>
         <Ionicons name='search' size={20} color={THEME.colors.textMuted} />
         <TextInput
           style={styles.searchInput}
-          placeholder='Search debates...'
+          placeholder={`Search Profiles or Debates...`}
           placeholderTextColor={THEME.colors.textMuted}
           value={searchQuery}
           onChangeText={setSearchQuery}
@@ -327,6 +423,43 @@ const ExploreDebatesPage = () => {
           )
         )}
       </View>
+
+      {searchQuery.trim() && (
+        <View style={styles.searchTypeContainer}>
+          <TouchableOpacity
+            style={[
+              styles.searchTypeButton,
+              searchType === "debates" && styles.searchTypeButtonActive,
+            ]}
+            onPress={() => handleSearchTypeChange("debates")}
+          >
+            <Text
+              style={[
+                styles.searchTypeText,
+                searchType === "debates" && styles.searchTypeTextActive,
+              ]}
+            >
+              Debates
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[
+              styles.searchTypeButton,
+              searchType === "profiles" && styles.searchTypeButtonActive,
+            ]}
+            onPress={() => handleSearchTypeChange("profiles")}
+          >
+            <Text
+              style={[
+                styles.searchTypeText,
+                searchType === "profiles" && styles.searchTypeTextActive,
+              ]}
+            >
+              Accounts
+            </Text>
+          </TouchableOpacity>
+        </View>
+      )}
     </View>
   );
 
@@ -392,8 +525,8 @@ const ExploreDebatesPage = () => {
       </Text>
       <Text style={styles.emptyStateText}>
         {searchQuery.trim()
-          ? `No debates found for "${searchQuery}".`
-          : "Search for debates on topics you're interested in!"}
+          ? `No ${searchType} found for "${searchQuery}".`
+          : "Search for debates or profiles you're interested in!"}
       </Text>
     </View>
   );
@@ -410,12 +543,23 @@ const ExploreDebatesPage = () => {
   );
 
   const renderFooter = () =>
-    hasMorePages && searchQuery.trim() ? (
+    hasMorePages && searchQuery.trim() && searchType === "debates" ? (
       <View style={styles.footerLoader}>
         <ActivityIndicator size='small' color={THEME.colors.primary} />
         <Text style={styles.footerText}>Loading more debates...</Text>
       </View>
     ) : null;
+
+  const getCurrentData = () => {
+    if (!searchQuery.trim()) return debates;
+    return searchType === "debates" ? debates : profiles;
+  };
+
+  const getCurrentRenderItem = () => {
+    return searchType === "debates"
+      ? renderDebateCard
+      : ({ item }) => <ProfileCard item={item} onPress={handleProfilePress} />;
+  };
 
   if (loading && !refreshing) {
     return (
@@ -440,8 +584,8 @@ const ExploreDebatesPage = () => {
         renderError()
       ) : (
         <FlatList
-          data={debates}
-          renderItem={renderDebateCard}
+          data={getCurrentData()}
+          renderItem={getCurrentRenderItem()}
           keyExtractor={(item) => item.id}
           showsVerticalScrollIndicator={false}
           refreshControl={
@@ -458,7 +602,7 @@ const ExploreDebatesPage = () => {
           onEndReachedThreshold={0.1}
           contentContainerStyle={[
             styles.listContent,
-            debates.length === 0 && { flex: 1 },
+            getCurrentData().length === 0 && { flex: 1 },
           ]}
         />
       )}
@@ -517,6 +661,31 @@ const styles = StyleSheet.create({
   clearButton: {
     marginLeft: 8,
     padding: 4,
+  },
+  searchTypeContainer: {
+    flexDirection: "row",
+    marginTop: 12,
+    backgroundColor: THEME.colors.searchBackground,
+    borderRadius: 8,
+    padding: 4,
+  },
+  searchTypeButton: {
+    flex: 1,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 6,
+    alignItems: "center",
+  },
+  searchTypeButtonActive: {
+    backgroundColor: THEME.colors.primary,
+  },
+  searchTypeText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: THEME.colors.textMuted,
+  },
+  searchTypeTextActive: {
+    color: THEME.colors.background,
   },
   listContent: {
     paddingHorizontal: 16,
