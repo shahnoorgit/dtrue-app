@@ -381,8 +381,10 @@ const ExploreDebatesPage = () => {
   );
 
   const handleProfilePress = useCallback((profile: any) => {
-    console.log("Profile pressed:", profile.id);
-    // router.push to profile page when ready
+    router.push({
+      pathname: "/(tabs)/[id]/page",
+      params: { id: profile.id },
+    });
   }, []);
 
   const handleSearchTypeChange = useCallback((type: "debates" | "profiles") => {

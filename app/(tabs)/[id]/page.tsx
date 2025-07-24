@@ -9,17 +9,18 @@ import {
   ActivityIndicator,
   RefreshControl,
   Alert,
-  ScrollView,
+  Modal,
+  Dimensions,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRoute, useNavigation } from "@react-navigation/native";
 import { useAuthToken } from "@/hook/clerk/useFetchjwtToken";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
-import { useClerk } from "@clerk/clerk-expo";
 import * as Haptics from "expo-haptics";
-import SkeletonLoader from "@/components/profile/ProfileSkeliton";
 import ProfileSkeleton from "@/components/profile/ProfileSkeliton";
+
+const { width, height } = Dimensions.get("window");
 
 const THEME = {
   colors: {
@@ -140,13 +141,14 @@ const ProfilePage: React.FC = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [dataFetched, setDataFetched] = useState(false);
   const [joiningDebateId, setJoiningDebateId] = useState<string | null>(null);
+  const [isFollowing, setIsFollowing] = useState(false);
+  const [imageModalVisible, setImageModalVisible] = useState(false);
+  const [modalImageUri, setModalImageUri] = useState("");
   const [token, fetchToken] = useAuthToken();
   const route = useRoute();
   const navigation = useNavigation();
   const router = useRouter();
-  const clerk = useClerk();
-  const { username, userId } =
-    (route.params as { username: string; userId: string }) || {};
+  const { id } = route.params as { id: string };
 
   const fetchWithAuthRetry = useCallback(
     async (url: string): Promise<Response> => {
@@ -189,9 +191,11 @@ const ProfilePage: React.FC = () => {
     setLoading(true);
     try {
       const [profileResponse, debatesResponse] = await Promise.all([
-        fetchWithAuthRetry(`${process.env.EXPO_PUBLIC_BASE_URL}/user/profile`),
         fetchWithAuthRetry(
-          `${process.env.EXPO_PUBLIC_BASE_URL}/debate-room/get-user-created-rooms`
+          `${process.env.EXPO_PUBLIC_BASE_URL}/user/profile/${id}`
+        ),
+        fetchWithAuthRetry(
+          `${process.env.EXPO_PUBLIC_BASE_URL}/debate-room/get-user-created-rooms/${id}`
         ),
       ]);
       const profileData = await profileResponse.json();
@@ -205,7 +209,7 @@ const ProfilePage: React.FC = () => {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [fetchWithAuthRetry, token, dataFetched]);
+  }, [fetchWithAuthRetry, token, dataFetched, id]);
 
   useEffect(() => {
     if (token && !dataFetched) {
@@ -227,7 +231,7 @@ const ProfilePage: React.FC = () => {
         router.push({
           pathname: "/(chat-room)/screen",
           params: {
-            clerkId: userId,
+            clerkId: id,
             debateId: debate.id,
             debateImage: debate.image || "",
           },
@@ -238,17 +242,23 @@ const ProfilePage: React.FC = () => {
         setJoiningDebateId(null);
       }
     },
-    [token, router, userId]
+    [token, router, id]
   );
 
-  const handleLogout = async () => {
-    try {
-      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-      await clerk.signOut();
-      router.replace("/onboarding");
-    } catch (error) {
-      console.error("Error signing out:", error);
-    }
+  const handleFollow = () => {
+    console.log(`Follow user with ID: ${id}`);
+    setIsFollowing(!isFollowing);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+  };
+
+  const openImageModal = (uri: string) => {
+    setModalImageUri(uri);
+    setImageModalVisible(true);
+  };
+
+  const closeImageModal = () => {
+    setImageModalVisible(false);
+    setModalImageUri("");
   };
 
   if (loading) {
@@ -286,22 +296,14 @@ const ProfilePage: React.FC = () => {
         >
           <Ionicons name='chevron-back' size={24} color={THEME.colors.text} />
         </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.logoutButton}
-          onPress={handleLogout}
-          accessibilityLabel='Logout'
-        >
-          <Ionicons
-            name='log-out-outline'
-            size={24}
-            color={THEME.colors.text}
-          />
-        </TouchableOpacity>
         <View style={styles.profileSection}>
-          <View style={styles.profileImageContainer}>
+          <TouchableOpacity
+            style={styles.profileImageContainer}
+            onPress={() => openImageModal(user.image)}
+          >
             <Image source={{ uri: user.image }} style={styles.profileImage} />
             <View style={styles.profileImageBorder} />
-          </View>
+          </TouchableOpacity>
           <View style={styles.statsContainer}>
             <View style={styles.statItem}>
               <Text style={styles.statNumber}>
@@ -325,7 +327,22 @@ const ProfilePage: React.FC = () => {
         </View>
       </View>
       <View style={styles.bioSection}>
-        <Text style={styles.name}>@{user.name}</Text>
+        <View style={styles.nameRow}>
+          <Text style={styles.name}>@{user.name}</Text>
+          <TouchableOpacity
+            style={[styles.followButton, isFollowing && styles.followingButton]}
+            onPress={handleFollow}
+          >
+            <Text
+              style={[
+                styles.followButtonText,
+                isFollowing && styles.followingButtonText,
+              ]}
+            >
+              {isFollowing ? "Following" : "Follow"}
+            </Text>
+          </TouchableOpacity>
+        </View>
         {user.about && <Text style={styles.bio}>{user.about}</Text>}
         <View style={styles.additionalStatItem}>
           <Ionicons name='calendar' size={16} color={THEME.colors.textMuted} />
@@ -372,11 +389,38 @@ const ProfilePage: React.FC = () => {
             />
             <Text style={styles.emptyText}>No debates created yet</Text>
             <Text style={styles.emptySubText}>
-              Start your first debate to see it here
+              User has not created any debates yet. Check back later!
             </Text>
           </View>
         }
       />
+
+      {/* Image Modal */}
+      <Modal
+        visible={imageModalVisible}
+        transparent={true}
+        onRequestClose={closeImageModal}
+      >
+        <View style={styles.modalContainer}>
+          <TouchableOpacity
+            style={styles.modalBackdrop}
+            onPress={closeImageModal}
+            activeOpacity={1}
+          >
+            <Image
+              source={{ uri: modalImageUri }}
+              style={styles.modalImage}
+              resizeMode='contain'
+            />
+            <TouchableOpacity
+              style={styles.closeModalButton}
+              onPress={closeImageModal}
+            >
+              <Ionicons name='close' size={30} color='#FFFFFF' />
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -447,20 +491,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  logoutButton: {
-    position: "absolute",
-    top: 50,
-    right: THEME.spacing.md,
-    zIndex: 1,
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: THEME.colors.cardBackground,
-    borderWidth: 1,
-    borderColor: THEME.colors.border,
-    justifyContent: "center",
-    alignItems: "center",
-  },
   profileSection: {
     alignItems: "center",
     paddingHorizontal: THEME.spacing.md,
@@ -510,11 +540,35 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: THEME.colors.border,
   },
+  nameRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: THEME.spacing.sm,
+  },
   name: {
     fontSize: 28,
     fontWeight: "bold",
     color: THEME.colors.text,
-    marginBottom: THEME.spacing.sm,
+  },
+  followButton: {
+    backgroundColor: THEME.colors.primary,
+    paddingHorizontal: THEME.spacing.lg,
+    paddingVertical: THEME.spacing.sm,
+    borderRadius: THEME.borderRadius.md,
+  },
+  followingButton: {
+    backgroundColor: "transparent",
+    borderWidth: 1,
+    borderColor: THEME.colors.border,
+  },
+  followButtonText: {
+    color: THEME.colors.text,
+    fontWeight: "700",
+    fontSize: 16,
+  },
+  followingButtonText: {
+    color: THEME.colors.textSecondary,
   },
   bio: {
     fontSize: 16,
@@ -664,6 +718,26 @@ const styles = StyleSheet.create({
     marginTop: THEME.spacing.sm,
     textAlign: "center",
     lineHeight: 20,
+  },
+  // Modal Styles
+  modalContainer: {
+    flex: 1,
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.9)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  modalImage: {
+    width: width * 0.9,
+    height: height * 0.7,
+  },
+  closeModalButton: {
+    position: "absolute",
+    top: 50,
+    right: 20,
+    padding: 10,
   },
 });
 
