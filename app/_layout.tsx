@@ -163,7 +163,7 @@ function AuthFlow() {
       const timeoutId = setTimeout(() => controller.abort(), 10000);
 
       const response = await fetch(
-        `${process.env.EXPO_PUBLIC_BASE_URL}/user/${userId}`,
+        `${process.env.EXPO_PUBLIC_BASE_URL}/user/find/${userId}`,
         {
           headers: {
             Accept: "application/json",

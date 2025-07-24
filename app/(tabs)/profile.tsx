@@ -1,340 +1,725 @@
-import React, { useState, useEffect } from "react";
-import { View, Text, TouchableOpacity, ScrollView, Image } from "react-native";
-import { SignedIn } from "@clerk/clerk-expo";
+import React, { useState, useEffect, useCallback } from "react";
+import {
+  View,
+  Text,
+  StyleSheet,
+  Image,
+  TouchableOpacity,
+  FlatList,
+  ActivityIndicator,
+  RefreshControl,
+  Alert,
+} from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { useRoute, useNavigation } from "@react-navigation/native";
+import { useAuthToken } from "@/hook/clerk/useFetchjwtToken";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useRouter } from "expo-router";
 import { useClerk } from "@clerk/clerk-expo";
-import { LinearGradient } from "expo-linear-gradient";
-import { MaterialIcons, MaterialCommunityIcons } from "@expo/vector-icons";
-import { router } from "expo-router";
 import * as Haptics from "expo-haptics";
 
-// Define the type for badge icons
-type BadgeIconName = "analytics" | "emoji-events" | "search" | "lightbulb";
+const THEME = {
+  colors: {
+    primary: "#00FF94",
+    background: "#03120F",
+    backgroundSecondary: "#1a1a1a",
+    cardBackground: "#262626",
+    surface: "#333333",
+    text: "#FFFFFF",
+    textSecondary: "#a3a3a3",
+    textMuted: "#8F9BB3",
+    border: "#404040",
+    success: "#10b981",
+  },
+  spacing: { xs: 4, sm: 8, md: 16, lg: 24, xl: 32 },
+  borderRadius: { sm: 8, md: 12, lg: 16, xl: 24 },
+};
 
-// Define the type for the badges
-interface Badge {
+interface User {
+  id: string;
   name: string;
-  icon: BadgeIconName;
+  username: string;
+  about: string;
+  image: string;
+  createdAt: string;
+  following: any[];
+  followers: any[];
+  created_debates: Array<{
+    _count: { participants: number; upvoted_by: number };
+  }>;
 }
 
-const ProfilePage = () => {
-  const [activeTab, setActiveTab] = useState("debates");
-  const { signOut } = useClerk();
+interface Debate {
+  id: string;
+  title: string;
+  description: string;
+  createdAt: string;
+  image: string;
+  duration: number;
+  active: boolean;
+  keywords: string[];
+  upvotes: number;
+  joinedUsers: number;
+}
+
+const DebateCard: React.FC<{
+  item: Debate;
+  onJoin: (item: Debate) => void;
+  loading: boolean;
+}> = ({ item, onJoin, loading }) => (
+  <View style={styles.debateCard}>
+    <Image source={{ uri: item.image }} style={styles.debateImage} />
+
+    <View style={styles.debateStatus}>
+      <View
+        style={[
+          styles.statusBadge,
+          {
+            backgroundColor: item.active
+              ? THEME.colors.success
+              : THEME.colors.textMuted,
+          },
+        ]}
+      >
+        <Text style={styles.statusText}>
+          {item.active ? "Active" : "Ended"}
+        </Text>
+      </View>
+    </View>
+
+    <View style={styles.debateInfo}>
+      <Text style={styles.debateTitle} numberOfLines={2}>
+        {item.title}
+      </Text>
+      <Text style={styles.debateDescription} numberOfLines={2}>
+        {item.description}
+      </Text>
+
+      <View style={styles.debateMetrics}>
+        <View style={styles.metricItem}>
+          <Ionicons name='people' size={14} color={THEME.colors.textMuted} />
+          <Text style={styles.metricText}>{item.joinedUsers}</Text>
+        </View>
+        <View style={styles.metricItem}>
+          <Ionicons name='arrow-up' size={14} color={THEME.colors.textMuted} />
+          <Text style={styles.metricText}>{item.upvotes}</Text>
+        </View>
+        <View style={styles.metricItem}>
+          <Ionicons name='time' size={14} color={THEME.colors.textMuted} />
+          <Text style={styles.metricText}>{item.duration}h</Text>
+        </View>
+      </View>
+
+      <View style={styles.keywordsContainer}>
+        {item.keywords.slice(0, 3).map((keyword, index) => (
+          <View key={index} style={styles.keywordTag}>
+            <Text style={styles.keywordText}>{keyword}</Text>
+          </View>
+        ))}
+      </View>
+
+      <TouchableOpacity
+        style={styles.enterButton}
+        onPress={() => onJoin(item)}
+        disabled={loading}
+      >
+        {loading ? (
+          <ActivityIndicator size='small' color={THEME.colors.text} />
+        ) : (
+          <Text style={styles.enterButtonText}>Enter</Text>
+        )}
+      </TouchableOpacity>
+    </View>
+  </View>
+);
+
+const ProfilePage: React.FC = () => {
+  const [user, setUser] = useState<User | null>(null);
+  const [debates, setDebates] = useState<Debate[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [isFollowing, setIsFollowing] = useState(false);
+  const [dataFetched, setDataFetched] = useState(false);
+  const [joiningDebateId, setJoiningDebateId] = useState<string | null>(null);
+
+  const [token, fetchToken] = useAuthToken();
+  const route = useRoute();
+  const navigation = useNavigation();
+  const router = useRouter();
+  const clerk = useClerk();
+  const { username, userId } =
+    (route.params as { username: string; userId: string }) || {};
+
+  const fetchWithAuthRetry = useCallback(
+    async (url: string): Promise<Response> => {
+      let currentToken = token;
+
+      if (!currentToken) {
+        currentToken = await AsyncStorage.getItem("authToken");
+        if (!currentToken) {
+          await fetchToken();
+          currentToken = await AsyncStorage.getItem("authToken");
+        }
+      }
+
+      if (!currentToken) throw new Error("No authentication token available");
+
+      let response = await fetch(url, {
+        headers: {
+          Authorization: `Bearer ${currentToken}`,
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (response.status === 401) {
+        await fetchToken();
+        currentToken = await AsyncStorage.getItem("authToken");
+        if (!currentToken) throw new Error("Token refresh failed");
+
+        response = await fetch(url, {
+          headers: {
+            Authorization: `Bearer ${currentToken}`,
+            "Content-Type": "application/json",
+          },
+        });
+      }
+
+      if (!response.ok) {
+        throw new Error(`Request failed: ${response.status}`);
+      }
+
+      return response;
+    },
+    [token, fetchToken]
+  );
+
+  const fetchProfileData = useCallback(async () => {
+    if (!token && !dataFetched) return;
+
+    setLoading(true);
+    try {
+      const [profileResponse, debatesResponse] = await Promise.all([
+        fetchWithAuthRetry(`${process.env.EXPO_PUBLIC_BASE_URL}/user/profile`),
+        fetchWithAuthRetry(
+          `${process.env.EXPO_PUBLIC_BASE_URL}/debate-room/get-user-created-rooms`
+        ),
+      ]);
+
+      const profileData = await profileResponse.json();
+      const debatesData = await debatesResponse.json();
+
+      if (profileData.success) setUser(profileData.data);
+      if (debatesData.success) setDebates(debatesData.data);
+
+      setDataFetched(true);
+    } catch (error) {
+      console.error("Error fetching profile data:", error);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [fetchWithAuthRetry, token, dataFetched]);
 
   useEffect(() => {
-    console.log("PROFILE SCREEN: Profile tab loaded successfully");
-  }, []);
+    if (token && !dataFetched) {
+      fetchProfileData();
+    }
+  }, [token, dataFetched, fetchProfileData]);
 
-  // Handle logout with redirection
+  const onRefresh = () => {
+    setRefreshing(true);
+    setDataFetched(false);
+    fetchProfileData();
+  };
+
+  const handleJoinPress = useCallback(
+    async (debate: Debate) => {
+      if (!token || !debate?.id) return;
+      setJoiningDebateId(debate.id);
+
+      try {
+        router.push({
+          pathname: "/(chat-room)/screen",
+          params: {
+            clerkId: userId,
+            debateId: debate.id,
+            debateImage: debate.image || "",
+          },
+        });
+      } catch (err) {
+        Alert.alert("Error", "Unable to join debate. Please try again.");
+      } finally {
+        setJoiningDebateId(null);
+      }
+    },
+    [token, router, userId]
+  );
+
   const handleLogout = async () => {
     try {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-      await signOut();
-      // After signOut succeeds, redirect to onboarding
+      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      await clerk.signOut();
       router.replace("/onboarding");
     } catch (error) {
       console.error("Error signing out:", error);
     }
   };
 
-  // Mock user data
-  const userData = {
-    name: "Alex Ramirezon",
-    handle: "@debatemaster",
-    followers: 12453,
-    bio: "Digital philosopher. Evidence enthusiast. Seeking truth through structured dialogue.",
-    stats: {
-      debatesCreated: 14,
-      debatesJoined: 37,
-      evidenceSubmitted: 62,
-      reputation: 4.8,
-    },
-    badges: [
-      { name: "Evidence Expert", icon: "analytics" as BadgeIconName },
-      { name: "Debate Champion", icon: "emoji-events" as BadgeIconName },
-      { name: "Truth Seeker", icon: "search" as BadgeIconName },
-      { name: "Thought Leader", icon: "lightbulb" as BadgeIconName },
-    ] as Badge[],
-    activeDebates: [
-      {
-        id: 1,
-        title: "Should AI be regulated by global consensus?",
-        participants: 34,
-        timeRemaining: "12h",
-      },
-      {
-        id: 2,
-        title: "Is remote work the future of knowledge economy?",
-        participants: 27,
-        timeRemaining: "1d 6h",
-      },
-    ],
-    pastDebates: [
-      {
-        id: 3,
-        title:
-          "Are cryptocurrencies a viable alternative to traditional banking?",
-        participants: 42,
-        result: "Inconclusive",
-      },
-      {
-        id: 4,
-        title: "Does social media amplify or reduce political polarization?",
-        participants: 56,
-        result: "For",
-      },
-      {
-        id: 5,
-        title:
-          "Should space exploration be prioritized over ocean exploration?",
-        participants: 23,
-        result: "Against",
-      },
-    ],
-  };
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size='large' color={THEME.colors.primary} />
+        <Text style={styles.loadingText}>Loading profile...</Text>
+      </View>
+    );
+  }
 
-  // Helper function to determine result style class
-  const getResultClass = (result: string): string => {
-    switch (result) {
-      case "For":
-        return "bg-[#00FF9415] text-[#00FF94]";
-      case "Against":
-        return "bg-[#FF00E515] text-[#FF00E5]";
-      default:
-        return "bg-[#FFC70015] text-[#FFC700]";
-    }
-  };
+  if (!user) {
+    return (
+      <View style={styles.errorContainer}>
+        <Ionicons
+          name='person-outline'
+          size={48}
+          color={THEME.colors.textMuted}
+        />
+        <Text style={styles.errorText}>User not found</Text>
+        <TouchableOpacity
+          style={styles.retryButton}
+          onPress={() => {
+            setDataFetched(false);
+            fetchProfileData();
+          }}
+        >
+          <Text style={styles.retryButtonText}>Retry</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  const renderHeader = () => (
+    <View>
+      <View style={styles.headerSection}>
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={() => navigation.goBack()}
+        >
+          <Ionicons name='chevron-back' size={24} color={THEME.colors.text} />
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.logoutButton}
+          onPress={handleLogout}
+          accessibilityLabel='Logout'
+        >
+          <Ionicons
+            name='log-out-outline'
+            size={24}
+            color={THEME.colors.text}
+          />
+        </TouchableOpacity>
+        <View style={styles.profileSection}>
+          <View style={styles.profileImageContainer}>
+            <Image source={{ uri: user.image }} style={styles.profileImage} />
+            <View style={styles.profileImageBorder} />
+          </View>
+          <View style={styles.statsContainer}>
+            <View style={styles.statItem}>
+              <Text style={styles.statNumber}>
+                {user.followers?.length || 0}
+              </Text>
+              <Text style={styles.statLabel}>Followers</Text>
+            </View>
+            <View style={styles.statItem}>
+              <Text style={styles.statNumber}>
+                {user.following?.length || 0}
+              </Text>
+              <Text style={styles.statLabel}>Following</Text>
+            </View>
+            <View style={styles.statItem}>
+              <Text style={styles.statNumber}>
+                {user.created_debates?.length || 0}
+              </Text>
+              <Text style={styles.statLabel}>Debates</Text>
+            </View>
+          </View>
+          <TouchableOpacity
+            style={[styles.followButton, isFollowing && styles.followingButton]}
+            onPress={() => setIsFollowing((prev) => !prev)}
+          >
+            <Text
+              style={[
+                styles.followButtonText,
+                isFollowing && styles.followingButtonText,
+              ]}
+            >
+              {isFollowing ? "Following" : "Follow"}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+      <View style={styles.bioSection}>
+        <Text style={styles.username}>@{user.username}</Text>
+        <Text style={styles.name}>{user.name}</Text>
+        {user.about && <Text style={styles.bio}>{user.about}</Text>}
+        <View style={styles.additionalStatItem}>
+          <Ionicons name='calendar' size={16} color={THEME.colors.textMuted} />
+          <Text style={styles.additionalStatText}>
+            Joined {new Date(user.createdAt).toLocaleDateString()}
+          </Text>
+        </View>
+      </View>
+      <View style={styles.debatesHeader}>
+        <Text style={styles.debatesTitle}>Debates ({debates.length})</Text>
+      </View>
+    </View>
+  );
 
   return (
-    <ScrollView className='flex-1 bg-[#080F12]'>
-      {/* Profile Panel */}
-      <View className='m-4 p-6 rounded-xl bg-[#080F1290] border border-[#00FF9430]'>
-        <View className='flex-row justify-between items-start mb-6'>
-          <Text className='text-[#00FF94] font-bold text-lg'>Profile</Text>
-          <SignedIn>
-            <TouchableOpacity
-              onPress={handleLogout}
-              className='px-4 py-2 rounded-lg bg-[#FF00E515] border border-[#FF00E530]'
-            >
-              <Text className='text-[#FF00E5]'>Log Out</Text>
-            </TouchableOpacity>
-          </SignedIn>
-        </View>
-
-        <View className='flex-row flex-wrap'>
-          {/* Avatar */}
-          <LinearGradient
-            colors={["#00FF94", "#02C39A"]}
-            className='h-24 w-24 rounded-full items-center justify-center mb-4'
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-          >
-            <Text className='text-[#080F12] text-3xl font-bold'>
-              {userData.name.charAt(0)}
-            </Text>
-          </LinearGradient>
-
-          {/* User Info */}
-          <View className='ml-4 flex-1'>
-            <Text className='text-[#00FF94] text-2xl font-bold'>
-              {userData.name}
-            </Text>
-            <Text className='text-[#8F9BB3] mb-1'>{userData.handle}</Text>
-            <View className='bg-[#00FF9415] px-3 py-1 rounded-full self-start mb-2'>
-              <Text className='text-[#E0F0EA] text-xs'>
-                {userData.followers.toLocaleString()} followers
-              </Text>
-            </View>
-            <Text className='text-[#E0F0EA]'>{userData.bio}</Text>
-          </View>
-        </View>
-
-        {/* Stats Grid */}
-        <View className='flex-row flex-wrap mt-6 mb-6'>
-          <View className='w-1/2 pr-2 mb-2'>
-            <View className='bg-[#080F1298] p-3 rounded-lg border border-[#00FF9420]'>
-              <Text className='text-[#00FF94] text-xl font-bold text-center'>
-                {userData.stats.debatesCreated}
-              </Text>
-              <Text className='text-[#8F9BB3] text-center text-xs'>
-                Debates Created
-              </Text>
-            </View>
-          </View>
-          <View className='w-1/2 pl-2 mb-2'>
-            <View className='bg-[#080F1298] p-3 rounded-lg border border-[#00FF9420]'>
-              <Text className='text-[#00FF94] text-xl font-bold text-center'>
-                {userData.stats.debatesJoined}
-              </Text>
-              <Text className='text-[#8F9BB3] text-center text-xs'>
-                Debates Joined
-              </Text>
-            </View>
-          </View>
-          <View className='w-1/2 pr-2'>
-            <View className='bg-[#080F1298] p-3 rounded-lg border border-[#00FF9420]'>
-              <Text className='text-[#00FF94] text-xl font-bold text-center'>
-                {userData.stats.evidenceSubmitted}
-              </Text>
-              <Text className='text-[#8F9BB3] text-center text-xs'>
-                Evidence Submitted
-              </Text>
-            </View>
-          </View>
-          <View className='w-1/2 pl-2'>
-            <View className='bg-[#080F1298] p-3 rounded-lg border border-[#00FF9420]'>
-              <Text className='text-[#00FF94] text-xl font-bold text-center'>
-                {userData.stats.reputation}
-              </Text>
-              <Text className='text-[#8F9BB3] text-center text-xs'>
-                Reputation
-              </Text>
-            </View>
-          </View>
-        </View>
-
-        {/* Badges */}
-        <View className='mb-2'>
-          <Text className='text-[#E0F0EA] font-medium mb-3'>Badges</Text>
-          <View className='flex-row flex-wrap'>
-            {userData.badges.map((badge, index) => (
-              <View
-                key={index}
-                className='bg-[#FF00E515] border border-[#FF00E520] py-1 px-3 rounded-lg mr-2 mb-2 flex-row items-center'
-              >
-                <MaterialIcons name={badge.icon} size={16} color='#FF00E5' />
-                <Text className='text-[#FF00E5] text-xs ml-1'>
-                  {badge.name}
-                </Text>
-              </View>
-            ))}
-          </View>
-        </View>
-      </View>
-
-      {/* Debates Panel */}
-      <View className='m-4 p-6 rounded-xl bg-[#080F1290] border border-[#00FF9430]'>
-        {/* Tabs */}
-        <View className='flex-row border-b border-[#00FF9420] mb-4'>
-          <TouchableOpacity
-            className='mr-4 pb-2 relative'
-            onPress={() => setActiveTab("debates")}
-          >
-            <Text
-              className={
-                activeTab === "debates"
-                  ? "text-[#00FF94] font-bold"
-                  : "text-[#8F9BB3]"
-              }
-            >
-              Active Debates
-            </Text>
-            {activeTab === "debates" && (
-              <LinearGradient
-                colors={["#00FF94", "#02C39A"]}
-                className='h-0.5 absolute bottom-0 w-full'
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-              />
-            )}
-          </TouchableOpacity>
-          <TouchableOpacity
-            className='pb-2 relative'
-            onPress={() => setActiveTab("history")}
-          >
-            <Text
-              className={
-                activeTab === "history"
-                  ? "text-[#00FF94] font-bold"
-                  : "text-[#8F9BB3]"
-              }
-            >
-              Debate History
-            </Text>
-            {activeTab === "history" && (
-              <LinearGradient
-                colors={["#00FF94", "#02C39A"]}
-                className='h-0.5 absolute bottom-0 w-full'
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-              />
-            )}
-          </TouchableOpacity>
-        </View>
-
-        {/* Active Debates */}
-        {activeTab === "debates" && (
-          <View>
-            <View className='flex-row justify-between items-center mb-4'>
-              <Text className='text-[#E0F0EA] font-medium'>
-                Your Active Debates
-              </Text>
-              <LinearGradient
-                colors={["#00FF94", "#02C39A"]}
-                className='px-4 py-2 rounded-lg'
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-              >
-                <Text className='text-[#080F12] font-bold'>Create Debate</Text>
-              </LinearGradient>
-            </View>
-
-            {userData.activeDebates.map((debate) => (
-              <TouchableOpacity
-                key={debate.id}
-                className='bg-[#080F1298] p-4 rounded-lg border border-[#00FF9420] mb-3'
-              >
-                <Text className='text-[#E0F0EA] text-base mb-2'>
-                  {debate.title}
-                </Text>
-                <View className='flex-row justify-between'>
-                  <Text className='text-[#8F9BB3] text-xs'>
-                    {debate.participants} participants
-                  </Text>
-                  <Text className='text-[#FFC700] text-xs'>
-                    Time remaining: {debate.timeRemaining}
-                  </Text>
-                </View>
-              </TouchableOpacity>
-            ))}
-          </View>
+    <View style={styles.container}>
+      <FlatList
+        data={debates}
+        keyExtractor={(item) => item.id}
+        renderItem={({ item }) => (
+          <DebateCard
+            item={item}
+            onJoin={handleJoinPress}
+            loading={joiningDebateId === item.id}
+          />
         )}
-
-        {/* Debate History */}
-        {activeTab === "history" && (
-          <View>
-            <Text className='text-[#E0F0EA] font-medium mb-4'>
-              Past Debates
+        ListHeaderComponent={renderHeader}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={[THEME.colors.primary]}
+            tintColor={THEME.colors.primary}
+          />
+        }
+        ListEmptyComponent={
+          <View style={styles.emptyContainer}>
+            <Ionicons
+              name='chatbubbles-outline'
+              size={64}
+              color={THEME.colors.textMuted}
+            />
+            <Text style={styles.emptyText}>No debates created yet</Text>
+            <Text style={styles.emptySubText}>
+              Start your first debate to see it here
             </Text>
-
-            {userData.pastDebates.map((debate) => (
-              <TouchableOpacity
-                key={debate.id}
-                className='bg-[#080F1298] p-4 rounded-lg border border-[#00FF9420] mb-3'
-              >
-                <Text className='text-[#E0F0EA] text-base mb-2'>
-                  {debate.title}
-                </Text>
-                <View className='flex-row justify-between'>
-                  <Text className='text-[#8F9BB3] text-xs'>
-                    {debate.participants} participants
-                  </Text>
-                  <View
-                    className={`px-3 py-1 rounded-full ${getResultClass(
-                      debate.result
-                    )}`}
-                  >
-                    <Text className={getResultClass(debate.result)}>
-                      {debate.result}
-                    </Text>
-                  </View>
-                </View>
-              </TouchableOpacity>
-            ))}
           </View>
-        )}
-      </View>
-    </ScrollView>
+        }
+      />
+    </View>
   );
 };
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: THEME.colors.background,
+    paddingBottom: 20,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: THEME.colors.background,
+  },
+  loadingText: {
+    fontSize: 16,
+    color: THEME.colors.textSecondary,
+    fontWeight: "500",
+    marginTop: THEME.spacing.md,
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: THEME.colors.background,
+    paddingHorizontal: THEME.spacing.xl,
+  },
+  errorText: {
+    fontSize: 18,
+    color: THEME.colors.textSecondary,
+    fontWeight: "600",
+    marginTop: THEME.spacing.md,
+    marginBottom: THEME.spacing.lg,
+  },
+  retryButton: {
+    backgroundColor: THEME.colors.primary,
+    paddingHorizontal: THEME.spacing.lg,
+    paddingVertical: THEME.spacing.sm,
+    borderRadius: THEME.borderRadius.md,
+  },
+  retryButtonText: {
+    color: THEME.colors.text,
+    fontWeight: "600",
+    fontSize: 16,
+  },
+  scrollContent: {
+    paddingBottom: 20,
+    padding: THEME.spacing.md,
+  },
+  headerSection: {
+    paddingTop: 50,
+    paddingBottom: THEME.spacing.md,
+    backgroundColor: THEME.colors.background,
+    borderBottomWidth: 1,
+    borderBottomColor: THEME.colors.text,
+  },
+  backButton: {
+    position: "absolute",
+    top: 50,
+    left: THEME.spacing.md,
+    zIndex: 1,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: THEME.colors.background,
+    borderWidth: 1,
+    borderColor: THEME.colors.text,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  logoutButton: {
+    position: "absolute",
+    top: 50,
+    right: THEME.spacing.md,
+    zIndex: 1,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: THEME.colors.background,
+    borderWidth: 1,
+    borderColor: THEME.colors.text,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  profileSection: {
+    alignItems: "center",
+    paddingHorizontal: THEME.spacing.md,
+  },
+  profileImageContainer: {
+    position: "relative",
+    marginBottom: THEME.spacing.md,
+  },
+  profileImage: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+  },
+  profileImageBorder: {
+    position: "absolute",
+    top: -4,
+    left: -4,
+    right: -4,
+    bottom: -4,
+    borderRadius: 64,
+    borderWidth: 3,
+    borderColor: THEME.colors.text,
+  },
+  statsContainer: {
+    flexDirection: "row",
+    marginBottom: THEME.spacing.lg,
+    gap: THEME.spacing.xl,
+  },
+  statItem: {
+    alignItems: "center",
+  },
+  statNumber: {
+    fontSize: 24,
+    fontWeight: "bold",
+    color: THEME.colors.text,
+    marginBottom: 4,
+  },
+  statLabel: {
+    fontSize: 14,
+    color: THEME.colors.textSecondary,
+    fontWeight: "500",
+  },
+  followButton: {
+    backgroundColor: THEME.colors.text,
+    paddingHorizontal: THEME.spacing.xl,
+    paddingVertical: THEME.spacing.sm,
+    borderRadius: THEME.borderRadius.xl,
+    minWidth: 120,
+  },
+  followingButton: {
+    backgroundColor: "transparent",
+    borderWidth: 2,
+    borderColor: THEME.colors.text,
+  },
+  followButtonText: {
+    color: THEME.colors.background,
+    fontWeight: "700",
+    fontSize: 16,
+    textAlign: "center",
+  },
+  followingButtonText: {
+    color: THEME.colors.text,
+  },
+  bioSection: {
+    backgroundColor: THEME.colors.background,
+    padding: THEME.spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: THEME.colors.text,
+  },
+  username: {
+    fontSize: 16,
+    color: THEME.colors.textMuted,
+    marginBottom: 4,
+    fontWeight: "500",
+  },
+  name: {
+    fontSize: 28,
+    fontWeight: "bold",
+    color: THEME.colors.text,
+    marginBottom: THEME.spacing.sm,
+  },
+  bio: {
+    fontSize: 16,
+    color: THEME.colors.textSecondary,
+    lineHeight: 24,
+    marginBottom: THEME.spacing.md,
+  },
+  additionalStatItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: THEME.spacing.sm,
+  },
+  additionalStatText: {
+    fontSize: 14,
+    color: THEME.colors.textMuted,
+    fontWeight: "500",
+  },
+  debatesHeader: {
+    paddingHorizontal: THEME.spacing.md,
+    paddingVertical: THEME.spacing.md,
+    backgroundColor: THEME.colors.background,
+    borderBottomWidth: 1,
+    borderBottomColor: THEME.colors.text,
+  },
+  debatesTitle: {
+    fontSize: 20,
+    fontWeight: "bold",
+    color: THEME.colors.text,
+  },
+  debateCard: {
+    marginVertical: THEME.spacing.sm,
+    backgroundColor: THEME.colors.background,
+    borderRadius: THEME.borderRadius.lg,
+    borderWidth: 1,
+    borderColor: THEME.colors.text,
+    overflow: "hidden",
+    position: "relative",
+  },
+  debateImage: {
+    width: "100%",
+    height: 200,
+  },
+  debateStatus: {
+    position: "absolute",
+    top: THEME.spacing.sm,
+    right: THEME.spacing.sm,
+    zIndex: 1,
+  },
+  statusBadge: {
+    paddingHorizontal: THEME.spacing.sm,
+    paddingVertical: 4,
+    borderRadius: THEME.borderRadius.sm,
+  },
+  statusText: {
+    color: THEME.colors.text,
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  debateInfo: {
+    padding: THEME.spacing.md,
+  },
+  debateTitle: {
+    fontSize: 18,
+    fontWeight: "bold",
+    color: THEME.colors.text,
+    marginBottom: THEME.spacing.sm,
+    lineHeight: 24,
+  },
+  debateDescription: {
+    fontSize: 14,
+    color: THEME.colors.textSecondary,
+    lineHeight: 20,
+    marginBottom: THEME.spacing.sm,
+  },
+  debateMetrics: {
+    flexDirection: "row",
+    gap: THEME.spacing.md,
+    marginBottom: THEME.spacing.sm,
+  },
+  metricItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  metricText: {
+    fontSize: 12,
+    color: THEME.colors.textMuted,
+    fontWeight: "600",
+  },
+  keywordsContainer: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: THEME.spacing.xs,
+    marginBottom: THEME.spacing.md,
+  },
+  keywordTag: {
+    backgroundColor: THEME.colors.background,
+    paddingHorizontal: THEME.spacing.sm,
+    paddingVertical: 4,
+    borderRadius: THEME.borderRadius.sm,
+    borderWidth: 1,
+    borderColor: THEME.colors.text,
+  },
+  keywordText: {
+    fontSize: 12,
+    color: THEME.colors.textSecondary,
+    fontWeight: "500",
+  },
+  enterButton: {
+    backgroundColor: "transparent",
+    borderWidth: 2,
+    borderColor: THEME.colors.primary,
+    paddingVertical: THEME.spacing.sm,
+    paddingHorizontal: THEME.spacing.lg,
+    borderRadius: THEME.borderRadius.md,
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 44,
+  },
+  enterButtonText: {
+    color: THEME.colors.primary,
+    fontWeight: "700",
+    fontSize: 16,
+  },
+  emptyContainer: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 80,
+    paddingHorizontal: THEME.spacing.xl,
+  },
+  emptyText: {
+    fontSize: 18,
+    color: THEME.colors.textSecondary,
+    marginTop: THEME.spacing.md,
+    fontWeight: "600",
+    textAlign: "center",
+  },
+  emptySubText: {
+    fontSize: 14,
+    color: THEME.colors.textMuted,
+    marginTop: THEME.spacing.sm,
+    textAlign: "center",
+    lineHeight: 20,
+  },
+});
 
 export default ProfilePage;

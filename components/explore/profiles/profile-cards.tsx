@@ -38,7 +38,7 @@ const ProfileCard: React.FC<ProfileCardProps> = ({ item, onPress }) => (
       <Image source={{ uri: item.image }} style={styles.profileImage} />
       <View style={styles.profileInfo}>
         <Text style={styles.profileUsername}>@{item.username}</Text>
-        <Text style={styles.profileId}> {item.about.slice(0, 8)}...</Text>
+        <Text style={styles.profileId}> {item?.about?.slice(0, 8)}...</Text>
       </View>
       <Ionicons
         name='chevron-forward'

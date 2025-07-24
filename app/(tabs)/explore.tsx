@@ -251,7 +251,12 @@ const ExploreDebatesPage = () => {
   // Search for profiles
   const performProfileSearch = useCallback(
     async (query: string) => {
-      if (!token || !query) return;
+      if (!token || !query) {
+        setProfiles([]);
+        setDebates([]);
+
+        return;
+      }
 
       setFetchError(null);
       setIsSearching(true);
@@ -259,9 +264,9 @@ const ExploreDebatesPage = () => {
 
       try {
         const res = await fetch(
-          `${process.env.EXPO_PUBLIC_BASE_URL}/user/${encodeURIComponent(
-            query
-          )}`,
+          `${
+            process.env.EXPO_PUBLIC_BASE_URL
+          }/user/account/${encodeURIComponent(query)}`,
           {
             method: "GET",
             headers: {
@@ -411,7 +416,12 @@ const ExploreDebatesPage = () => {
         ) : (
           searchQuery.length > 0 && (
             <TouchableOpacity
-              onPress={() => setSearchQuery("")}
+              onPress={() => {
+                setSearchQuery("");
+                setDebates([]);
+                setProfiles([]);
+                setSearchType("debates");
+              }}
               style={styles.clearButton}
             >
               <Ionicons
