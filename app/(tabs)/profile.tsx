@@ -18,7 +18,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
 import { useClerk } from "@clerk/clerk-expo";
 import * as Haptics from "expo-haptics";
-import SkeletonLoader from "@/components/profile/ProfileSkeliton";
+import * as ImagePicker from "expo-image-picker";
 import ProfileSkeleton from "@/components/profile/ProfileSkeliton";
 
 const THEME = {
@@ -140,6 +140,19 @@ const ProfilePage: React.FC = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [dataFetched, setDataFetched] = useState(false);
   const [joiningDebateId, setJoiningDebateId] = useState<string | null>(null);
+
+  // Image update states
+  const [isEditingImage, setIsEditingImage] = useState(false);
+  const [newImageUri, setNewImageUri] = useState<string | null>(null);
+  const [newCloudUrl, setNewCloudUrl] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [updating, setUpdating] = useState(false);
+
+  // About/Bio update states
+  const [isEditingAbout, setIsEditingAbout] = useState(false);
+  const [newAboutText, setNewAboutText] = useState("");
+  const [updatingAbout, setUpdatingAbout] = useState(false);
+
   const [token, fetchToken] = useAuthToken();
   const route = useRoute();
   const navigation = useNavigation();
@@ -183,6 +196,292 @@ const ProfilePage: React.FC = () => {
     },
     [token, fetchToken]
   );
+
+  // Permission request function
+  const requestPermission = async (
+    permissionFn: () => Promise<any>,
+    errorMsg: string
+  ) => {
+    const { status } = await permissionFn();
+    if (status !== "granted") {
+      Alert.alert("Permission Required", errorMsg);
+      return false;
+    }
+
+    return true;
+  };
+
+  // Upload image to R2
+  const uploadImageToR2 = async (uri: string) => {
+    setUploading(true);
+    try {
+      // 1. Generate a unique file key
+      const name = uri.split("/").pop() || "profile.jpg";
+      const key = `profile-images/${Date.now()}_${name}`;
+
+      // 2. Get signed URL from backend
+      const response = await fetchWithAuthRetry(
+        `${process.env.EXPO_PUBLIC_BASE_URL}/uploads/signed-url?filename=${key}&type=image/jpeg`
+      );
+      const data = await response.json();
+      const signedUrl: string = data.data.signedUrl;
+
+      // 3. Upload directly to R2
+      try {
+        const blob = await fetch(uri).then((r) => r.blob());
+        const uploadRes = await fetch(signedUrl, {
+          method: "PUT",
+          headers: { "Content-Type": "image/jpeg" },
+          body: blob,
+        });
+        if (!uploadRes.ok) throw new Error("Upload failed");
+      } catch (error) {
+        console.error("Image upload error:", error);
+        throw error;
+      }
+
+      // 4. Construct public CDN URL
+      const publicUrl = `https://r2-image-cdn.letsdebate0.workers.dev/letsdebate-media/${key}`;
+      setNewCloudUrl(publicUrl);
+      setNewImageUri(uri);
+    } catch (err) {
+      console.error(err);
+      Alert.alert("Upload Error", "Unable to upload image. Please try again.");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  // Pick image from library
+  const pickImage = async () => {
+    if (
+      !(await requestPermission(
+        ImagePicker.requestMediaLibraryPermissionsAsync,
+        "Access to media library is needed."
+      ))
+    )
+      return;
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1], // Square aspect for profile image
+      quality: 1,
+    });
+
+    if (!result.canceled) {
+      await uploadImageToR2(result.assets[0].uri);
+    }
+  };
+
+  // Take photo with camera
+  const takePhoto = async () => {
+    if (
+      !(await requestPermission(
+        ImagePicker.requestCameraPermissionsAsync,
+        "Camera permission is needed."
+      ))
+    )
+      return;
+
+    const result = await ImagePicker.launchCameraAsync({
+      allowsEditing: true,
+      aspect: [1, 1], // Square aspect for profile image
+      quality: 1,
+    });
+
+    if (!result.canceled) {
+      await uploadImageToR2(result.assets[0].uri);
+    }
+  };
+
+  // Show image picker options
+  const showImagePickerOptions = () => {
+    Alert.alert("Update Profile Image", "Choose an option", [
+      { text: "Camera", onPress: takePhoto },
+      { text: "Gallery", onPress: pickImage },
+      { text: "Cancel", style: "cancel" },
+    ]);
+  };
+
+  // Save updated profile image
+  const handleSaveImage = async () => {
+    if (!newCloudUrl) {
+      Alert.alert("Error", "Please select an image first.");
+      return;
+    }
+
+    setUpdating(true);
+    try {
+      // Get current token for the PATCH request
+      let currentToken = token;
+      if (!currentToken) {
+        currentToken = await AsyncStorage.getItem("authToken");
+        if (!currentToken) {
+          await fetchToken();
+          currentToken = await AsyncStorage.getItem("authToken");
+        }
+      }
+      if (!currentToken) throw new Error("No authentication token available");
+
+      // Make PATCH request to update profile image
+      let response = await fetch(`${process.env.EXPO_PUBLIC_BASE_URL}/user`, {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${currentToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          data: {
+            image: newCloudUrl,
+          },
+        }),
+      });
+
+      // Handle token refresh if needed
+      if (response.status === 401) {
+        await fetchToken();
+        currentToken = await AsyncStorage.getItem("authToken");
+        if (!currentToken) throw new Error("Token refresh failed");
+
+        response = await fetch(
+          `${process.env.EXPO_PUBLIC_BASE_URL}/user/image-update`,
+          {
+            method: "PATCH",
+            headers: {
+              Authorization: `Bearer ${currentToken}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              image: newCloudUrl,
+            }),
+          }
+        );
+      }
+
+      if (!response.ok) {
+        throw new Error(`Update failed: ${response.status}`);
+      }
+
+      const result = await response.json();
+
+      if (result.success) {
+        // Update local user state
+        setUser((prev) => (prev ? { ...prev, image: newCloudUrl } : null));
+        setIsEditingImage(false);
+        setNewImageUri(null);
+        setNewCloudUrl(null);
+        Alert.alert("Success", "Profile image updated successfully!");
+      } else {
+        throw new Error(result.message || "Update failed");
+      }
+    } catch (error) {
+      console.error("Error updating profile image:", error);
+      Alert.alert("Error", "Failed to update profile image. Please try again.");
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  // Cancel image editing
+  const handleCancelImageEdit = () => {
+    setIsEditingImage(false);
+    setNewImageUri(null);
+    setNewCloudUrl(null);
+  };
+
+  // Start editing about section
+  const handleStartEditAbout = () => {
+    setNewAboutText(user?.about || "");
+    setIsEditingAbout(true);
+  };
+
+  // Save updated about text
+  const handleSaveAbout = async () => {
+    if (!newAboutText.trim() && !user?.about) {
+      Alert.alert("Error", "Please enter some text for your bio.");
+      return;
+    }
+
+    setUpdatingAbout(true);
+    try {
+      // Get current token for the PATCH request
+      let currentToken = token;
+      if (!currentToken) {
+        currentToken = await AsyncStorage.getItem("authToken");
+        if (!currentToken) {
+          await fetchToken();
+          currentToken = await AsyncStorage.getItem("authToken");
+        }
+      }
+      if (!currentToken) throw new Error("No authentication token available");
+
+      // Make PATCH request to update about text
+      let response = await fetch(
+        `${process.env.EXPO_PUBLIC_BASE_URL}/user/about-update`,
+        {
+          method: "PATCH",
+          headers: {
+            Authorization: `Bearer ${currentToken}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            about: newAboutText.trim(),
+          }),
+        }
+      );
+
+      // Handle token refresh if needed
+      if (response.status === 401) {
+        await fetchToken();
+        currentToken = await AsyncStorage.getItem("authToken");
+        if (!currentToken) throw new Error("Token refresh failed");
+
+        response = await fetch(
+          `${process.env.EXPO_PUBLIC_BASE_URL}/user/about-update`,
+          {
+            method: "PATCH",
+            headers: {
+              Authorization: `Bearer ${currentToken}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              about: newAboutText.trim(),
+            }),
+          }
+        );
+      }
+
+      if (!response.ok) {
+        throw new Error(`Update failed: ${response.status}`);
+      }
+
+      const result = await response.json();
+
+      if (result.success) {
+        // Update local user state
+        setUser((prev) =>
+          prev ? { ...prev, about: newAboutText.trim() } : null
+        );
+        setIsEditingAbout(false);
+        setNewAboutText("");
+        Alert.alert("Success", "Bio updated successfully!");
+      } else {
+        throw new Error(result.message || "Update failed");
+      }
+    } catch (error) {
+      console.error("Error updating about text:", error);
+      Alert.alert("Error", "Failed to update bio. Please try again.");
+    } finally {
+      setUpdatingAbout(false);
+    }
+  };
+
+  // Cancel about editing
+  const handleCancelAboutEdit = () => {
+    setIsEditingAbout(false);
+    setNewAboutText("");
+  };
 
   const fetchProfileData = useCallback(async () => {
     if (!token && !dataFetched) return;
@@ -299,9 +598,58 @@ const ProfilePage: React.FC = () => {
         </TouchableOpacity>
         <View style={styles.profileSection}>
           <View style={styles.profileImageContainer}>
-            <Image source={{ uri: user.image }} style={styles.profileImage} />
-            <View style={styles.profileImageBorder} />
+            <TouchableOpacity
+              onPress={() => {
+                if (isEditingImage) {
+                  showImagePickerOptions();
+                } else {
+                  setIsEditingImage(true);
+                }
+              }}
+              disabled={uploading || updating}
+            >
+              <Image
+                source={{ uri: newImageUri || user.image }}
+                style={styles.profileImage}
+              />
+              <View style={styles.profileImageBorder} />
+
+              {/* Edit overlay */}
+              <View style={styles.editOverlay}>
+                {uploading ? (
+                  <ActivityIndicator size='small' color='white' />
+                ) : (
+                  <Ionicons name='camera' size={20} color='white' />
+                )}
+              </View>
+            </TouchableOpacity>
+
+            {/* Edit buttons */}
+            {isEditingImage && (
+              <View style={styles.editButtons}>
+                <TouchableOpacity
+                  style={[styles.editButton, styles.cancelButton]}
+                  onPress={handleCancelImageEdit}
+                  disabled={updating}
+                >
+                  <Text style={styles.cancelButtonText}>Cancel</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.editButton, styles.saveButton]}
+                  onPress={handleSaveImage}
+                  disabled={!newCloudUrl || updating}
+                >
+                  {updating ? (
+                    <ActivityIndicator size='small' color='white' />
+                  ) : (
+                    <Text style={styles.saveButtonText}>Save</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            )}
           </View>
+
           <View style={styles.statsContainer}>
             <View style={styles.statItem}>
               <Text style={styles.statNumber}>
@@ -664,6 +1012,46 @@ const styles = StyleSheet.create({
     marginTop: THEME.spacing.sm,
     textAlign: "center",
     lineHeight: 20,
+  },
+  editOverlay: {
+    position: "absolute",
+    bottom: 0,
+    right: 0,
+    backgroundColor: "rgba(0, 0, 0, 0.6)",
+    borderRadius: 15,
+    width: 30,
+    height: 30,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  editButtons: {
+    flexDirection: "row",
+    marginTop: 10,
+    gap: 10,
+    justifyContent: "center",
+  },
+  editButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 6,
+    minWidth: 70,
+    alignItems: "center",
+  },
+  cancelButton: {
+    backgroundColor: THEME.colors.textMuted,
+  },
+  saveButton: {
+    backgroundColor: THEME.colors.primary,
+  },
+  cancelButtonText: {
+    color: "white",
+    fontWeight: "600",
+    fontSize: 14,
+  },
+  saveButtonText: {
+    color: "white",
+    fontWeight: "600",
+    fontSize: 14,
   },
 });
 

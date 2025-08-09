@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from "react";
-import { StatusBar, View, Text, TouchableOpacity } from "react-native";
+import { StatusBar, View, Text, TouchableOpacity, Linking } from "react-native";
 import {
   SplashScreen,
   Slot,
@@ -86,6 +86,96 @@ enum UserStatus {
 }
 
 // --------------------
+// Deep Link Handler Hook
+// --------------------
+function useDeepLinkHandler() {
+  const router = useRouter();
+  const { isSignedIn, isLoaded } = useAuth();
+
+  useEffect(() => {
+    const handleDeepLink = (url: string) => {
+      console.log("DEEP LINK: Received URL:", url);
+
+      try {
+        // Parse the URL
+        const urlObj = new URL(url);
+        const path = urlObj.pathname;
+        const params = Object.fromEntries(urlObj.searchParams.entries());
+
+        console.log("DEEP LINK: Parsed path:", path, "params:", params);
+
+        // Handle different deep link paths
+        if (path.startsWith("/auth/")) {
+          // Auth-related deep links (sign-in, sign-up, etc.)
+          console.log("DEEP LINK: Auth-related link detected");
+          // Let Clerk handle authentication deep links
+          return;
+        }
+
+        if (path.startsWith("/profile/")) {
+          // Profile deep links
+          console.log("DEEP LINK: Profile link detected");
+          if (isSignedIn) {
+            router.push(`/profile`);
+          } else {
+            router.push("/onboarding");
+          }
+          return;
+        }
+
+        // Handle other specific routes
+        switch (path) {
+          case "/":
+          case "/home":
+            if (isSignedIn) {
+              router.push("/(tabs)");
+            } else {
+              router.push("/onboarding");
+            }
+            break;
+
+          default:
+            console.log("DEEP LINK: Unknown path, using default navigation");
+            // For unknown paths, use default navigation logic
+            break;
+        }
+      } catch (error) {
+        console.error("DEEP LINK: Error parsing URL:", error);
+        // If URL parsing fails, use default navigation
+      }
+    };
+
+    // Get initial URL when app launches
+    const getInitialURL = async () => {
+      try {
+        const initialUrl = await Linking.getInitialURL();
+        if (initialUrl) {
+          console.log("DEEP LINK: Initial URL found:", initialUrl);
+          setTimeout(() => handleDeepLink(initialUrl), 1000); // Delay to ensure auth state is loaded
+        }
+      } catch (error) {
+        console.error("DEEP LINK: Error getting initial URL:", error);
+      }
+    };
+
+    // Handle URL when app is already running
+    const handleUrlListener = (event: { url: string }) => {
+      handleDeepLink(event.url);
+    };
+
+    // Only set up deep link handling if auth is loaded
+    if (isLoaded) {
+      getInitialURL();
+      const subscription = Linking.addEventListener("url", handleUrlListener);
+
+      return () => {
+        subscription?.remove();
+      };
+    }
+  }, [router, isSignedIn, isLoaded]);
+}
+
+// --------------------
 // AuthFlow Component (Overlaid on RootLayout)
 // --------------------
 function AuthFlow() {
@@ -102,6 +192,9 @@ function AuthFlow() {
   } | null>(null);
   const [retryCount, setRetryCount] = useState(0);
   const MAX_RETRIES = 3;
+
+  // Use deep link handler
+  useDeepLinkHandler();
 
   // Use a ref to persist whether redirection has already occurred
   const hasRedirectedRef = useRef(false);
@@ -251,41 +344,64 @@ function AuthFlow() {
     // Skip navigation if we have an API error
     if (apiError && !apiError.isRetrying) return;
 
-    try {
-      SplashScreen.hideAsync().catch((e) =>
-        console.error("Failed to hide splash screen:", e)
-      );
-
-      // Log the state for debugging
-      console.log("AUTH NAVIGATION: Ready to navigate", {
-        userStatus,
-        isSignedIn,
-        hasRedirected: hasRedirectedRef.current,
-        segments: segments,
-        navState: navigationState?.key,
-      });
-
-      // Force navigation after a longer delay to ensure app is ready
-      setTimeout(() => {
-        if (userStatus === UserStatus.NOT_SIGNED_IN) {
-          console.log("AUTH CHECK: Navigating to sign-in");
-          hasRedirectedRef.current = true;
-          router.replace("/onboarding");
-        } else if (userStatus === UserStatus.SIGNED_IN_NOT_IN_DB) {
-          console.log("AUTH CHECK: Navigating to boarding");
-          hasRedirectedRef.current = true;
-          router.replace("/(auth)/(boarding)/boarding");
-        } else if (userStatus === UserStatus.SIGNED_IN_IN_DB) {
-          console.log("AUTH CHECK: User verified, navigating to tabs");
-          hasRedirectedRef.current = true;
-
-          // Navigate to the main app tab
-          router.replace("/(tabs)");
+    // Check if we have a deep link that should take precedence
+    const checkForDeepLink = async () => {
+      try {
+        const initialUrl = await Linking.getInitialURL();
+        if (initialUrl && initialUrl !== "dtrue://") {
+          console.log(
+            "AUTH NAVIGATION: Deep link detected, skipping default navigation"
+          );
+          SplashScreen.hideAsync().catch((e) =>
+            console.error("Failed to hide splash screen:", e)
+          );
+          return true; // Skip default navigation
         }
-      }, 1000); // Increased delay to 1 second for more reliable navigation
-    } catch (error) {
-      console.error("Navigation error:", error);
-    }
+      } catch (error) {
+        console.error("Error checking for deep link:", error);
+      }
+      return false;
+    };
+
+    checkForDeepLink().then((hasDeepLink) => {
+      if (hasDeepLink) return;
+
+      try {
+        SplashScreen.hideAsync().catch((e) =>
+          console.error("Failed to hide splash screen:", e)
+        );
+
+        // Log the state for debugging
+        console.log("AUTH NAVIGATION: Ready to navigate", {
+          userStatus,
+          isSignedIn,
+          hasRedirected: hasRedirectedRef.current,
+          segments: segments,
+          navState: navigationState?.key,
+        });
+
+        // Force navigation after a longer delay to ensure app is ready
+        setTimeout(() => {
+          if (userStatus === UserStatus.NOT_SIGNED_IN) {
+            console.log("AUTH CHECK: Navigating to sign-in");
+            hasRedirectedRef.current = true;
+            router.replace("/onboarding");
+          } else if (userStatus === UserStatus.SIGNED_IN_NOT_IN_DB) {
+            console.log("AUTH CHECK: Navigating to boarding");
+            hasRedirectedRef.current = true;
+            router.replace("/(auth)/(boarding)/boarding");
+          } else if (userStatus === UserStatus.SIGNED_IN_IN_DB) {
+            console.log("AUTH CHECK: User verified, navigating to tabs");
+            hasRedirectedRef.current = true;
+
+            // Navigate to the main app tab
+            router.replace("/(tabs)");
+          }
+        }, 1000); // Increased delay to 1 second for more reliable navigation
+      } catch (error) {
+        console.error("Navigation error:", error);
+      }
+    });
   }, [
     mounted,
     isCheckingComplete,
@@ -319,7 +435,7 @@ function AuthFlow() {
             onPress={() => {
               setRetryCount(0);
               setApiError(null);
-              checkUserStatus(userId);
+              checkUserStatus(userId!);
             }}
           >
             <Text className='text-white text-center font-medium'>

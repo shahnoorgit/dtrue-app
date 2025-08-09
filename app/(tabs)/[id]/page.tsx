@@ -202,6 +202,10 @@ const ProfilePage: React.FC = () => {
       const debatesData = await debatesResponse.json();
       if (profileData.success) setUser(profileData.data);
       if (debatesData.success) setDebates(debatesData.data);
+      console.log("Profile Data:", profileData);
+      if (profileData.data.isFollowing) {
+        setIsFollowing(true);
+      }
       setDataFetched(true);
     } catch (error) {
       console.error("Error fetching profile data:", error);
@@ -212,10 +216,9 @@ const ProfilePage: React.FC = () => {
   }, [fetchWithAuthRetry, token, dataFetched, id]);
 
   useEffect(() => {
-    if (token && !dataFetched) {
-      fetchProfileData();
-    }
-  }, [token, dataFetched, fetchProfileData]);
+    if (!token) return;
+    fetchProfileData();
+  }, [token, id]);
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -245,10 +248,48 @@ const ProfilePage: React.FC = () => {
     [token, router, id]
   );
 
-  const handleFollow = () => {
-    console.log(`Follow user with ID: ${id}`);
-    setIsFollowing(!isFollowing);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+  const handleFollow = async () => {
+    const url = `${process.env.EXPO_PUBLIC_BASE_URL}`;
+    try {
+      if (isFollowing) {
+        const response = await fetch(`${url}/user/unfollow/${id}`, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        });
+        if (response.status == 401) {
+          await fetchToken();
+          return handleFollow();
+        }
+        const data = await response.json();
+        if (data.success) {
+          setIsFollowing(false);
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        }
+      } else {
+        const response = await fetch(`${url}/user/follow/${id}`, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        });
+        if (response.status == 401) {
+          await fetchToken();
+          return handleFollow();
+        }
+        const data = await response.json();
+        if (data.success) {
+          setIsFollowing(true);
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        }
+      }
+    } catch (error) {
+      console.error("Error handling follow action:", error);
+      Alert.alert("Error", "Unable to follow/unfollow user. Please try again.");
+    }
   };
 
   const openImageModal = (uri: string) => {
