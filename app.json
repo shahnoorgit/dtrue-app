@@ -15,6 +15,7 @@
     "userInterfaceStyle": "automatic",
     "jsEngine": "hermes",
     "newArchEnabled": true,
+
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
@@ -23,21 +24,43 @@
         }
       }
     },
+
     "android": {
       "package": "com.shahnoor.dtrue",
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/logo.png",
         "backgroundColor": "#0A0E13"
       },
-      "jsEngine": "hermes"
+      "jsEngine": "hermes",
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "category": ["BROWSABLE", "DEFAULT"],
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "https",
+              "host": "links-dev.dtrue.online",
+              "pathPrefix": "/"
+            }
+          ]
+        }
+      ]
     },
+
     "web": {
       "bundler": "metro",
       "output": "static",
       "favicon": "./assets/images/favicon.png"
     },
+
     "plugins": [
-      "expo-router",
+      [
+        "expo-router",
+        {
+          "origin": "https://links-dev.dtrue.online"
+        }
+      ],
       [
         "expo-splash-screen",
         {
@@ -56,17 +79,20 @@
       ],
       "expo-localization"
     ],
+
     "experiments": {
       "typedRoutes": true
     },
+
     "extra": {
       "router": {
-        "origin": false
+        "origin": "https://links-dev.dtrue.online"
       },
       "eas": {
         "projectId": "161ac660-74b1-4723-b57c-ba70d81bc91e"
       }
     },
+
     "owner": "shahnoor_mujawar"
   }
 }

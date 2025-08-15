@@ -13,6 +13,8 @@ import {
   StyleSheet,
   TextInput,
   Keyboard,
+  Share,
+  Pressable,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
@@ -475,55 +477,100 @@ const ExploreDebatesPage = () => {
     </View>
   );
 
-  const renderDebateCard = ({ item }: { item: any }) => (
-    <View style={styles.cardContainer}>
-      <LinearGradient
-        colors={[THEME.colors.backgroundDarker, THEME.colors.background]}
-        style={styles.card}
-      >
-        <Image source={{ uri: item.debate.image }} style={styles.debateImage} />
+  // inside your screen/component
+  const renderDebateCard = ({ item }: { item: any }) => {
+    const joining = joiningDebateId === item.id;
 
-        <View style={styles.cardContent}>
-          <Text style={styles.debateTitle} numberOfLines={2}>
-            {item?.title}
-          </Text>
-          <Text style={styles.debateDescription} numberOfLines={3}>
-            {item?.description}
-          </Text>
+    const participantCount = item.debate?.participantCount ?? 0;
+    const base = process.env.EXPO_SHARE_URL || "https://links-dev.dtrue.online";
+    const shareUrl = `${base}/debate/${item.debate?.id ?? item.id}`;
 
-          <View style={styles.creatorContainer}>
-            <Image
-              source={{ uri: item.creatorImage }}
-              style={styles.creatorImage}
-            />
-            <View>
-              <Text style={styles.creatorName}>Debate Creator</Text>
-              <Text style={styles.creatorHandle}>{item?.creatorName}</Text>
+    const handleShare = async (e?: any) => {
+      // try to stop parent press (web / pressable-friendly)
+      e?.stopPropagation?.();
+
+      try {
+        await Share.share({
+          title: item?.title ?? "Debate",
+          message: `${item?.title ?? "Join this debate"}\n\n${shareUrl}`,
+          url: shareUrl,
+        });
+      } catch (err) {
+        console.warn("Share failed", err);
+      }
+    };
+
+    return (
+      <View style={styles.cardContainer}>
+        <LinearGradient
+          colors={[THEME.colors.backgroundDarker, THEME.colors.background]}
+          style={styles.card}
+        >
+          <Image
+            source={{ uri: item.debate.image }}
+            style={styles.debateImage}
+          />
+
+          <View style={styles.cardContent}>
+            <Text style={styles.debateTitle} numberOfLines={2}>
+              {item?.title}
+            </Text>
+            <Text style={styles.debateDescription} numberOfLines={3}>
+              {item?.description}
+            </Text>
+
+            <View style={styles.creatorContainer}>
+              <Image
+                source={{ uri: item.creatorImage }}
+                style={styles.creatorImage}
+              />
+              <View>
+                <Text style={styles.creatorName}>Debate Creator</Text>
+                <Text style={styles.creatorHandle}>{item?.creatorName}</Text>
+              </View>
+
+              {/* Right side: joined pill + share button */}
+              <View style={styles.metaRight}>
+                <View style={styles.joinedPill}>
+                  <Ionicons name='people' size={14} color='#E6E6E6' />
+                  <Text style={styles.joinedText}>
+                    {participantCount} Joined
+                  </Text>
+                </View>
+
+                <Pressable
+                  onPress={(e) => handleShare(e)}
+                  style={styles.shareButton}
+                  accessibilityLabel={`Share debate ${item?.title}`}
+                >
+                  <Ionicons name='share-social' size={18} color='#BDBDBD' />
+                </Pressable>
+              </View>
             </View>
-          </View>
 
-          <TouchableOpacity
-            style={styles.actionButton}
-            onPress={() => handleJoinDebate(item)}
-            disabled={joiningDebateId === item.id}
-          >
-            {joiningDebateId === item.id ? (
-              <ActivityIndicator size='small' color={THEME.colors.text} />
-            ) : (
-              <>
-                <Ionicons
-                  name='add-circle'
-                  size={20}
-                  color={THEME.colors.text}
-                />
-                <Text style={styles.actionButtonText}>ENTER DEBATE</Text>
-              </>
-            )}
-          </TouchableOpacity>
-        </View>
-      </LinearGradient>
-    </View>
-  );
+            <TouchableOpacity
+              style={styles.actionButton}
+              onPress={() => handleJoinDebate(item)}
+              disabled={joining}
+            >
+              {joining ? (
+                <ActivityIndicator size='small' color={THEME.colors.text} />
+              ) : (
+                <>
+                  <Ionicons
+                    name='add-circle'
+                    size={20}
+                    color={THEME.colors.text}
+                  />
+                  <Text style={styles.actionButtonText}>ENTER DEBATE</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </View>
+        </LinearGradient>
+      </View>
+    );
+  };
 
   const renderEmptyState = () => (
     <View style={styles.emptyState}>
@@ -773,6 +820,13 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: THEME.colors.textMuted,
   },
+
+  joinedText: {
+    color: "#E6E6E6", // light grey text
+    fontSize: 12,
+    fontWeight: "700",
+    marginLeft: 6,
+  },
   actionButton: {
     flexDirection: "row",
     alignItems: "center",
@@ -862,6 +916,29 @@ const styles = StyleSheet.create({
     color: THEME.colors.text,
     fontSize: 14,
     fontWeight: "bold",
+  },
+  shareButton: {
+    marginLeft: 10,
+    backgroundColor: "#111", // near-black
+    padding: 8,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  metaRight: {
+    marginLeft: "auto",
+    flexDirection: "row",
+    alignItems: "center",
+  },
+
+  joinedPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#000", // modern black
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 14,
+    marginLeft: 8,
   },
 });
 

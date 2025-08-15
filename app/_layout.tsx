@@ -1,5 +1,7 @@
 import React, { useEffect, useState, useRef } from "react";
 import { StatusBar, View, Text, TouchableOpacity, Linking } from "react-native";
+import { Linking as RNLinking } from "react-native";
+import * as ExpoLinking from "expo-linking";
 import {
   SplashScreen,
   Slot,
@@ -87,92 +89,112 @@ enum UserStatus {
 
 // --------------------
 // Deep Link Handler Hook
-// --------------------
 function useDeepLinkHandler() {
   const router = useRouter();
-  const { isSignedIn, isLoaded } = useAuth();
+  const { isSignedIn, isLoaded, userId } = useAuth();
 
   useEffect(() => {
-    const handleDeepLink = (url: string) => {
-      console.log("DEEP LINK: Received URL:", url);
+    if (!isLoaded) return;
 
+    const handleDeepLinkRaw = (rawUrl?: string) => {
+      if (!rawUrl) return;
       try {
-        // Parse the URL
-        const urlObj = new URL(url);
-        const path = urlObj.pathname;
-        const params = Object.fromEntries(urlObj.searchParams.entries());
+        console.log("DEEP LINK: Received URL:", rawUrl);
 
-        console.log("DEEP LINK: Parsed path:", path, "params:", params);
+        // Use expo-linking to parse custom schemes robustly
+        const parsed = ExpoLinking.parse(rawUrl);
+        const path = parsed.path || ""; // ex: "chat-room/screen" or "debate/abc123//encodedImage"
+        const qp = parsed.queryParams || {}; // ex: { debateId: 'abc123', debateImage: '...' }
 
-        // Handle different deep link paths
-        if (path.startsWith("/auth/")) {
-          // Auth-related deep links (sign-in, sign-up, etc.)
-          console.log("DEEP LINK: Auth-related link detected");
-          // Let Clerk handle authentication deep links
-          return;
-        }
+        console.log("DEEP LINK: parsed.path:", path, "queryParams:", qp);
 
-        if (path.startsWith("/profile/")) {
-          // Profile deep links
-          console.log("DEEP LINK: Profile link detected");
+        // Preferred format: dtrue://chat-room/screen?debateId=...&debateImage=...
+        if (path === "chat-room" && qp.debateId) {
+          const debateId = String(qp.debateId);
+          const debateImage = qp.debateImage ? String(qp.debateImage) : "";
+
           if (isSignedIn) {
-            router.push(`/profile`);
+            router.push({
+              pathname: "/(chat-room)/screen",
+              params: {
+                clerkId: userId,
+                debateId,
+                debateImage,
+              },
+            });
           } else {
             router.push("/onboarding");
           }
           return;
         }
 
-        // Handle other specific routes
-        switch (path) {
-          case "/":
-          case "/home":
-            if (isSignedIn) {
-              router.push("/(tabs)");
-            } else {
-              router.push("/onboarding");
-            }
-            break;
+        // Legacy / alternate: dtrue://debate/{id}//{encodedImage}  OR dtrue://debate/{id}/image/{...}
+        if (path.startsWith("debate/")) {
+          const parts = path.split("/");
+          const debateId = parts[1] || "";
+          let debateImage = "";
 
-          default:
-            console.log("DEEP LINK: Unknown path, using default navigation");
-            // For unknown paths, use default navigation logic
-            break;
+          // handle double-slash pattern or remaining segments as image
+          if (parts.length >= 4 && parts[2] === "") {
+            debateImage = parts.slice(3).join("/");
+          } else if (parts.length >= 3) {
+            debateImage = parts.slice(2).join("/");
+          }
+
+          try {
+            debateImage = decodeURIComponent(debateImage);
+          } catch (e) {
+            /* ignore decode errors */
+          }
+
+          if (!debateId) return;
+
+          if (isSignedIn) {
+            router.push({
+              pathname: "/(chat-room)/screen",
+              params: {
+                clerkId: userId,
+                debateId,
+                debateImage,
+              },
+            });
+          } else {
+            router.push("/onboarding");
+          }
+          return;
         }
-      } catch (error) {
-        console.error("DEEP LINK: Error parsing URL:", error);
-        // If URL parsing fails, use default navigation
+
+        console.log(
+          "DEEP LINK: Unknown path — falling back to default navigation"
+        );
+      } catch (err) {
+        console.error("DEEP LINK: Error handling URL:", err);
       }
     };
 
-    // Get initial URL when app launches
-    const getInitialURL = async () => {
+    // Cold start: initial URL
+    (async () => {
       try {
-        const initialUrl = await Linking.getInitialURL();
+        const initialUrl = await RNLinking.getInitialURL();
         if (initialUrl) {
-          console.log("DEEP LINK: Initial URL found:", initialUrl);
-          setTimeout(() => handleDeepLink(initialUrl), 1000); // Delay to ensure auth state is loaded
+          console.log("DEEP LINK: initialUrl", initialUrl);
+          // slight delay to let auth state settle
+          setTimeout(() => handleDeepLinkRaw(initialUrl), 600);
         }
-      } catch (error) {
-        console.error("DEEP LINK: Error getting initial URL:", error);
+      } catch (e) {
+        console.error("DEEP LINK: getInitialURL error", e);
       }
+    })();
+
+    // Runtime links (while app is running)
+    const subscription = RNLinking.addEventListener("url", (ev) => {
+      handleDeepLinkRaw(ev.url);
+    });
+
+    return () => {
+      subscription?.remove?.();
     };
-
-    // Handle URL when app is already running
-    const handleUrlListener = (event: { url: string }) => {
-      handleDeepLink(event.url);
-    };
-
-    // Only set up deep link handling if auth is loaded
-    if (isLoaded) {
-      getInitialURL();
-      const subscription = Linking.addEventListener("url", handleUrlListener);
-
-      return () => {
-        subscription?.remove();
-      };
-    }
-  }, [router, isSignedIn, isLoaded]);
+  }, [isLoaded, isSignedIn, userId, router]);
 }
 
 // --------------------

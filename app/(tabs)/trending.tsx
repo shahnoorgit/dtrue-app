@@ -11,6 +11,7 @@ import {
   InteractionManager,
   Dimensions,
   StyleSheet,
+  Share,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
@@ -138,6 +139,25 @@ const TrendingDebatesPage = () => {
     });
   }, []);
 
+  const handleShare = useCallback(async (e, debate) => {
+    // prevent parent Pressable from triggering
+    e?.stopPropagation?.();
+
+    const base = process.env.EXPO_SHARE_URL || "https://links-dev.dtrue.online";
+    const shareUrl = `${base}/debate/${debate.id}`;
+
+    try {
+      await Share.share({
+        title: debate.title,
+        message: `${debate.title}\n\nJoin the debate: ${shareUrl}`,
+        url: shareUrl,
+      });
+    } catch (err) {
+      console.error("Share error", err);
+      Alert.alert("Could not share", "Please try again.");
+    }
+  }, []);
+
   const getCategoryColor = (category) => {
     const colors = {
       SPORTS_AND_LEISURE: THEME.colors.primary,
@@ -171,6 +191,15 @@ const TrendingDebatesPage = () => {
         <View style={styles.rankBadge}>
           <Text style={styles.rankText}>Rank {item.rank}</Text>
         </View>
+
+        {/* Share Button */}
+        <TouchableOpacity
+          style={styles.shareButton}
+          onPress={(e) => handleShare(e, item)}
+          accessibilityLabel={`Share debate ${item.title}`}
+        >
+          <Ionicons name='share-outline' size={20} color={THEME.colors.text} />
+        </TouchableOpacity>
 
         {/* Debate Image */}
         <Image source={{ uri: item.image }} style={styles.debateImage} />
@@ -377,6 +406,17 @@ const styles = StyleSheet.create({
     color: THEME.colors.text,
     fontSize: 12,
     fontWeight: "bold",
+  },
+  shareButton: {
+    position: "absolute",
+    top: 12,
+    right: 12,
+    zIndex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.7)",
+    padding: 10,
+    borderRadius: 20,
+    alignItems: "center",
+    justifyContent: "center",
   },
   debateImage: {
     width: "100%",

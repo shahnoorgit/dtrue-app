@@ -8,6 +8,7 @@ import {
   Image,
   Dimensions,
   Alert,
+  Share,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
@@ -192,6 +193,30 @@ const DebateCard = ({ debate, onJoinPress }) => {
     }
   }, [token, refreshToken, debate.id]);
 
+  // Share handler
+  const handleShare = useCallback(
+    async (e) => {
+      // prevent parent Pressable from triggering
+      e?.stopPropagation?.();
+
+      const base =
+        process.env.EXPO_SHARE_URL || "https://links-dev.dtrue.online";
+      const shareUrl = `${base}/debate/${debate.id}`;
+
+      try {
+        await Share.share({
+          title: debate.title,
+          message: `${debate.title}\n\nJoin the debate: ${shareUrl}`,
+          url: shareUrl,
+        });
+      } catch (err) {
+        console.error("Share error", err);
+        Alert.alert("Could not share", "Please try again.");
+      }
+    },
+    [debate.id, debate.title]
+  );
+
   // Memoized CyberpunkSpinner component to avoid recreation
   const CyberpunkSpinner = useMemo(() => {
     if (!loading) return null;
@@ -298,6 +323,23 @@ const DebateCard = ({ debate, onJoinPress }) => {
             {mainCategory}
           </Text>
         </View>
+
+        {/* Share button (top-right) */}
+        <Pressable
+          onPress={(e) => handleShare(e)}
+          style={{
+            position: "absolute",
+            top: 12,
+            right: 12,
+            padding: 8,
+            borderRadius: 999,
+            backgroundColor: cyberpunkTheme.colors.primaryDark + "DD",
+            elevation: 4,
+          }}
+          accessibilityLabel={`Share debate ${debate.title}`}
+        >
+          <Icon name='share-variant' size={20} color={"#00FF94"} />
+        </Pressable>
       </View>
 
       <View style={{ padding: 10 }}>
