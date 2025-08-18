@@ -520,7 +520,15 @@ const ExploreDebatesPage = () => {
               {item?.description}
             </Text>
 
-            <View style={styles.creatorContainer}>
+            <Pressable
+              onPress={() => {
+                router.push({
+                  pathname: "/(tabs)/[id]/page",
+                  params: { id: item.apiData.creatorId },
+                });
+              }}
+              style={styles.creatorContainer}
+            >
               <Image
                 source={{ uri: item.creatorImage }}
                 style={styles.creatorImage}
@@ -547,7 +555,7 @@ const ExploreDebatesPage = () => {
                   <Ionicons name='share-social' size={18} color='#BDBDBD' />
                 </Pressable>
               </View>
-            </View>
+            </Pressable>
 
             <TouchableOpacity
               style={styles.actionButton}

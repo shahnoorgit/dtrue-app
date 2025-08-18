@@ -14,6 +14,7 @@ import {
   ActivityIndicator,
   SafeAreaView,
   StatusBar,
+  Pressable,
 } from "react-native";
 import { useLocalSearchParams } from "expo-router";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
@@ -27,6 +28,7 @@ import OpinionsList from "../components/OpinionsList";
 import InputBar from "../components/InputBar";
 import ModalSheet from "../components/ModalSheet";
 import DebateEndedResults from "./ResultsScreen";
+import { router } from "expo-router";
 
 export default function DebateRoom() {
   const { debateId, debateImage, clerkId } = useLocalSearchParams();
@@ -281,11 +283,7 @@ export default function DebateRoom() {
       const isAgreed = item.agreed;
       const isLiked = likedUserIds.includes(item.userId);
       return (
-        <TouchableOpacity
-          onPress={() => handleLike(item.userId)}
-          activeOpacity={0.8}
-          disabled={!isDebateActive}
-        >
+        <TouchableOpacity activeOpacity={0.8} disabled={!isDebateActive}>
           <View
             style={{
               marginHorizontal: 8,
@@ -303,7 +301,14 @@ export default function DebateRoom() {
               padding: 10,
             }}
           >
-            <View
+            <Pressable
+              onPress={() => {
+                router.push({
+                  pathname: "/(tabs)/[id]/page",
+                  params: { id: item.userId },
+                });
+              }}
+              hitSlop={10}
               style={{
                 flexDirection: "row",
                 alignItems: "center",
@@ -341,7 +346,7 @@ export default function DebateRoom() {
                   hour12: true,
                 })}
               </Text>
-            </View>
+            </Pressable>
 
             <Text style={{ color: theme.colors.text, lineHeight: 20 }}>
               {item.opinion}
@@ -355,7 +360,12 @@ export default function DebateRoom() {
                 marginTop: 8,
               }}
             >
-              <View style={{ flexDirection: "row", alignItems: "center" }}>
+              <Pressable
+                onPress={() => {
+                  handleLike(item.userId);
+                }}
+                style={{ flexDirection: "row", alignItems: "center" }}
+              >
                 <Ionicons
                   name={isLiked ? "thumbs-up" : "thumbs-up-outline"}
                   size={12}
@@ -370,7 +380,7 @@ export default function DebateRoom() {
                 >
                   {item.upvotes}
                 </Text>
-              </View>
+              </Pressable>
 
               {item.aiFlagged ? (
                 <View

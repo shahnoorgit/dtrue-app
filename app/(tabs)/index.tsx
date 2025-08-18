@@ -19,9 +19,9 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { cyberpunkTheme } from "@/constants/theme";
 import DebateCard from "@/components/tabs/debate_card/DebateCard";
 import { useAuth } from "@clerk/clerk-expo";
-import { theme } from "../(chat-room)/theme";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 const DEBATES_STORAGE_KEY = "cached_debates";
 const DEBATES_TIMESTAMP_KEY = "cached_debates_timestamp";
@@ -30,6 +30,7 @@ const SCROLL_POSITION_KEY = "saved_scroll_offset";
 const CACHE_EXPIRY = 1000 * 60 * 60; // 1 hour
 const tabBarHeight = 70;
 const screenHeight = Dimensions.get("window").height;
+const HEADER_HEIGHT = 110; // keep same visual spacing as before
 
 export default function DebateFeed() {
   const [debates, setDebates] = useState([]);
@@ -42,11 +43,12 @@ export default function DebateFeed() {
   const { getToken } = useAuth();
   const router = useRouter();
   const tokenRef = useRef(null);
-  const momentumRef = useRef(true);
+  const momentumRef = useRef(false); // updated logic: true while momentum scroll is happening
   const scrollY = useRef(new Animated.Value(0)).current;
   const flatListRef = useRef(null);
   const scrollOffsetRef = useRef(0);
   const isInitialMount = useRef(true);
+  const insets = useSafeAreaInsets();
 
   useEffect(() => {
     const initialize = async () => {
@@ -61,14 +63,21 @@ export default function DebateFeed() {
     };
     initialize();
 
+    // persist scroll offset when component unmounts
     return () => {
-      AsyncStorage.multiSet([
-        [CURSOR_STORAGE_KEY, cursor || ""],
-        [SCROLL_POSITION_KEY, scrollOffsetRef.current.toString()],
-      ]);
+      try {
+        AsyncStorage.setItem(
+          SCROLL_POSITION_KEY,
+          scrollOffsetRef.current.toString()
+        );
+      } catch (e) {
+        /* ignore */
+      }
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // restore scroll position once we have data
   useEffect(() => {
     if (isInitialMount.current && debates.length > 0 && flatListRef.current) {
       const restoreScroll = async () => {
@@ -85,11 +94,19 @@ export default function DebateFeed() {
     }
   }, [debates]);
 
+  // cache debates after changes (preserve your previous behaviour)
   useEffect(() => {
     if (debates.length > 0 && !refreshing && !loadingMore && !loading) {
       cacheDebates(debates);
     }
   }, [debates, refreshing, loadingMore, loading]);
+
+  // save cursor whenever it changes to avoid stale writes on unmount
+  useEffect(() => {
+    if (cursor !== null && cursor !== undefined) {
+      AsyncStorage.setItem(CURSOR_STORAGE_KEY, cursor).catch(() => {});
+    }
+  }, [cursor]);
 
   const loadCachedDebates = async () => {
     try {
@@ -172,6 +189,7 @@ export default function DebateFeed() {
   }, [fetchDebates, loading, refreshing]);
 
   const onEndReachedCallback = useCallback(() => {
+    // only load more if we are NOT in momentum scrolling, to prevent duplicate triggers
     if (
       !momentumRef.current &&
       hasNextPage &&
@@ -187,7 +205,7 @@ export default function DebateFeed() {
   const handleExplorePress = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     router.push("/explore");
-  }, []);
+  }, [router]);
 
   const renderItem = useCallback(
     ({ item }) => (
@@ -209,7 +227,7 @@ export default function DebateFeed() {
           alignItems: "center",
           paddingHorizontal: 32,
           backgroundColor: "#080F12",
-          paddingBottom: tabBarHeight,
+          paddingBottom: tabBarHeight + insets.bottom,
         }}
       >
         <View
@@ -251,7 +269,7 @@ export default function DebateFeed() {
             marginBottom: 32,
           }}
         >
-          Looks like you’ve joined all debates in your selected categories.
+          Looks like you've joined all debates in your selected categories.
           Explore more or create your own!
         </Text>
 
@@ -292,103 +310,198 @@ export default function DebateFeed() {
         </View>
       </View>
     );
-  }, [loading, handleExplorePress]);
+  }, [loading, handleExplorePress, insets.bottom]);
 
-  const keyExtractor = useCallback((item, idx) => idx.toString(), []);
+  const keyExtractor = useCallback(
+    (item, idx) => item?.id ?? idx.toString(),
+    []
+  );
+
+  // header translate animation
+  const headerTranslate = scrollY.interpolate({
+    inputRange: [0, 120],
+    outputRange: [0, -120],
+    extrapolate: "clamp",
+  });
 
   return (
     <SafeAreaView
       style={{
         flex: 1,
         backgroundColor: "#080F12",
-        height: screenHeight - tabBarHeight,
       }}
     >
-      <View
+      {/* Animated header — visually same as before but slides up on scroll */}
+      <Animated.View
         style={{
+          transform: [{ translateY: headerTranslate }],
           position: "absolute",
           top: 0,
           left: 0,
           right: 0,
           zIndex: 10,
-          paddingHorizontal: 16,
-          paddingTop: Platform.OS === "ios" ? 10 : 20,
-          paddingBottom: 8,
-          backgroundColor: "#000",
-          borderBottomWidth: 0.5,
-          borderColor: theme.colors.backgroundDarker,
-          flexDirection: "row",
-          alignItems: "center",
-          justifyContent: "space-between",
         }}
       >
-        <View style={{ flexDirection: "row", alignItems: "center" }}>
-          <View style={{ width: 40, height: 40, marginRight: 10 }}>
-            <Image
-              source={require("@/assets/images/logo.png")}
-              style={{ width: "100%", height: "100%" }}
-              resizeMode='contain'
-            />
-          </View>
-          <Text
+        {/* Subtle gradient overlay for depth */}
+        <LinearGradient
+          colors={["rgba(0, 0, 0, 1)", "rgba(8, 15, 18, 0.95)"]}
+          style={{
+            paddingHorizontal: 20,
+            paddingTop: Platform.OS === "ios" ? 12 : 24,
+            paddingBottom: 16,
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
+            backgroundColor: "#000000",
+            borderBottomWidth: 1,
+            borderBottomColor: "rgba(255, 255, 255, 0.08)",
+          }}
+        >
+          {/* Left side - Logo and Brand */}
+          <View
             style={{
-              color: "#FFF",
-              fontSize: 20,
-              fontWeight: "700",
-              letterSpacing: 0.4,
+              flexDirection: "row",
+              alignItems: "center",
+              flex: 1,
             }}
           >
-            Dtrue
-          </Text>
-        </View>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-          <Pressable
-            onPress={() =>
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-            }
-            style={({ pressed }) => ({
-              width: 36,
-              height: 36,
-              borderRadius: 18,
-              backgroundColor: pressed ? "#2a2a2a" : "#1a1a1a",
-              justifyContent: "center",
-              alignItems: "center",
-              transform: [{ scale: pressed ? 0.95 : 1 }],
-            })}
-          >
-            <Icon name='account-group-outline' size={18} color='#FFF' />
-          </Pressable>
-          <Pressable
-            onPress={() =>
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-            }
-            style={({ pressed }) => ({
-              width: 36,
-              height: 36,
-              borderRadius: 18,
-              backgroundColor: pressed ? "#2a2a2a" : "#1a1a1a",
-              justifyContent: "center",
-              alignItems: "center",
-              transform: [{ scale: pressed ? 0.95 : 1 }],
-            })}
-          >
-            <Icon name='bell-outline' size={18} color='#FFF' />
+            {/* Modern logo container with subtle glow effect */}
             <View
               style={{
-                position: "absolute",
-                top: 6,
-                right: 6,
-                width: 7,
-                height: 7,
-                borderRadius: 3.5,
-                backgroundColor: "#FF4757",
+                width: 42,
+                height: 42,
+                borderRadius: 12,
+                backgroundColor: "rgba(255, 255, 255, 0.05)",
+                justifyContent: "center",
+                alignItems: "center",
+                marginRight: 14,
                 borderWidth: 1,
-                borderColor: "#000",
+                borderColor: "rgba(255, 255, 255, 0.1)",
+                shadowColor: cyberpunkTheme.colors.primary,
+                shadowOffset: { width: 0, height: 0 },
+                shadowOpacity: 0.3,
+                shadowRadius: 4,
+                elevation: 8,
               }}
-            />
-          </Pressable>
-        </View>
-      </View>
+            >
+              <Image
+                source={require("@/assets/images/logo.png")}
+                style={{
+                  width: 28,
+                  height: 28,
+                  borderRadius: 6,
+                }}
+                resizeMode='contain'
+              />
+            </View>
+
+            {/* Brand name with modern typography */}
+            <View>
+              <Text
+                style={{
+                  color: "#FFFFFF",
+                  fontSize: 22,
+                  fontWeight: "800",
+                  letterSpacing: -0.5,
+                  lineHeight: 26,
+                }}
+              >
+                Dtrue
+              </Text>
+              <View
+                style={{
+                  width: 24,
+                  height: 2,
+                  backgroundColor: cyberpunkTheme.colors.primary,
+                  borderRadius: 1,
+                  marginTop: 2,
+                  opacity: 0.8,
+                }}
+              />
+            </View>
+          </View>
+
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 12,
+            }}
+          >
+            <Pressable
+              hitSlop={10}
+              onPress={() =>
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+              }
+              style={({ pressed }) => ({
+                width: 56, // larger hit area
+                height: 56,
+                borderRadius: 28,
+                backgroundColor: pressed
+                  ? "rgba(255, 255, 255, 0.12)"
+                  : "rgba(255, 255, 255, 0.06)",
+                justifyContent: "center",
+                alignItems: "center",
+                borderWidth: 1,
+                borderColor: pressed
+                  ? "rgba(255, 255, 255, 0.16)"
+                  : "rgba(255, 255, 255, 0.06)",
+                transform: [{ scale: pressed ? 0.96 : 1 }],
+                // subtle shadow so the badge pops more
+                shadowColor: "#000",
+                shadowOffset: { width: 0, height: 1 },
+                shadowOpacity: 0.12,
+                shadowRadius: 2,
+                elevation: 2,
+                overflow: "visible",
+              })}
+            >
+              <Icon
+                name='bell-outline'
+                size={28} // bigger icon
+                color='rgba(255, 255, 255, 0.95)'
+              />
+
+              {/* Modern notification badge */}
+              <View
+                style={{
+                  position: "absolute",
+                  top: 4, // sit a bit more on top of the bell
+                  right: 4,
+                  minWidth: 10,
+                  height: 12,
+                  paddingHorizontal: 3,
+                  borderRadius: 10,
+                  backgroundColor: "#FF4757",
+                  justifyContent: "center",
+                  alignItems: "center",
+                  borderWidth: 1.25,
+                  borderColor: "rgba(0,0,0,0.65)",
+                  // badge shadow
+                  shadowColor: "#FF4757",
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: 0.35,
+                  shadowRadius: 3,
+                  elevation: 6,
+                }}
+              >
+                <Text
+                  style={{
+                    color: "#FFFFFF",
+                    fontSize: 8,
+                    fontWeight: "700",
+                    lineHeight: 8,
+                    paddingHorizontal: 0,
+                  }}
+                >
+                  8
+                </Text>
+              </View>
+            </Pressable>
+          </View>
+        </LinearGradient>
+      </Animated.View>
+
       {loading && cursor === null ? (
         <View
           style={{
@@ -412,13 +525,15 @@ export default function DebateFeed() {
           ListEmptyComponent={renderEmptyComponent}
           ItemSeparatorComponent={() => <View style={{ height: 16 }} />}
           onScroll={(event) => {
+            // update Animated.Value and also keep track of offset for saving
             Animated.event(
               [{ nativeEvent: { contentOffset: { y: scrollY } } }],
               { useNativeDriver: false }
             )(event);
             scrollOffsetRef.current = event.nativeEvent.contentOffset.y;
           }}
-          onMomentumScrollBegin={() => (momentumRef.current = false)}
+          onMomentumScrollBegin={() => (momentumRef.current = true)}
+          onMomentumScrollEnd={() => (momentumRef.current = false)}
           onEndReached={onEndReachedCallback}
           onEndReachedThreshold={0.5}
           refreshControl={
@@ -452,8 +567,8 @@ export default function DebateFeed() {
             ) : null
           }
           contentContainerStyle={{
-            paddingTop: 110,
-            paddingBottom: tabBarHeight,
+            paddingTop: HEADER_HEIGHT, // keep visual spacing as before
+            paddingBottom: insets.bottom + tabBarHeight,
             flexGrow: 1,
           }}
         />

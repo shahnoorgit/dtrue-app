@@ -810,7 +810,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   scrollContent: {
-    paddingBottom: 40,
+    paddingBottom: 100,
   },
   headerSection: {
     paddingTop: 50,

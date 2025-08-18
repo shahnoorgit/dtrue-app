@@ -12,6 +12,7 @@ import {
   Dimensions,
   StyleSheet,
   Share,
+  Pressable,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
@@ -240,7 +241,15 @@ const TrendingDebatesPage = () => {
           </Text>
 
           {/* Creator Info */}
-          <View style={styles.creatorContainer}>
+          <Pressable
+            onPress={() => {
+              router.push({
+                pathname: "/(tabs)/[id]/page",
+                params: { id: item.creator.id },
+              });
+            }}
+            style={styles.creatorContainer}
+          >
             <Image
               source={{ uri: item.creator.image }}
               style={styles.creatorImage}
@@ -250,7 +259,7 @@ const TrendingDebatesPage = () => {
               <Text style={styles.creatorHandle}>@{item.creator.username}</Text>
             </View>
             <Text style={styles.timeAgo}>{formatTimeAgo(item.createdAt)}</Text>
-          </View>
+          </Pressable>
 
           {/* Stats */}
           <View style={styles.statsContainer}>

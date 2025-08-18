@@ -139,11 +139,6 @@ const DebateCard = ({ debate, onJoinPress }) => {
     [debate.categories, formatCategory]
   );
 
-  const urgencyColor = useMemo(
-    () => getUrgencyColor(timeRemaining),
-    [timeRemaining, getUrgencyColor]
-  );
-
   // Optimize join handler
   const handleJoinPress = useCallback(async () => {
     if (!token) {
@@ -351,7 +346,16 @@ const DebateCard = ({ debate, onJoinPress }) => {
             marginBottom: 8,
           }}
         >
-          <View style={{ flexDirection: "row", alignItems: "center" }}>
+          <Pressable
+            onPress={() => {
+              router.push({
+                pathname: "/(tabs)/[id]/page",
+                params: { id: debate.creator.id },
+              });
+            }}
+            hitSlop={8}
+            style={{ flexDirection: "row", alignItems: "center" }}
+          >
             <Image
               source={{ uri: debate.creator.image }}
               style={{
@@ -368,7 +372,8 @@ const DebateCard = ({ debate, onJoinPress }) => {
               </Text>
               <Text style={{ color: "#8F9BB3", fontSize: 11 }}>Creator</Text>
             </View>
-          </View>
+          </Pressable>
+
           <View
             style={{
               flexDirection: "row",
