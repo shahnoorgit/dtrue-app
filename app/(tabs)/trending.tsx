@@ -143,7 +143,8 @@ const TrendingDebatesPage = () => {
     // prevent parent Pressable from triggering
     e?.stopPropagation?.();
 
-    const base = process.env.EXPO_SHARE_URL || "https://links-dev.dtrue.online";
+    const base =
+      process.env.EXPO_PUBLIC_SHARE_URL || "https://links-dev.dtrue.online";
     const shareUrl = `${base}/debate/${debate.id}`;
 
     try {

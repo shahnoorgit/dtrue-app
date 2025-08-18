@@ -482,7 +482,8 @@ const ExploreDebatesPage = () => {
     const joining = joiningDebateId === item.id;
 
     const participantCount = item.debate?.participantCount ?? 0;
-    const base = process.env.EXPO_SHARE_URL || "https://links-dev.dtrue.online";
+    const base =
+      process.env.EXPO_PUBLIC_SHARE_URL || "https://links-dev.dtrue.online";
     const shareUrl = `${base}/debate/${item.debate?.id ?? item.id}`;
 
     const handleShare = async (e?: any) => {

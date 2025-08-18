@@ -10,6 +10,7 @@ import {
   RefreshControl,
   Alert,
   ScrollView,
+  Share,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRoute, useNavigation } from "@react-navigation/native";
@@ -196,6 +197,27 @@ const ProfilePage: React.FC = () => {
     },
     [token, fetchToken]
   );
+
+  // Share profile function
+  const handleShareProfile = async () => {
+    if (!user) return;
+
+    try {
+      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+
+      const shareUrl = `${process.env.EXPO_PUBLIC_SHARE_URL}/profile/${user.id}`;
+      const shareMessage = `Check out @${user.name}'s profile on Dtrue!\n\n${shareUrl}`;
+
+      await Share.share({
+        message: shareMessage,
+        url: shareUrl,
+        title: `@${user.name}'s Profile`,
+      });
+    } catch (error) {
+      console.error("Error sharing profile:", error);
+      Alert.alert("Error", "Unable to share profile. Please try again.");
+    }
+  };
 
   // Permission request function
   const requestPermission = async (
@@ -585,17 +607,33 @@ const ProfilePage: React.FC = () => {
         >
           <Ionicons name='chevron-back' size={24} color={THEME.colors.text} />
         </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.logoutButton}
-          onPress={handleLogout}
-          accessibilityLabel='Logout'
-        >
-          <Ionicons
-            name='log-out-outline'
-            size={24}
-            color={THEME.colors.text}
-          />
-        </TouchableOpacity>
+
+        <View style={styles.headerActions}>
+          <TouchableOpacity
+            style={styles.shareButton}
+            onPress={handleShareProfile}
+            accessibilityLabel='Share Profile'
+          >
+            <Ionicons
+              name='share-social-sharp'
+              size={24}
+              color={THEME.colors.text}
+            />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.logoutButton}
+            onPress={handleLogout}
+            accessibilityLabel='Logout'
+          >
+            <Ionicons
+              name='log-out-outline'
+              size={24}
+              color={THEME.colors.text}
+            />
+          </TouchableOpacity>
+        </View>
+
         <View style={styles.profileSection}>
           <View style={styles.profileImageContainer}>
             <TouchableOpacity
@@ -795,11 +833,25 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  logoutButton: {
+  headerActions: {
     position: "absolute",
     top: 50,
     right: THEME.spacing.md,
+    flexDirection: "row",
+    gap: THEME.spacing.sm,
     zIndex: 1,
+  },
+  shareButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: THEME.colors.cardBackground,
+    borderWidth: 1,
+    borderColor: THEME.colors.border,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  logoutButton: {
     width: 40,
     height: 40,
     borderRadius: 20,

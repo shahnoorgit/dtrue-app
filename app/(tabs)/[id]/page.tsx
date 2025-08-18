@@ -11,6 +11,7 @@ import {
   Alert,
   Modal,
   Dimensions,
+  Share,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRoute, useNavigation } from "@react-navigation/native";
@@ -19,6 +20,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
 import ProfileSkeleton from "@/components/profile/ProfileSkeliton";
+import { useAuth } from "@clerk/clerk-expo";
 
 const { width, height } = Dimensions.get("window");
 
@@ -43,6 +45,7 @@ interface User {
   id: string;
   name: string;
   username: string;
+  clerkId: string;
   about: string;
   image: string;
   createdAt: string;
@@ -149,6 +152,8 @@ const ProfilePage: React.FC = () => {
   const navigation = useNavigation();
   const router = useRouter();
   const { id } = route.params as { id: string };
+
+  const { userId } = useAuth();
 
   const fetchWithAuthRetry = useCallback(
     async (url: string): Promise<Response> => {
@@ -292,6 +297,26 @@ const ProfilePage: React.FC = () => {
     }
   };
 
+  const handleShareProfile = async () => {
+    if (!user) return;
+
+    try {
+      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+
+      const shareUrl = `${process.env.EXPO_PUBLIC_SHARE_URL}/profile/${user.id}`;
+      const shareMessage = `Check out @${user.name}'s profile on Dtrue!\n\n${shareUrl}`;
+
+      await Share.share({
+        message: shareMessage,
+        url: shareUrl,
+        title: `@${user.name}'s Profile`,
+      });
+    } catch (error) {
+      console.error("Error sharing profile:", error);
+      Alert.alert("Error", "Unable to share profile. Please try again.");
+    }
+  };
+
   const openImageModal = (uri: string) => {
     setModalImageUri(uri);
     setImageModalVisible(true);
@@ -337,6 +362,21 @@ const ProfilePage: React.FC = () => {
         >
           <Ionicons name='chevron-back' size={24} color={THEME.colors.text} />
         </TouchableOpacity>
+
+        <View style={styles.headerActions}>
+          <TouchableOpacity
+            style={styles.shareButton}
+            onPress={handleShareProfile}
+            accessibilityLabel='Share Profile'
+          >
+            <Ionicons
+              name='share-social-sharp'
+              size={24}
+              color={THEME.colors.text}
+            />
+          </TouchableOpacity>
+        </View>
+
         <View style={styles.profileSection}>
           <TouchableOpacity
             style={styles.profileImageContainer}
@@ -370,19 +410,26 @@ const ProfilePage: React.FC = () => {
       <View style={styles.bioSection}>
         <View style={styles.nameRow}>
           <Text style={styles.name}>@{user.name}</Text>
-          <TouchableOpacity
-            style={[styles.followButton, isFollowing && styles.followingButton]}
-            onPress={handleFollow}
-          >
-            <Text
+          {user.clerkId === userId ? (
+            ""
+          ) : (
+            <TouchableOpacity
               style={[
-                styles.followButtonText,
-                isFollowing && styles.followingButtonText,
+                styles.followButton,
+                isFollowing && styles.followingButton,
               ]}
+              onPress={handleFollow}
             >
-              {isFollowing ? "Following" : "Follow"}
-            </Text>
-          </TouchableOpacity>
+              <Text
+                style={[
+                  styles.followButtonText,
+                  isFollowing && styles.followingButtonText,
+                ]}
+              >
+                {isFollowing ? "Following" : "Follow"}
+              </Text>
+            </TouchableOpacity>
+          )}
         </View>
         {user.about && <Text style={styles.bio}>{user.about}</Text>}
         <View style={styles.additionalStatItem}>
@@ -523,6 +570,24 @@ const styles = StyleSheet.create({
     top: 50,
     left: THEME.spacing.md,
     zIndex: 1,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: THEME.colors.cardBackground,
+    borderWidth: 1,
+    borderColor: THEME.colors.border,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  headerActions: {
+    position: "absolute",
+    top: 50,
+    right: THEME.spacing.md,
+    zIndex: 1,
+    flexDirection: "row",
+    gap: THEME.spacing.sm,
+  },
+  shareButton: {
     width: 40,
     height: 40,
     borderRadius: 20,

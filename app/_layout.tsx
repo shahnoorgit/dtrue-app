@@ -104,29 +104,6 @@ function useDeepLinkHandler() {
         // Use expo-linking to parse custom schemes robustly
         const parsed = ExpoLinking.parse(rawUrl);
         const path = parsed.path || ""; // ex: "chat-room/screen" or "debate/abc123//encodedImage"
-        const qp = parsed.queryParams || {}; // ex: { debateId: 'abc123', debateImage: '...' }
-
-        console.log("DEEP LINK: parsed.path:", path, "queryParams:", qp);
-
-        // Preferred format: dtrue://chat-room/screen?debateId=...&debateImage=...
-        if (path === "chat-room" && qp.debateId) {
-          const debateId = String(qp.debateId);
-          const debateImage = qp.debateImage ? String(qp.debateImage) : "";
-
-          if (isSignedIn) {
-            router.push({
-              pathname: "/(chat-room)/screen",
-              params: {
-                clerkId: userId,
-                debateId,
-                debateImage,
-              },
-            });
-          } else {
-            router.push("/onboarding");
-          }
-          return;
-        }
 
         // Legacy / alternate: dtrue://debate/{id}//{encodedImage}  OR dtrue://debate/{id}/image/{...}
         if (path.startsWith("debate/")) {
@@ -157,6 +134,23 @@ function useDeepLinkHandler() {
                 debateId,
                 debateImage,
               },
+            });
+          } else {
+            router.push("/onboarding");
+          }
+          return;
+        }
+
+        if (path.startsWith("profile/")) {
+          const parts = path.split("/");
+          const profileId = parts[1] || "";
+
+          if (!profileId) return;
+
+          if (isSignedIn) {
+            router.push({
+              pathname: "/(tabs)/[id]/page",
+              params: { id: profileId },
             });
           } else {
             router.push("/onboarding");
