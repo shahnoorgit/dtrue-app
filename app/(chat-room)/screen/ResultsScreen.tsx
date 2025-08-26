@@ -1,8 +1,16 @@
 import React from "react";
-import { View, Text, Image, ScrollView, StyleSheet } from "react-native";
+import {
+  View,
+  Text,
+  Image,
+  ScrollView,
+  StyleSheet,
+  Pressable,
+} from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { theme } from "../theme";
 import { Ionicons } from "@expo/vector-icons";
+import { router } from "expo-router";
 
 const DebateEndedResults = ({ results, insets, debateTitle, debateImage }) => {
   if (results?.code === 102) {
@@ -77,7 +85,15 @@ const DebateEndedResults = ({ results, insets, debateTitle, debateImage }) => {
 
           {results.topOpinions.map((opinion, index) => (
             <View key={index} style={styles.opinionItem}>
-              <View style={styles.opinionHeader}>
+              <Pressable
+                onPress={() => {
+                  router.push({
+                    pathname: "/(tabs)/[id]/page",
+                    params: { id: opinion.user.id },
+                  });
+                }}
+                style={styles.opinionHeader}
+              >
                 <Image
                   source={{ uri: opinion.user.image }}
                   style={styles.avatar}
@@ -86,7 +102,7 @@ const DebateEndedResults = ({ results, insets, debateTitle, debateImage }) => {
                 <View style={styles.badge}>
                   <Text style={styles.badgeText}>Rank #{index + 1}</Text>
                 </View>
-              </View>
+              </Pressable>
 
               <Text style={styles.opinionText}>{opinion.opinion}</Text>
 

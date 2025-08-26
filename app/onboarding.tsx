@@ -19,7 +19,7 @@ const { width } = Dimensions.get("window");
 const slides = [
   {
     id: "1",
-    title: "Welcome to Let's Debate",
+    title: "Welcome to Dtrue",
     description:
       "Ignite your intellect and join a revolution in online discourse. Experience debates that are structured, meaningful, and designed to spark real insights.",
     icon: "forum",

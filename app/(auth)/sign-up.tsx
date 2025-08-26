@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import {
   Text,
   TextInput,
@@ -12,11 +12,12 @@ import {
   Dimensions,
 } from "react-native";
 import { useSignUp } from "@clerk/clerk-expo";
-import { Link, useRouter } from "expo-router";
+import { useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { LinearGradient } from "expo-linear-gradient";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import { cyberpunkTheme } from "@/constants/theme";
+import { useFocusEffect } from "@react-navigation/native";
 
 export default function SignUpScreen() {
   const { isLoaded, signUp, setActive } = useSignUp();
@@ -32,6 +33,21 @@ export default function SignUpScreen() {
   const [passwordError, setPasswordError] = useState("");
   const [verificationError, setVerificationError] = useState("");
   const [secureTextEntry, setSecureTextEntry] = useState(true);
+
+  // Reset transient UI / errors when screen is focused
+  useFocusEffect(
+    useCallback(() => {
+      setEmailError("");
+      setPasswordError("");
+      setVerificationError("");
+      setIsSubmitting(false);
+      // Reset verification step when coming back to the screen so UI is predictable
+      setPendingVerification(false);
+      setCode("");
+      // keep email/password so users don't lose typed input by default
+      return () => {};
+    }, [])
+  );
 
   // Handle submission of sign-up form
   const onSignUpPress = async () => {
@@ -69,60 +85,58 @@ export default function SignUpScreen() {
         password,
       });
 
-      // Send user an email with verification code
+      // Send verification code by email
       await signUp.prepareEmailAddressVerification({ strategy: "email_code" });
 
-      // Set 'pendingVerification' to true to display second form
+      // Show verification step
       setPendingVerification(true);
       setIsSubmitting(false);
-    } catch (err) {
+    } catch (err: any) {
       console.error(JSON.stringify(err, null, 2));
       Alert.alert(
         "Sign Up Failed",
-        err.errors?.[0]?.message || "An error occurred during sign up"
+        err?.errors?.[0]?.message || "An error occurred during sign up"
       );
       setIsSubmitting(false);
     }
   };
 
-  // Handle submission of verification form
-const onVerifyPress = async () => {
-  if (!isLoaded || isSubmitting) return;
+  // Handle verification
+  const onVerifyPress = async () => {
+    if (!isLoaded || isSubmitting) return;
 
-  if (!code.trim()) {
-    setVerificationError("Verification code is required");
-    return;
-  }
-
-  setIsSubmitting(true);
-
-  try {
-    // Use the code the user provided to attempt verification
-    const signUpAttempt = await signUp.attemptEmailAddressVerification({
-      code,
-    });
-
-    // If verification was completed, set the session to active and redirect
-    if (signUpAttempt.status === "complete") {
-      await setActive({ session: signUpAttempt.createdSessionId });
-      router.replace("/boarding");
-    } else {
-      console.error(JSON.stringify(signUpAttempt, null, 2));
-      Alert.alert(
-        "Verification Error",
-        "Unable to verify your account. Please try again."
-      );
+    if (!code.trim()) {
+      setVerificationError("Verification code is required");
+      return;
     }
-  } catch (err) {
-    console.error(JSON.stringify(err, null, 2));
-    Alert.alert(
-      "Verification Failed",
-      err.errors?.[0]?.message || "Invalid verification code"
-    );
-  } finally {
-    setIsSubmitting(false);
-  }
-};
+
+    setIsSubmitting(true);
+
+    try {
+      const signUpAttempt = await signUp.attemptEmailAddressVerification({
+        code,
+      });
+
+      if (signUpAttempt.status === "complete") {
+        await setActive({ session: signUpAttempt.createdSessionId });
+        router.replace("/boarding");
+      } else {
+        console.error(JSON.stringify(signUpAttempt, null, 2));
+        Alert.alert(
+          "Verification Error",
+          "Unable to verify your account. Please try again."
+        );
+      }
+    } catch (err: any) {
+      console.error(JSON.stringify(err, null, 2));
+      Alert.alert(
+        "Verification Failed",
+        err?.errors?.[0]?.message || "Invalid verification code"
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   return (
     <SafeAreaView className='flex-1'>
@@ -131,7 +145,6 @@ const onVerifyPress = async () => {
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         className='flex-1'
       >
-        {/* Decorative cyberpunk grid lines */}
         <View className='absolute top-0 left-0 right-0 h-40 overflow-hidden opacity-20'>
           {Array.from({ length: 10 }).map((_, i) => (
             <View
@@ -147,7 +160,6 @@ const onVerifyPress = async () => {
         </View>
 
         <View className='flex-1 justify-center px-6'>
-          {/* Enhanced icon with glow */}
           <View
             className='w-24 h-24 rounded-full bg-gray-800/70 items-center justify-center self-center mb-10 border border-green-400/40'
             style={{
@@ -172,16 +184,15 @@ const onVerifyPress = async () => {
               textShadowRadius: 10,
             }}
           >
-            {pendingVerification ? "VERIFY ID" : "NEW IDENTITY"}
+            {pendingVerification ? "Verify Email" : "Create Account"}
           </Text>
 
           <Text className='text-gray-400 text-center mb-10'>
             {pendingVerification
-              ? "Security protocol active"
-              : "System access registration"}
+              ? "Enter the code sent to your email"
+              : "Fill in your details to create an account"}
           </Text>
 
-          {/* Verification form */}
           {pendingVerification ? (
             <View className='space-y-6'>
               <View
@@ -244,7 +255,9 @@ const onVerifyPress = async () => {
                 disabled={isSubmitting}
               >
                 <LinearGradient
-                  colors={cyberpunkTheme.colors.gradients.primary}
+                  colors={
+                    cyberpunkTheme.colors.gradients.primary as [string, string]
+                  }
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
                   className='rounded-xl py-4 items-center'
@@ -259,7 +272,7 @@ const onVerifyPress = async () => {
                     <ActivityIndicator color='#0A1115' size='small' />
                   ) : (
                     <Text className='text-gray-900 font-bold text-lg tracking-wide'>
-                      AUTHENTICATE
+                      Verify
                     </Text>
                   )}
                 </LinearGradient>
@@ -267,7 +280,6 @@ const onVerifyPress = async () => {
             </View>
           ) : (
             <View className='gap-5'>
-              {/* Email input with enhanced styling */}
               <View>
                 <View className='bg-gray-800/70 rounded-xl border border-gray-700 overflow-hidden'>
                   <View className='flex-row items-center'>
@@ -304,7 +316,6 @@ const onVerifyPress = async () => {
                 ) : null}
               </View>
 
-              {/* Password input with show/hide toggle */}
               <View>
                 <View className='bg-gray-800/70 rounded-xl border border-gray-700 overflow-hidden'>
                   <View className='flex-row items-center'>
@@ -352,27 +363,26 @@ const onVerifyPress = async () => {
                 ) : null}
               </View>
 
-              {/* Security notice */}
               <View className='bg-gray-800/30 rounded-xl p-4 border border-green-400/10'>
                 <Text className='text-gray-400 text-xs'>
                   <Icon
                     name='shield-lock'
                     size={14}
                     color={cyberpunkTheme.colors.primary}
-                  />{" "}
-                  Your credentials are protected with advanced encryption.
-                  System access is monitored and secured.
+                  />
+                  Your information is stored securely.
                 </Text>
               </View>
 
-              {/* Sign Up button */}
               <TouchableOpacity
                 className='mt-6'
                 onPress={onSignUpPress}
                 disabled={isSubmitting}
               >
                 <LinearGradient
-                  colors={cyberpunkTheme.colors.gradients.primary}
+                  colors={
+                    cyberpunkTheme.colors.gradients.primary as [string, string]
+                  }
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
                   className='rounded-xl py-4 items-center'
@@ -387,7 +397,7 @@ const onVerifyPress = async () => {
                     <ActivityIndicator color='#0A1115' size='small' />
                   ) : (
                     <Text className='text-gray-900 font-bold text-lg tracking-wide'>
-                      CREATE IDENTITY
+                      Sign Up
                     </Text>
                   )}
                 </LinearGradient>
@@ -395,28 +405,24 @@ const onVerifyPress = async () => {
             </View>
           )}
 
-          {/* Sign In link */}
           {!pendingVerification && (
             <View className='flex-row justify-center mt-8 items-center'>
               <Text className='text-gray-300'>Already registered? </Text>
-              <Link href='/(auth)/sign-in' asChild>
-                <TouchableOpacity>
-                  <Text
-                    className='text-green-400 font-semibold'
-                    style={{
-                      textShadowColor: cyberpunkTheme.colors.primary,
-                      textShadowOffset: { width: 0, height: 0 },
-                      textShadowRadius: 8,
-                    }}
-                  >
-                    ACCESS SYSTEM
-                  </Text>
-                </TouchableOpacity>
-              </Link>
+              <TouchableOpacity onPress={() => router.push("/(auth)/sign-in")}>
+                <Text
+                  className='text-green-400 font-semibold'
+                  style={{
+                    textShadowColor: cyberpunkTheme.colors.primary,
+                    textShadowOffset: { width: 0, height: 0 },
+                    textShadowRadius: 8,
+                  }}
+                >
+                  Sign In
+                </Text>
+              </TouchableOpacity>
             </View>
           )}
 
-          {/* Decorative cyberpunk element */}
           <View className='absolute bottom-10 left-0 right-0 items-center'>
             <View className='w-32 h-1 bg-green-400/20 rounded-full' />
           </View>
