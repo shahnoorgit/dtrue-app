@@ -11,12 +11,13 @@ import {
   Alert,
   ScrollView,
   Share,
+  Pressable,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRoute, useNavigation } from "@react-navigation/native";
 import { useAuthToken } from "@/hook/clerk/useFetchjwtToken";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useRouter } from "expo-router";
+import { usePathname, useRouter } from "expo-router";
 import { useClerk } from "@clerk/clerk-expo";
 import * as Haptics from "expo-haptics";
 import * as ImagePicker from "expo-image-picker";
@@ -25,7 +26,7 @@ import ProfileSkeleton from "@/components/profile/ProfileSkeliton";
 const THEME = {
   colors: {
     primary: "#00FF94",
-    background: "#03120F",
+    background: "#080F12",
     backgroundSecondary: "#1a1a1a",
     cardBackground: "#262626",
     surface: "#333333",
@@ -153,6 +154,8 @@ const ProfilePage: React.FC = () => {
   const [isEditingAbout, setIsEditingAbout] = useState(false);
   const [newAboutText, setNewAboutText] = useState("");
   const [updatingAbout, setUpdatingAbout] = useState(false);
+
+  const pathname = usePathname();
 
   const [token, fetchToken] = useAuthToken();
   const route = useRoute();
@@ -689,18 +692,46 @@ const ProfilePage: React.FC = () => {
           </View>
 
           <View style={styles.statsContainer}>
-            <View style={styles.statItem}>
+            <Pressable
+              onPress={() => {
+                router.push({
+                  pathname: "/(follow)/followers/[id]/page",
+                  params: {
+                    id: user.id,
+                    username: user.username,
+                    followersCount: user.followers?.length,
+                    image: user.image,
+                    backTo: pathname,
+                  },
+                });
+              }}
+              style={styles.statItem}
+            >
               <Text style={styles.statNumber}>
                 {user.followers?.length || 0}
               </Text>
               <Text style={styles.statLabel}>Followers</Text>
-            </View>
-            <View style={styles.statItem}>
+            </Pressable>
+            <Pressable
+              onPress={() => {
+                router.push({
+                  pathname: "/(follow)/following/[id]/page",
+                  params: {
+                    id: user.id,
+                    backTo: pathname,
+                    username: user.username,
+                    followersCount: user.followers?.length,
+                    image: user.image,
+                  },
+                });
+              }}
+              style={styles.statItem}
+            >
               <Text style={styles.statNumber}>
                 {user.following?.length || 0}
               </Text>
               <Text style={styles.statLabel}>Following</Text>
-            </View>
+            </Pressable>
             <View style={styles.statItem}>
               <Text style={styles.statNumber}>
                 {user.created_debates?.length || 0}

@@ -12,12 +12,12 @@ import {
   Modal,
   Dimensions,
   Share,
+  Pressable,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useRoute, useNavigation } from "@react-navigation/native";
 import { useAuthToken } from "@/hook/clerk/useFetchjwtToken";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useRouter } from "expo-router";
+import { useRouter, usePathname, useLocalSearchParams } from "expo-router";
 import * as Haptics from "expo-haptics";
 import ProfileSkeleton from "@/components/profile/ProfileSkeliton";
 import { useAuth } from "@clerk/clerk-expo";
@@ -148,11 +148,10 @@ const ProfilePage: React.FC = () => {
   const [imageModalVisible, setImageModalVisible] = useState(false);
   const [modalImageUri, setModalImageUri] = useState("");
   const [token, fetchToken] = useAuthToken();
-  const route = useRoute();
-  const navigation = useNavigation();
-  const router = useRouter();
-  const { id } = route.params as { id: string };
 
+  const { id } = useLocalSearchParams<{ id: string }>();
+  const router = useRouter();
+  const pathname = usePathname();
   const { userId } = useAuth();
 
   const fetchWithAuthRetry = useCallback(
@@ -207,7 +206,6 @@ const ProfilePage: React.FC = () => {
       const debatesData = await debatesResponse.json();
       if (profileData.success) setUser(profileData.data);
       if (debatesData.success) setDebates(debatesData.data);
-      console.log("Profile Data:", profileData);
       if (profileData.data.isFollowing) {
         setIsFollowing(true);
       }
@@ -358,7 +356,7 @@ const ProfilePage: React.FC = () => {
       <View style={styles.headerSection}>
         <TouchableOpacity
           style={styles.backButton}
-          onPress={() => navigation.goBack()}
+          onPress={() => router.back()}
         >
           <Ionicons name='chevron-back' size={24} color={THEME.colors.text} />
         </TouchableOpacity>
@@ -386,18 +384,46 @@ const ProfilePage: React.FC = () => {
             <View style={styles.profileImageBorder} />
           </TouchableOpacity>
           <View style={styles.statsContainer}>
-            <View style={styles.statItem}>
+            <Pressable
+              onPress={() => {
+                router.push({
+                  pathname: "/(follow)/followers/[id]/page",
+                  params: {
+                    id: user.id,
+                    username: user.username,
+                    followersCount: user.followers?.length,
+                    image: user.image,
+                    backTo: pathname,
+                  },
+                });
+              }}
+              style={styles.statItem}
+            >
               <Text style={styles.statNumber}>
                 {user.followers?.length || 0}
               </Text>
               <Text style={styles.statLabel}>Followers</Text>
-            </View>
-            <View style={styles.statItem}>
+            </Pressable>
+            <Pressable
+              onPress={() => {
+                router.push({
+                  pathname: "/(follow)/following/[id]/page",
+                  params: {
+                    id: user.id,
+                    username: user.username,
+                    followersCount: user.followers?.length,
+                    image: user.image,
+                    backTo: pathname,
+                  },
+                });
+              }}
+              style={styles.statItem}
+            >
               <Text style={styles.statNumber}>
                 {user.following?.length || 0}
               </Text>
               <Text style={styles.statLabel}>Following</Text>
-            </View>
+            </Pressable>
             <View style={styles.statItem}>
               <Text style={styles.statNumber}>
                 {user.created_debates?.length || 0}
