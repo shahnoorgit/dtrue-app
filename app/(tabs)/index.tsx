@@ -138,37 +138,46 @@ export default function DebateFeed() {
     async (fetchCursor = null, shouldRefresh = false) => {
       if (!tokenRef.current) return;
       fetchCursor === null ? setLoading(true) : setLoadingMore(true);
+
       try {
         const url = `${
           process.env.EXPO_PUBLIC_BASE_URL
         }/debate-room/feed?limit=10${
           fetchCursor ? `&cursor=${fetchCursor}` : ""
         }`;
+
         const { data } = await axios.get(url, {
           headers: { Authorization: `Bearer ${tokenRef.current}` },
         });
+
         if (data?.success) {
           const newDebates = data.data.data;
           const nextCursor = data.data.nextCursor;
           const hasNext = data.data.pagination?.hasNextPage;
+
           setDebates((prev) =>
             shouldRefresh ? newDebates : [...prev, ...newDebates]
           );
           setCursor(nextCursor);
           setHasNextPage(hasNext);
+
           if (nextCursor) {
             await AsyncStorage.setItem(CURSOR_STORAGE_KEY, nextCursor);
           }
         }
       } catch (error) {
-        if (error.response?.status === 404) {
-          console.log("Got 404—refreshing token and retrying feed fetch");
+        if (error.response?.status === 401) {
+          // 🔑 Handle expired/invalid token
+          console.log("Got 401 — refreshing token and retrying feed fetch");
           try {
             tokenRef.current = await getToken({ template: "lets_debate_jwt" });
             return fetchDebates(fetchCursor, shouldRefresh);
-          } catch (tokeErr) {
-            console.error("Error refreshing token:", tokeErr);
+          } catch (tokenErr) {
+            console.error("Error refreshing token:", tokenErr);
           }
+        } else if (error.response?.status === 404) {
+          // 🎯 404 likely means empty feed
+          console.log("Feed not found — no debates available for this query");
         } else {
           console.error("Error fetching debates:", error);
         }

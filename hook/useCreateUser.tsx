@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useUser } from "@clerk/clerk-expo";
 import { CategoryEnum } from "@/enums/boarding";
-import { getFCMToken } from "@/app/(auth)/_layout";
 
 export interface Profile {
   username: string;
@@ -26,7 +25,6 @@ export function useCreateUser() {
 
     setLoading(true);
     setError(null);
-    const token = await getFCMToken();
 
     try {
       const response = await fetch(`${process.env.EXPO_PUBLIC_BASE_URL}/user`, {
@@ -42,7 +40,6 @@ export function useCreateUser() {
           clerkId: user.id,
           about: data.profile.bio,
           image: data.profile.profileImage,
-          expoTokens: token, // Ideally, this should be dynamic
         }),
       });
 
