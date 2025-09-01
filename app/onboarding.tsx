@@ -13,6 +13,7 @@ import { router } from "expo-router";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import { cyberpunkTheme } from "@/constants/theme";
 import * as Haptics from "expo-haptics";
+import { logError } from "@/utils/sentry/sentry"; // Added Sentry import
 
 const { width } = Dimensions.get("window");
 
@@ -202,14 +203,32 @@ export default function OnboardingScreen() {
           useNativeDriver: true,
         }),
       ]).start(() => {
-        router.replace("/(auth)/sign-in");
+        try {
+          router.replace("/(auth)/sign-in");
+        } catch (error: any) {
+          console.error("Navigation error:", error);
+          // Log error to Sentry
+          logError(error, {
+            context: "OnboardingScreen.scrollTo",
+            action: "navigate_to_signin",
+          });
+        }
       });
     }
   }, [currentIndex, buttonScale, buttonTextOpacity]);
 
   const skipOnboarding = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    router.replace("/(auth)/sign-in");
+    try {
+      router.replace("/(auth)/sign-in");
+    } catch (error: any) {
+      console.error("Navigation error:", error);
+      // Log error to Sentry
+      logError(error, {
+        context: "OnboardingScreen.skipOnboarding",
+        action: "skip_to_signin",
+      });
+    }
   }, []);
 
   const inputRange = slides.map((_, i) => i * width);

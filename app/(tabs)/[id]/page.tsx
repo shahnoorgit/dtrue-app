@@ -21,6 +21,7 @@ import { useRouter, usePathname, useLocalSearchParams } from "expo-router";
 import * as Haptics from "expo-haptics";
 import ProfileSkeleton from "@/components/profile/ProfileSkeliton";
 import { useAuth } from "@clerk/clerk-expo";
+import { logError } from "@/utils/sentry/sentry"; // Added Sentry import
 
 const { width, height } = Dimensions.get("window");
 
@@ -210,8 +211,13 @@ const ProfilePage: React.FC = () => {
         setIsFollowing(true);
       }
       setDataFetched(true);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error fetching profile data:", error);
+      // Log error to Sentry
+      logError(error, {
+        context: "ProfilePage.fetchProfileData",
+        userId: id ? "[REDACTED_USER_ID]" : "undefined",
+      });
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -242,7 +248,14 @@ const ProfilePage: React.FC = () => {
             debateImage: debate.image || "",
           },
         });
-      } catch (err) {
+      } catch (err: any) {
+        console.error("Error joining debate:", err);
+        // Log error to Sentry
+        logError(err, {
+          context: "ProfilePage.handleJoinPress",
+          debateId: debate.id ? "[REDACTED_DEBATE_ID]" : "undefined",
+          userId: id ? "[REDACTED_USER_ID]" : "undefined",
+        });
         Alert.alert("Error", "Unable to join debate. Please try again.");
       } finally {
         setJoiningDebateId(null);
@@ -289,8 +302,14 @@ const ProfilePage: React.FC = () => {
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         }
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error handling follow action:", error);
+      // Log error to Sentry
+      logError(error, {
+        context: "ProfilePage.handleFollow",
+        userId: id ? "[REDACTED_USER_ID]" : "undefined",
+        action: isFollowing ? "unfollow" : "follow",
+      });
       Alert.alert("Error", "Unable to follow/unfollow user. Please try again.");
     }
   };
@@ -309,8 +328,13 @@ const ProfilePage: React.FC = () => {
         url: shareUrl,
         title: `@${user.name}'s Profile`,
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error sharing profile:", error);
+      // Log error to Sentry
+      logError(error, {
+        context: "ProfilePage.handleShareProfile",
+        userId: user.id ? "[REDACTED_USER_ID]" : "undefined",
+      });
       Alert.alert("Error", "Unable to share profile. Please try again.");
     }
   };

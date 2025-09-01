@@ -1,4 +1,3 @@
-// SignInScreen.tsx (with in-app reset modal)
 import React, { useState, useCallback } from "react";
 import {
   Text,
@@ -20,6 +19,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import { cyberpunkTheme } from "@/constants/theme";
 import { useFocusEffect } from "@react-navigation/native";
+import { logError } from "@/utils/sentry/sentry";
 
 export default function SignInScreen() {
   const { signIn, setActive, isLoaded } = useSignIn();
@@ -98,6 +98,15 @@ export default function SignInScreen() {
         setTimeout(() => router.replace("/(tabs)/profile"), 1000);
       } else {
         console.error("signInAttempt", signInAttempt);
+        // Log unexpected non-complete status to Sentry
+        logError(new Error("SignIn attempt not complete"), {
+          status: signInAttempt.status,
+          emailAddress: emailAddress ? "[REDACTED_EMAIL]" : "undefined", // Redact PII
+          attemptDetails: {
+            status: signInAttempt.status,
+            // Add non-PII details if relevant, e.g., supportedFirstFactors
+          },
+        });
         Alert.alert(
           "Error",
           "Unable to sign in. Please check your credentials."
@@ -105,6 +114,13 @@ export default function SignInScreen() {
       }
     } catch (err: any) {
       console.error("sign in error", JSON.stringify(err, null, 2));
+      // Log the actual error to Sentry
+      logError(err, {
+        context: "SignInScreen.onSignInPress",
+        emailAddress: emailAddress ? "[REDACTED_EMAIL]" : "undefined", // Redact PII
+        // clerkErrorCode: err?.errors?.[0]?.code, // Optional: extract Clerk code if needed in context
+      });
+
       const code = err?.errors?.[0]?.code;
       if (code === "form_identifier_not_found") {
         setEmailError("Email not found");
@@ -157,6 +173,13 @@ export default function SignInScreen() {
       );
     } catch (err: any) {
       console.error("requestResetCode err:", JSON.stringify(err, null, 2));
+      // Log the actual error to Sentry
+      logError(err, {
+        context: "SignInScreen.requestResetCode",
+        resetEmail: resetEmail ? "[REDACTED_EMAIL]" : "undefined", // Redact PII
+        // clerkErrorCode: err?.errors?.[0]?.code,
+      });
+
       const code = err?.errors?.[0]?.code;
       if (code === "form_identifier_not_found") {
         setResetError("Email not found");
@@ -211,12 +234,37 @@ export default function SignInScreen() {
         setResetError(
           "This account requires a second factor. Please reset using web flow or contact support."
         );
+        // Log this unexpected but handled state to Sentry if deemed important
+        logError(new Error("Password reset requires 2FA"), {
+          context: "SignInScreen.submitReset",
+          status: result.status,
+          emailAddress: emailAddress ? "[REDACTED_EMAIL]" : "undefined", // Redact PII
+        });
       } else {
         console.warn("Unexpected result during reset:", result);
-        setResetError("Could not complete reset. Try again.");
+        const errorMessage = "Could not complete reset. Try again.";
+        setResetError(errorMessage);
+        // Log unexpected result status to Sentry
+        logError(new Error("Unexpected result status during password reset"), {
+          context: "SignInScreen.submitReset",
+          status: result.status,
+          emailAddress: emailAddress ? "[REDACTED_EMAIL]" : "undefined", // Redact PII
+          resultDetails: {
+            status: result.status,
+            // Add non-PII details if relevant
+          },
+        });
       }
     } catch (err: any) {
       console.error("submitReset err:", JSON.stringify(err, null, 2));
+      // Log the actual error to Sentry
+      logError(err, {
+        context: "SignInScreen.submitReset",
+        resetEmail: resetEmail ? "[REDACTED_EMAIL]" : "undefined", // Redact PII
+        resetCodeProvided: !!resetCode, // Just flag if code was entered
+        // clerkErrorCode: err?.errors?.[0]?.code,
+      });
+
       setResetError(
         err?.errors?.[0]?.message || "Invalid code or error. Try again."
       );

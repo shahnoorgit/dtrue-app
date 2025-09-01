@@ -22,6 +22,7 @@ import { useAuth } from "@clerk/clerk-expo";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { logError } from "@/utils/sentry/sentry"; // Added Sentry import
 
 const DEBATES_STORAGE_KEY = "cached_debates";
 const DEBATES_TIMESTAMP_KEY = "cached_debates_timestamp";
@@ -117,8 +118,12 @@ export default function DebateFeed() {
 
       const cachedData = await AsyncStorage.getItem(DEBATES_STORAGE_KEY);
       return cachedData ? JSON.parse(cachedData) : [];
-    } catch (error) {
+    } catch (error: any) {
       console.warn("Error loading cached debates:", error);
+      // Log error to Sentry
+      logError(error, {
+        context: "DebateFeed.loadCachedDebates",
+      });
       return [];
     }
   };
@@ -129,8 +134,13 @@ export default function DebateFeed() {
         [DEBATES_STORAGE_KEY, JSON.stringify(data)],
         [DEBATES_TIMESTAMP_KEY, Date.now().toString()],
       ]);
-    } catch (error) {
+    } catch (error: any) {
       console.warn("Error caching debates:", error);
+      // Log error to Sentry
+      logError(error, {
+        context: "DebateFeed.cacheDebates",
+        debatesCount: data.length,
+      });
     }
   };
 
@@ -165,15 +175,26 @@ export default function DebateFeed() {
             await AsyncStorage.setItem(CURSOR_STORAGE_KEY, nextCursor);
           }
         }
-      } catch (error) {
+      } catch (error: any) {
+        // Log error to Sentry
+        logError(error, {
+          context: "DebateFeed.fetchDebates",
+          cursor: fetchCursor ? "[REDACTED_CURSOR]" : "null",
+          shouldRefresh,
+        });
+
         if (error.response?.status === 401) {
           // 🔑 Handle expired/invalid token
           console.log("Got 401 — refreshing token and retrying feed fetch");
           try {
             tokenRef.current = await getToken({ template: "lets_debate_jwt" });
             return fetchDebates(fetchCursor, shouldRefresh);
-          } catch (tokenErr) {
+          } catch (tokenErr: any) {
             console.error("Error refreshing token:", tokenErr);
+            // Log token refresh error to Sentry
+            logError(tokenErr, {
+              context: "DebateFeed.fetchDebates.tokenRefresh",
+            });
           }
         } else if (error.response?.status === 404) {
           // 🎯 404 likely means empty feed

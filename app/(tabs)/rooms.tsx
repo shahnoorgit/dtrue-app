@@ -23,6 +23,7 @@ import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuthToken } from "@/hook/clerk/useFetchjwtToken";
 import { Modal } from "react-native";
+import { logError } from "@/utils/sentry/sentry"; // Added Sentry import
 
 // Define theme as a constant outside the component to avoid recreation on re-render
 const THEME = {
@@ -219,8 +220,12 @@ const Rooms = () => {
       } else {
         setShowNotEligible(true);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to check eligibility:", error);
+      // Log error to Sentry
+      logError(error, {
+        context: "Rooms.getCreateRoomEligibility",
+      });
       Alert.alert("Error", "Unable to check if you can create a debate room.");
     } finally {
       setCreateRoomLoading(false);
@@ -276,8 +281,14 @@ const Rooms = () => {
             },
           });
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error("Failed to join debate room:", error);
+        // Log error to Sentry
+        logError(error, {
+          context: "Rooms.joinDebateRoom",
+          roomId: roomId ? "[REDACTED_ROOM_ID]" : "undefined",
+          activeTab,
+        });
         Alert.alert("Error", "Failed to join the debate room.");
       } finally {
         setJoiningRoomId(null);
@@ -354,8 +365,14 @@ const Rooms = () => {
 
         setTabDataCache((prev) => ({ ...prev, [activeTab]: roomsData }));
         setRooms(roomsData);
-      } catch (error) {
+      } catch (error: any) {
         console.error("Failed to fetch debate rooms:", error);
+        // Log error to Sentry
+        logError(error, {
+          context: "Rooms.fetchDebateRooms",
+          activeTab,
+          route,
+        });
         setFetchError("Failed to load rooms. Pull down to retry.");
       } finally {
         setLoading(false);
@@ -556,7 +573,7 @@ const Rooms = () => {
         {isJoined && <View style={styles.glowEffect} />}
 
         <Image
-          source={{ uri: debate?.image || "https://placekitten.com/120/120" }}
+          source={{ uri: debate?.image || "https://placekitten.com/120/120  " }}
           style={[
             styles.debateImage,
             isJoined && styles.joinedImage,

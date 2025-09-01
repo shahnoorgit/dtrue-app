@@ -25,8 +25,31 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Notifications from "expo-notifications";
 import Constants from "expo-constants";
 import "./globals.css";
+import * as Sentry from "@sentry/react-native";
+import { setSentryUser, logError } from "@/utils/sentry/sentry"; // <-- Import logError
 
-// keep splash visible until we explicitly hide
+function SentryUserWrapper() {
+  const { isLoaded, isSignedIn, userId } = useAuth();
+
+  useEffect(() => {
+    if (isLoaded && isSignedIn && userId) {
+      setSentryUser(userId);
+    } else {
+      setSentryUser(""); // or Sentry.setUser(null)
+    }
+  }, [isLoaded, isSignedIn, userId]);
+
+  return null;
+}
+
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: true,
+  }),
+});
+
 SplashScreen.preventAutoHideAsync();
 
 // ---------------- ErrorBoundary ----------------
@@ -102,10 +125,10 @@ function useDeepLinkHandler() {
   useEffect(() => {
     if (!isLoaded) return;
 
-    const handleDeepLinkRaw = (rawUrl?: string) => {
+    const handleDeepLinkRaw = (rawUrl?: string, source: string = "unknown") => {
       if (!rawUrl) return;
       try {
-        console.log("DEEP LINK: Received URL:", rawUrl);
+        console.log(`[DEEP LINK] Received URL from ${source}:`, rawUrl);
         const parsed = ExpoLinking.parse(rawUrl);
         const path = parsed.path || "";
 
@@ -122,18 +145,20 @@ function useDeepLinkHandler() {
 
           try {
             debateImage = decodeURIComponent(debateImage);
-          } catch (e) {
+          } catch {
             /* ignore decode errors */
           }
 
           if (!debateId) return;
 
           if (isSignedIn) {
+            console.log("[DEEP LINK] Navigating to debate screen");
             router.push({
               pathname: "/(chat-room)/screen",
               params: { clerkId: userId, debateId, debateImage },
             });
           } else {
+            console.log("[DEEP LINK] User not signed in → onboarding");
             router.push("/onboarding");
           }
           return;
@@ -143,67 +168,91 @@ function useDeepLinkHandler() {
           const parts = path.split("/");
           const profileId = parts[1] || "";
           if (!profileId) return;
+
           if (isSignedIn) {
+            console.log("[DEEP LINK] Navigating to profile page");
             router.push({
               pathname: "/(tabs)/[id]/page",
               params: { id: profileId },
             });
           } else {
+            console.log("[DEEP LINK] User not signed in → onboarding");
             router.push("/onboarding");
           }
           return;
         }
 
-        console.log("DEEP LINK: Unknown path — fallback");
+        console.log("[DEEP LINK] Unknown path — fallback", path);
       } catch (err) {
-        console.error("DEEP LINK: Error handling URL:", err);
+        console.error("[DEEP LINK] Error handling URL:", err);
       }
     };
 
     (async () => {
       try {
+        const lastResponse =
+          await Notifications.getLastNotificationResponseAsync();
+        if (lastResponse) {
+          const deeplink =
+            lastResponse.notification.request.content.data?.deeplink;
+          if (deeplink) {
+            console.log("[DEEP LINK] Cold start from notification");
+            setTimeout(
+              () => handleDeepLinkRaw(deeplink, "notification (cold start)"),
+              600
+            );
+            return;
+          }
+        }
+
         const initialUrl = await RNLinking.getInitialURL();
         if (initialUrl) {
-          console.log("DEEP LINK: initialUrl", initialUrl);
-          // give auth a moment to stabilize
-          setTimeout(() => handleDeepLinkRaw(initialUrl), 600);
+          console.log("[DEEP LINK] Cold start from deep link");
+          setTimeout(
+            () => handleDeepLinkRaw(initialUrl, "Linking.getInitialURL"),
+            600
+          );
         }
       } catch (e) {
-        console.error("DEEP LINK: getInitialURL error", e);
+        console.error("[DEEP LINK] getInitialURL error", e);
       }
     })();
 
     const subscription = RNLinking.addEventListener("url", (ev) => {
-      handleDeepLinkRaw(ev.url);
+      handleDeepLinkRaw(ev.url, "runtime deep link");
     });
 
-    return () => subscription?.remove?.();
+    const notifSub = Notifications.addNotificationResponseReceivedListener(
+      (response) => {
+        console.log(
+          "[DEEP LINK] Notification tapped (foreground/background)",
+          response
+        );
+        const deeplink = response.notification.request.content.data?.deeplink;
+        if (deeplink) {
+          handleDeepLinkRaw(deeplink, "notification (tap)");
+        }
+      }
+    );
+
+    return () => {
+      subscription?.remove?.();
+      notifSub.remove();
+    };
   }, [isLoaded, isSignedIn, userId, router]);
 }
 
 // ---------------- Push token registration (POST only) ----------------
-/**
- * Strategy:
- * - Read stored token from AsyncStorage.
- * - Ensure permission (only request if not granted).
- * - Get current expo push token.
- * - If different from stored token, POST to backend:
- *    POST ${BASE_URL}/users/${clerkId}/push-token  { token }
- * - Save the new token in AsyncStorage after success.
- */
 async function registerPushTokenIfNeeded(clerkId: string) {
   const STORAGE_KEY = "expoPushToken";
   try {
-    // 1) read stored token
     const storedToken = await AsyncStorage.getItem(STORAGE_KEY);
 
-    // 2) check permission (don't always re-prompt)
     const { status: existingStatus } =
       await Notifications.getPermissionsAsync();
     let finalStatus = existingStatus;
 
     if (existingStatus !== "granted") {
-      // request once — user may deny
       const { status } = await Notifications.requestPermissionsAsync();
       finalStatus = status;
     }
@@ -215,7 +264,6 @@ async function registerPushTokenIfNeeded(clerkId: string) {
       return;
     }
 
-    // 3) get current expo push token
     const tokenResp = await Notifications.getExpoPushTokenAsync({
       projectId:
         Constants.expoConfig?.extra?.eas?.projectId ||
@@ -227,40 +275,61 @@ async function registerPushTokenIfNeeded(clerkId: string) {
       return;
     }
 
-    // 4) compare and update only if different
     if (storedToken === currentToken) {
       console.log("Push token unchanged — no backend call required");
       return;
     }
 
-    // 5) POST to backend
+    // Use a more robust base URL fallback
     const base =
       process.env.EXPO_PUBLIC_BASE_URL ||
       process.env.API_URL ||
-      "https://your-api.com";
+      "https://your-api.com"; // <-- Corrected fallback
+
     const url = `${base.replace(/\/$/, "")}/user/${encodeURIComponent(
       clerkId
     )}/push-token`;
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
+
     const res = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         token: currentToken,
-        platform: Platform.OS, // 👈 "ios" or "android"
+        platform: Platform.OS,
       }),
+      signal: controller.signal, // Attach signal
     });
+
+    clearTimeout(timeoutId); // Clear timeout
 
     if (!res.ok) {
       const text = await res.text().catch(() => "");
-      console.error("Failed to POST push token to backend:", res.status, text);
-      return;
+      const errorDetails = {
+        message: "Failed to POST push token to backend",
+        status: res.status,
+        statusText: res.statusText,
+        responseText: text,
+        url: url,
+        clerkId: clerkId,
+        token: currentToken ? "[REDACTED]" : "undefined",
+      };
+      console.error(errorDetails.message, errorDetails);
+      logError(new Error(errorDetails.message), errorDetails); // <-- Log to Sentry
+      return; // Don't save token if backend update failed
     }
 
-    // 6) store token locally
     await AsyncStorage.setItem(STORAGE_KEY, currentToken);
     console.log("Registered new push token and saved locally");
-  } catch (err) {
-    console.error("registerPushTokenIfNeeded error:", err);
+  } catch (err: any) {
+    const errorMessage =
+      err?.name === "AbortError"
+        ? "Push token registration timed out"
+        : "registerPushTokenIfNeeded error";
+    console.error(errorMessage, err);
+    logError(err, { message: errorMessage, clerkId }); // <-- Log to Sentry
   }
 }
 
@@ -281,16 +350,26 @@ function AuthFlow() {
   const [retryCount, setRetryCount] = useState(0);
   const MAX_RETRIES = 3;
   const hasRedirectedRef = useRef(false);
-
-  useDeepLinkHandler();
+  // Add a ref to hold the timeout ID for checkUserStatus
+  const checkUserStatusTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     setMounted(true);
-    return () => setMounted(false);
+    return () => {
+      setMounted(false);
+      // Clear any pending timeouts on unmount
+      if (checkUserStatusTimeoutRef.current) {
+        clearTimeout(checkUserStatusTimeoutRef.current);
+      }
+    };
   }, []);
 
   const retryDatabaseCheck = async (clerkId: string) => {
     if (retryCount >= MAX_RETRIES) {
+      const finalError = new Error(
+        "Unable to connect after multiple attempts."
+      );
+      logError(finalError, { clerkId, retryCount, maxRetries: MAX_RETRIES }); // <-- Log to Sentry
       setApiError({
         message: "Unable to connect after multiple attempts.",
         isRetrying: false,
@@ -310,6 +389,11 @@ function AuthFlow() {
       console.log("AUTH CHECK: checking user in backend", clerkId);
       setApiError(null);
 
+      // Clear any previous timeout
+      if (checkUserStatusTimeoutRef.current) {
+        clearTimeout(checkUserStatusTimeoutRef.current);
+      }
+
       if (!isSignedIn || !clerkId) {
         setUserStatus(UserStatus.NOT_SIGNED_IN);
         setIsCheckingComplete(true);
@@ -317,12 +401,18 @@ function AuthFlow() {
       }
 
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000);
+      const timeoutId = setTimeout(() => {
+        controller.abort();
+        // Handle timeout specifically here if needed, or let catch handle it
+      }, 10000); // 10s timeout
+      checkUserStatusTimeoutRef.current = timeoutId; // Store timeout ID
 
+      // Use a more robust base URL fallback
       const base =
         process.env.EXPO_PUBLIC_BASE_URL ||
         process.env.API_URL ||
-        "https://your-api.com";
+        "https://your-api.com"; // <-- Corrected fallback
+
       const res = await fetch(
         `${base.replace(/\/$/, "")}/user/find/${encodeURIComponent(clerkId)}`,
         {
@@ -334,7 +424,8 @@ function AuthFlow() {
         }
       );
 
-      clearTimeout(timeoutId);
+      clearTimeout(timeoutId); // Clear timeout on success/failure
+      checkUserStatusTimeoutRef.current = null; // Clear stored ID
 
       if (res.status === 404) {
         console.log("AUTH CHECK: user not found in DB");
@@ -343,44 +434,86 @@ function AuthFlow() {
         return;
       }
 
-      if (!res.ok) throw new Error(`Server returned ${res.status}`);
+      if (!res.ok) {
+        const text = await res.text().catch(() => "");
+        const errorDetails = {
+          message: `User status check failed: ${res.status} ${res.statusText}`,
+          status: res.status,
+          statusText: res.statusText,
+          responseText: text,
+          url: `${base.replace(/\/$/, "")}/user/find/${encodeURIComponent(
+            clerkId
+          )}`,
+          clerkId: clerkId,
+        };
+        console.error(errorDetails.message, errorDetails);
+        logError(new Error(errorDetails.message), errorDetails); // <-- Log to Sentry
+        setApiError({ message: `API Error: ${res.status}`, isRetrying: false }); // <-- Set UI Error
+        setIsCheckingComplete(true);
+        return;
+      }
 
       const data = await res.json();
       if (data && data.statusCode === 200) {
         setUserStatus(UserStatus.SIGNED_IN_IN_DB);
-        // only after user exists in DB, register push token
         await registerPushTokenIfNeeded(clerkId);
       } else {
+        // Optional: Log unexpected response structure
+        // const errorDetails = {
+        //    message: "Unexpected response structure from user status check",
+        //    dataReceived: data,
+        //    clerkId: clerkId,
+        //    url: `${base.replace(/\/$/, "")}/user/find/${encodeURIComponent(clerkId)}`,
+        // };
+        // console.warn(errorDetails.message, errorDetails);
+        // logError(new Error(errorDetails.message), errorDetails);
         setUserStatus(UserStatus.SIGNED_IN_NOT_IN_DB);
       }
 
       setIsCheckingComplete(true);
     } catch (err: any) {
+      // Ensure timeout is cleared on error
+      if (checkUserStatusTimeoutRef.current) {
+        clearTimeout(checkUserStatusTimeoutRef.current);
+        checkUserStatusTimeoutRef.current = null;
+      }
+
       console.error("AUTH CHECK error:", err);
-      const message =
+      const errorMessage =
         err?.name === "AbortError"
-          ? "Request timed out"
-          : err?.message ?? "Unknown error";
-      setApiError({ message, isRetrying: false });
+          ? "User status check timed out"
+          : err?.message ?? "Unknown error during user status check";
+      const errorContext = {
+        message: errorMessage,
+        clerkId: clerkId,
+        originalError: err,
+      };
+      logError(err, errorContext); // <-- Log to Sentry
 
       if (
         err?.name === "AbortError" ||
         (err?.message || "").toLowerCase().includes("network")
       ) {
-        if (clerkId) retryDatabaseCheck(clerkId);
+        if (clerkId) {
+          retryDatabaseCheck(clerkId);
+        } else {
+          setIsCheckingComplete(true);
+          SplashScreen.hideAsync().catch(console.error);
+        }
         return;
       }
 
+      setApiError({ message: errorMessage, isRetrying: false });
       setIsCheckingComplete(true);
       SplashScreen.hideAsync().catch(console.error);
     }
   };
 
-  // trigger check when auth becomes available
   useEffect(() => {
     if (!isLoaded) return;
     setIsCheckingComplete(false);
     setApiError(null);
+    setRetryCount(0); // Reset retry count on auth state change
 
     if (userId) {
       checkUserStatus(userId);
@@ -390,7 +523,6 @@ function AuthFlow() {
     }
   }, [isLoaded, isSignedIn, userId]);
 
-  // navigate once checks complete (unless deep link present)
   useEffect(() => {
     if (!mounted || !isCheckingComplete || hasRedirectedRef.current) return;
     if (!navigationState?.key) return;
@@ -409,7 +541,6 @@ function AuthFlow() {
 
       SplashScreen.hideAsync().catch(console.error);
 
-      // small delay so ui is stable
       setTimeout(() => {
         if (userStatus === UserStatus.NOT_SIGNED_IN) {
           hasRedirectedRef.current = true;
@@ -435,7 +566,6 @@ function AuthFlow() {
     segments,
   ]);
 
-  // show connection error overlay if needed
   if (apiError && !apiError.isRetrying && isCheckingComplete) {
     return (
       <View className='absolute inset-0 z-10 flex-1 items-center justify-center bg-gray-900 p-4'>
@@ -458,7 +588,7 @@ function AuthFlow() {
             onPress={() => {
               setRetryCount(0);
               setApiError(null);
-              checkUserStatus(userId!);
+              if (userId) checkUserStatus(userId);
             }}
           >
             <Text className='text-white text-center font-medium'>
@@ -481,7 +611,7 @@ function AuthFlow() {
 }
 
 // ---------------- RootLayout ----------------
-export default function RootLayout() {
+export default Sentry.wrap(function RootLayout() {
   const publishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY;
   if (!publishableKey) {
     throw new Error(
@@ -503,10 +633,19 @@ export default function RootLayout() {
             }
             className='absolute inset-0'
           />
+
+          <DeepLinkHandlerWrapper />
+          <SentryUserWrapper />
+
           <AuthFlow />
           <Slot />
         </View>
       </ErrorBoundary>
     </ClerkProvider>
   );
+});
+
+function DeepLinkHandlerWrapper() {
+  useDeepLinkHandler();
+  return null;
 }

@@ -11,11 +11,12 @@
       "resizeMode": "cover",
       "backgroundColor": "#0A0E13"
     },
-    "assetBundlePatterns": ["**/*"],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "userInterfaceStyle": "automatic",
     "jsEngine": "hermes",
     "newArchEnabled": true,
-
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
@@ -24,9 +25,9 @@
         }
       }
     },
-
     "android": {
       "package": "com.shahnoor.dtrue",
+      "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/logo.png",
         "backgroundColor": "#0A0E13"
@@ -35,7 +36,10 @@
       "intentFilters": [
         {
           "action": "VIEW",
-          "category": ["BROWSABLE", "DEFAULT"],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ],
           "autoVerify": true,
           "data": [
             {
@@ -47,13 +51,11 @@
         }
       ]
     },
-
     "web": {
       "bundler": "metro",
       "output": "static",
       "favicon": "./assets/images/favicon.png"
     },
-
     "plugins": [
       [
         "expo-router",
@@ -77,13 +79,19 @@
           }
         }
       ],
-      "expo-localization"
+      "expo-localization",
+      [
+        "@sentry/react-native/expo",
+        {
+          "url": "https://sentry.io/",
+          "project": "react-native",
+          "organization": "dtrue"
+        }
+      ]
     ],
-
     "experiments": {
       "typedRoutes": true
     },
-
     "extra": {
       "router": {
         "origin": "https://links-dev.dtrue.online"
@@ -92,7 +100,6 @@
         "projectId": "161ac660-74b1-4723-b57c-ba70d81bc91e"
       }
     },
-
     "owner": "shahnoor_mujawar"
   }
 }

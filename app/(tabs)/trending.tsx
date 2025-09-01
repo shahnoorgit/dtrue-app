@@ -19,6 +19,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useAuthToken } from "@/hook/clerk/useFetchjwtToken";
 import { useRouter } from "expo-router";
 import { useAuth } from "@clerk/clerk-expo";
+import { logError } from "@/utils/sentry/sentry"; // Added Sentry import
 
 // Define theme as a constant outside the component to avoid recreation on re-render
 const THEME = {
@@ -100,8 +101,12 @@ const TrendingDebatesPage = () => {
           setFetchError("Invalid response format");
         }
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error fetching trending debates:", error);
+      // Log error to Sentry
+      logError(error, {
+        context: "TrendingDebatesPage.fetchTrendingDebates",
+      });
       if (isMountedRef.current) {
         setFetchError(error.message || "Failed to fetch debates");
 
@@ -145,7 +150,7 @@ const TrendingDebatesPage = () => {
     e?.stopPropagation?.();
 
     const base =
-      process.env.EXPO_PUBLIC_SHARE_URL || "https://links-dev.dtrue.online";
+      process.env.EXPO_PUBLIC_SHARE_URL || "https://links-dev.dtrue.online  ";
     const shareUrl = `${base}/debate/${debate.id}`;
 
     try {
@@ -154,8 +159,13 @@ const TrendingDebatesPage = () => {
         message: `${debate.title}\n\nJoin the debate: ${shareUrl}`,
         url: shareUrl,
       });
-    } catch (err) {
+    } catch (err: any) {
       console.error("Share error", err);
+      // Log error to Sentry
+      logError(err, {
+        context: "TrendingDebatesPage.handleShare",
+        debateId: debate.id ? "[REDACTED_DEBATE_ID]" : "undefined",
+      });
       Alert.alert("Could not share", "Please try again.");
     }
   }, []);

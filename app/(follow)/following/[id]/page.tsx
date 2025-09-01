@@ -20,6 +20,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { useAuthToken } from "@/hook/clerk/useFetchjwtToken";
 import { LinearGradient } from "expo-linear-gradient";
+import { logError } from "@/utils/sentry/sentry"; // Added Sentry import
 
 const { width } = Dimensions.get("window");
 
@@ -86,7 +87,7 @@ export default function FollowingsScreen() {
 
   const fetchFollowings = useCallback(
     async (loadMore = false, retry = false, refresh = false) => {
-      if (!token) return;
+      if (!token || !id) return;
 
       try {
         if (refresh) {
@@ -130,8 +131,16 @@ export default function FollowingsScreen() {
         }
 
         setHasMore(!!data.data.nextCursor);
-      } catch (err) {
+      } catch (err: any) {
         console.error("Failed fetching followings", err);
+        // Log error to Sentry
+        logError(err, {
+          context: "FollowingsScreen.fetchFollowings",
+          userId: id ? "[REDACTED_USER_ID]" : "undefined",
+          loadMore,
+          refresh,
+          cursor: cursor ? "[REDACTED_CURSOR]" : "null",
+        });
         Alert.alert("Error", "Could not load followings. Please try again.");
       } finally {
         setLoading(false);

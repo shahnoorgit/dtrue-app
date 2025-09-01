@@ -22,6 +22,7 @@ import { useClerk } from "@clerk/clerk-expo";
 import * as Haptics from "expo-haptics";
 import * as ImagePicker from "expo-image-picker";
 import ProfileSkeleton from "@/components/profile/ProfileSkeliton";
+import { logError } from "@/utils/sentry/sentry"; // Added Sentry import
 
 const THEME = {
   colors: {
@@ -216,8 +217,13 @@ const ProfilePage: React.FC = () => {
         url: shareUrl,
         title: `@${user.name}'s Profile`,
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error sharing profile:", error);
+      // Log error to Sentry
+      logError(error, {
+        context: "ProfilePage.handleShareProfile",
+        userId: user.id ? "[REDACTED_USER_ID]" : "undefined",
+      });
       Alert.alert("Error", "Unable to share profile. Please try again.");
     }
   };
@@ -260,17 +266,27 @@ const ProfilePage: React.FC = () => {
           body: blob,
         });
         if (!uploadRes.ok) throw new Error("Upload failed");
-      } catch (error) {
+      } catch (error: any) {
         console.error("Image upload error:", error);
+        // Log error to Sentry
+        logError(error, {
+          context: "ProfilePage.uploadImageToR2.upload",
+          fileName: name,
+        });
         throw error;
       }
 
       // 4. Construct public CDN URL
-      const publicUrl = `https://r2-image-cdn.letsdebate0.workers.dev/letsdebate-media/${key}`;
+      const publicUrl = `https://r2-image-cdn.letsdebate0.workers.dev/letsdebate-media/  ${key}`;
       setNewCloudUrl(publicUrl);
       setNewImageUri(uri);
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
+      // Log error to Sentry
+      logError(err, {
+        context: "ProfilePage.uploadImageToR2",
+        uri: uri ? "[REDACTED_URI]" : "undefined",
+      });
       Alert.alert("Upload Error", "Unable to upload image. Please try again.");
     } finally {
       setUploading(false);
@@ -400,8 +416,13 @@ const ProfilePage: React.FC = () => {
       } else {
         throw new Error(result.message || "Update failed");
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error updating profile image:", error);
+      // Log error to Sentry
+      logError(error, {
+        context: "ProfilePage.handleSaveImage",
+        newCloudUrl: newCloudUrl ? "[REDACTED_URL]" : "undefined",
+      });
       Alert.alert("Error", "Failed to update profile image. Please try again.");
     } finally {
       setUpdating(false);
@@ -494,8 +515,13 @@ const ProfilePage: React.FC = () => {
       } else {
         throw new Error(result.message || "Update failed");
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error updating about text:", error);
+      // Log error to Sentry
+      logError(error, {
+        context: "ProfilePage.handleSaveAbout",
+        newAboutTextLength: newAboutText.length,
+      });
       Alert.alert("Error", "Failed to update bio. Please try again.");
     } finally {
       setUpdatingAbout(false);
@@ -523,8 +549,12 @@ const ProfilePage: React.FC = () => {
       if (profileData.success) setUser(profileData.data);
       if (debatesData.success) setDebates(debatesData.data);
       setDataFetched(true);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error fetching profile data:", error);
+      // Log error to Sentry
+      logError(error, {
+        context: "ProfilePage.fetchProfileData",
+      });
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -556,7 +586,14 @@ const ProfilePage: React.FC = () => {
             debateImage: debate.image || "",
           },
         });
-      } catch (err) {
+      } catch (err: any) {
+        console.error("Error joining debate:", err);
+        // Log error to Sentry
+        logError(err, {
+          context: "ProfilePage.handleJoinPress",
+          debateId: debate.id ? "[REDACTED_DEBATE_ID]" : "undefined",
+          userId: userId ? "[REDACTED_USER_ID]" : "undefined",
+        });
         Alert.alert("Error", "Unable to join debate. Please try again.");
       } finally {
         setJoiningDebateId(null);
@@ -570,8 +607,12 @@ const ProfilePage: React.FC = () => {
       await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       await clerk.signOut();
       router.replace("/onboarding");
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error signing out:", error);
+      // Log error to Sentry
+      logError(error, {
+        context: "ProfilePage.handleLogout",
+      });
     }
   };
 

@@ -22,6 +22,7 @@ import { useAuthToken } from "@/hook/clerk/useFetchjwtToken";
 import { useRouter } from "expo-router";
 import { useAuth } from "@clerk/clerk-expo";
 import ProfileCard from "@/components/explore/profiles/profile-cards";
+import { logError } from "@/utils/sentry/sentry"; // Added Sentry import
 
 const THEME = {
   colors: {
@@ -146,6 +147,10 @@ const ExploreDebatesPage = () => {
       } catch (err: any) {
         if (!isMountedRef.current) return;
         setFetchError(err.message || "Failed to load explore feed");
+        // Log error to Sentry
+        logError(err, {
+          context: "ExploreDebatesPage.fetchExploreDebates",
+        });
       } finally {
         if (!isMountedRef.current) return;
         setLoading(false);
@@ -233,6 +238,12 @@ const ExploreDebatesPage = () => {
       } catch (err: any) {
         if (!isMountedRef.current) return;
         setFetchError(err.message || "Search failed");
+        // Log error to Sentry
+        logError(err, {
+          context: "ExploreDebatesPage.performDebateSearch",
+          query: query ? "[REDACTED_QUERY]" : "undefined",
+          page,
+        });
         if (retryCount.current < maxRetries) {
           retryCount.current++;
           setTimeout(
@@ -296,6 +307,11 @@ const ExploreDebatesPage = () => {
       } catch (err: any) {
         if (!isMountedRef.current) return;
         setFetchError(err.message || "Profile search failed");
+        // Log error to Sentry
+        logError(err, {
+          context: "ExploreDebatesPage.performProfileSearch",
+          query: query ? "[REDACTED_QUERY]" : "undefined",
+        });
         if (retryCount.current < maxRetries) {
           retryCount.current++;
           setTimeout(
@@ -373,7 +389,14 @@ const ExploreDebatesPage = () => {
             debateImage: debate.debate?.image || "",
           },
         });
-      } catch (err) {
+      } catch (err: any) {
+        console.error("Error joining debate:", err);
+        // Log error to Sentry
+        logError(err, {
+          context: "ExploreDebatesPage.handleJoinDebate",
+          debateId: debate.id ? "[REDACTED_DEBATE_ID]" : "undefined",
+          userId: userId ? "[REDACTED_USER_ID]" : "undefined",
+        });
         Alert.alert("Error", "Unable to join. Please try again.");
       } finally {
         setJoiningDebateId(null);
@@ -483,7 +506,7 @@ const ExploreDebatesPage = () => {
 
     const participantCount = item.debate?.participantCount ?? 0;
     const base =
-      process.env.EXPO_PUBLIC_SHARE_URL || "https://links-dev.dtrue.online";
+      process.env.EXPO_PUBLIC_SHARE_URL || "https://links-dev.dtrue.online  ";
     const shareUrl = `${base}/debate/${item.debate?.id ?? item.id}`;
 
     const handleShare = async (e?: any) => {
@@ -496,8 +519,13 @@ const ExploreDebatesPage = () => {
           message: `${item?.title ?? "Join this debate"}\n\n${shareUrl}`,
           url: shareUrl,
         });
-      } catch (err) {
+      } catch (err: any) {
         console.warn("Share failed", err);
+        // Log error to Sentry
+        logError(err, {
+          context: "ExploreDebatesPage.handleShare",
+          debateId: item.id ? "[REDACTED_DEBATE_ID]" : "undefined",
+        });
       }
     };
 

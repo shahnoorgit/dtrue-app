@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import React, { useState, useCallback } from "react";
 import {
   Text,
   TextInput,
@@ -18,6 +18,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import { cyberpunkTheme } from "@/constants/theme";
 import { useFocusEffect } from "@react-navigation/native";
+import { logError } from "@/utils/sentry/sentry";
 
 export default function SignUpScreen() {
   const { isLoaded, signUp, setActive } = useSignUp();
@@ -93,6 +94,13 @@ export default function SignUpScreen() {
       setIsSubmitting(false);
     } catch (err: any) {
       console.error(JSON.stringify(err, null, 2));
+
+      // Log error to Sentry
+      logError(err, {
+        context: "SignUpScreen.onSignUpPress",
+        emailAddress: emailAddress ? "[REDACTED_EMAIL]" : "undefined",
+      });
+
       Alert.alert(
         "Sign Up Failed",
         err?.errors?.[0]?.message || "An error occurred during sign up"
@@ -122,6 +130,14 @@ export default function SignUpScreen() {
         router.replace("/boarding");
       } else {
         console.error(JSON.stringify(signUpAttempt, null, 2));
+
+        // Log unexpected status to Sentry
+        logError(new Error("SignUp verification not complete"), {
+          context: "SignUpScreen.onVerifyPress",
+          status: signUpAttempt.status,
+          emailAddress: emailAddress ? "[REDACTED_EMAIL]" : "undefined",
+        });
+
         Alert.alert(
           "Verification Error",
           "Unable to verify your account. Please try again."
@@ -129,6 +145,14 @@ export default function SignUpScreen() {
       }
     } catch (err: any) {
       console.error(JSON.stringify(err, null, 2));
+
+      // Log error to Sentry
+      logError(err, {
+        context: "SignUpScreen.onVerifyPress",
+        emailAddress: emailAddress ? "[REDACTED_EMAIL]" : "undefined",
+        codeProvided: !!code,
+      });
+
       Alert.alert(
         "Verification Failed",
         err?.errors?.[0]?.message || "Invalid verification code"

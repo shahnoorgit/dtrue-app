@@ -29,6 +29,7 @@ import InputBar from "../components/InputBar";
 import ModalSheet from "../components/ModalSheet";
 import DebateEndedResults from "./ResultsScreen";
 import { router } from "expo-router";
+import { logError } from "@/utils/sentry/sentry"; // Added Sentry import
 
 export default function DebateRoom() {
   const { debateId, debateImage, clerkId } = useLocalSearchParams();
@@ -107,6 +108,11 @@ export default function DebateRoom() {
       }
     } catch (err: any) {
       console.error("Failed to fetch ended room results:", err);
+      // Log error to Sentry
+      logError(err, {
+        context: "DebateRoom.fetchEndedRoomResults",
+        debateId: debateId ? `[REDACTED_DEBATE_ID]` : "undefined",
+      });
     } finally {
       setLoadingInitial(false);
     }
@@ -156,6 +162,12 @@ export default function DebateRoom() {
       }
     } catch (err: any) {
       console.error(err);
+      // Log error to Sentry
+      logError(err, {
+        context: "DebateRoom.fetchDebateRoomAndLikedUserIds",
+        debateId: debateId ? `[REDACTED_DEBATE_ID]` : "undefined",
+      });
+
       if (err.response?.status === 401) {
         await refreshToken();
         fetchDebateRoomAndLikedUserIds();
@@ -187,6 +199,14 @@ export default function DebateRoom() {
         setNextPage(data.data.nextPage);
       }
     } catch (err: any) {
+      // Log error to Sentry
+      logError(err, {
+        context: "DebateRoom.fetchOpinions",
+        debateId: debateId ? `[REDACTED_DEBATE_ID]` : "undefined",
+        page,
+        sort,
+      });
+
       if (err.response?.status === 401) {
         await refreshToken();
         fetchOpinions();
@@ -231,6 +251,14 @@ export default function DebateRoom() {
         }, 300);
       }
     } catch (err: any) {
+      // Log error to Sentry
+      logError(err, {
+        context: "DebateRoom.onSubmit",
+        debateId: debateId ? `[REDACTED_DEBATE_ID]` : "undefined",
+        stance,
+        userOpinionLength: userOpinion.length,
+      });
+
       if (err.response?.status === 401) {
         await refreshToken();
         onSubmit();
@@ -262,6 +290,13 @@ export default function DebateRoom() {
         }
       }
     } catch (err: any) {
+      // Log error to Sentry
+      logError(err, {
+        context: "DebateRoom.handleLike",
+        debateId: debateId ? `[REDACTED_DEBATE_ID]` : "undefined",
+        userId: userId ? `[REDACTED_USER_ID]` : "undefined",
+      });
+
       if (err.response?.status === 401) {
         await refreshToken();
         handleLike(userId);

@@ -21,6 +21,7 @@ import axios from "axios";
 import { cyberpunkTheme } from "@/constants/theme";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuthToken } from "@/hook/clerk/useFetchjwtToken";
+import { logError } from "@/utils/sentry/sentry"; // Added Sentry import
 
 // Duration Options
 const DURATION_OPTIONS = [
@@ -122,15 +123,25 @@ export default function CreateDebateRoomScreen() {
         if (!uploadRes.ok) throw new Error("Upload failed");
       } catch (error) {
         console.error("Image upload error:", error);
+        // Log error to Sentry
+        logError(error, {
+          context: "CreateDebateRoomScreen.uploadToR2",
+          fileName: name,
+        });
         throw error;
       }
 
       // 4. Construct public CDN URL
-      const publicUrl = `https://r2-image-cdn.letsdebate0.workers.dev/letsdebate-media/${key}`;
+      const publicUrl = `https://r2-image-cdn.letsdebate0.workers.dev/letsdebate-media/  ${key}`;
       setCloudUrl(publicUrl);
       setImageUri(uri);
     } catch (err) {
       console.error(err);
+      // Log error to Sentry
+      logError(err, {
+        context: "CreateDebateRoomScreen.uploadToR2",
+        uri: uri ? "[REDACTED_URI]" : "undefined",
+      });
       Alert.alert("Upload Error", "Unable to upload image. Please try again.");
     } finally {
       setUploading(false);
@@ -221,6 +232,14 @@ export default function CreateDebateRoomScreen() {
         ]);
       }
     } catch (err: any) {
+      // Log error to Sentry
+      logError(err, {
+        context: "CreateDebateRoomScreen.handleSubmit",
+        title: title ? "[REDACTED_TITLE]" : "undefined",
+        descriptionLength: description.length,
+        selectedDuration,
+      });
+
       if (err.response?.status === 400) {
         Alert.alert("Notice", "You already have an active debate.");
       } else {
