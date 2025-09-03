@@ -23,6 +23,7 @@ import * as Haptics from "expo-haptics";
 import * as ImagePicker from "expo-image-picker";
 import ProfileSkeleton from "@/components/profile/ProfileSkeliton";
 import { logError } from "@/utils/sentry/sentry"; // Added Sentry import
+import { invalidateUserCache } from "../_layout";
 
 const THEME = {
   colors: {
@@ -277,7 +278,7 @@ const ProfilePage: React.FC = () => {
       }
 
       // 4. Construct public CDN URL
-      const publicUrl = `https://r2-image-cdn.letsdebate0.workers.dev/letsdebate-media/  ${key}`;
+      const publicUrl = `https://r2-image-cdn.letsdebate0.workers.dev/letsdebate-media/${key}`;
       setNewCloudUrl(publicUrl);
       setNewImageUri(uri);
     } catch (err: any) {
@@ -605,6 +606,7 @@ const ProfilePage: React.FC = () => {
   const handleLogout = async () => {
     try {
       await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      await invalidateUserCache();
       await clerk.signOut();
       router.replace("/onboarding");
     } catch (error: any) {

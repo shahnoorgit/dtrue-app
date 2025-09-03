@@ -759,7 +759,7 @@ export default function OnboardingScreen() {
             await new Promise((resolve) => setTimeout(resolve, 500));
             router.replace("/(tabs)");
             setTimeout(() => {
-              router.replace("/(tabs)/profile");
+              router.replace("/(tabs)");
             }, 1000);
           } else {
             console.error("Failed to create user");

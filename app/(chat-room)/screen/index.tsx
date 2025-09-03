@@ -29,7 +29,7 @@ import InputBar from "../components/InputBar";
 import ModalSheet from "../components/ModalSheet";
 import DebateEndedResults from "./ResultsScreen";
 import { router } from "expo-router";
-import { logError } from "@/utils/sentry/sentry"; // Added Sentry import
+import { logError } from "@/utils/sentry/sentry";
 
 export default function DebateRoom() {
   const { debateId, debateImage, clerkId } = useLocalSearchParams();
@@ -59,8 +59,47 @@ export default function DebateRoom() {
   const [endedRoomResults, setEndedRoomResults] = useState<any>(null);
   const [loadingInitial, setLoadingInitial] = useState(true);
 
+  // New state for dynamic image fetching
+  const [fetchedDebateImage, setFetchedDebateImage] = useState<string | null>(
+    null
+  );
+  const [loadingImage, setLoadingImage] = useState(false);
+
   const [page, setPage] = useState(1);
   const [sort, setSort] = useState<"score" | "votes" | "date">("date");
+
+  // Compute final image to use
+  const finalDebateImage = useMemo(() => {
+    if (debateImage) {
+      return Array.isArray(debateImage) ? debateImage[0] : debateImage;
+    }
+    return fetchedDebateImage;
+  }, [debateImage, fetchedDebateImage]);
+
+  // Fetch public debate details for image
+  const fetchPublicDebateDetails = useCallback(async () => {
+    if (!debateId || debateImage) return; // Don't fetch if image is already provided
+
+    setLoadingImage(true);
+    try {
+      const response = await axios.get(
+        `${process.env.EXPO_PUBLIC_BASE_URL}/debate-room/get-room-public-details/${debateId}`
+      );
+
+      if (response.data.success && response.data.data.image) {
+        setFetchedDebateImage(response.data.data.image);
+        console.log("[IMAGE] Fetched debate image from public API");
+      }
+    } catch (err: any) {
+      console.error("Failed to fetch public debate details:", err);
+      logError(err, {
+        context: "DebateRoom.fetchPublicDebateDetails",
+        debateId: debateId ? `[REDACTED_DEBATE_ID]` : "undefined",
+      });
+    } finally {
+      setLoadingImage(false);
+    }
+  }, [debateId, debateImage]);
 
   // Timer effect
   useEffect(() => {
@@ -94,6 +133,11 @@ export default function DebateRoom() {
     }
   }, [debateDescription]);
 
+  // Fetch public debate details when component mounts
+  useEffect(() => {
+    fetchPublicDebateDetails();
+  }, [fetchPublicDebateDetails]);
+
   const fetchEndedRoomResults = useCallback(async () => {
     if (!debateId || !token) return;
 
@@ -108,7 +152,6 @@ export default function DebateRoom() {
       }
     } catch (err: any) {
       console.error("Failed to fetch ended room results:", err);
-      // Log error to Sentry
       logError(err, {
         context: "DebateRoom.fetchEndedRoomResults",
         debateId: debateId ? `[REDACTED_DEBATE_ID]` : "undefined",
@@ -162,7 +205,6 @@ export default function DebateRoom() {
       }
     } catch (err: any) {
       console.error(err);
-      // Log error to Sentry
       logError(err, {
         context: "DebateRoom.fetchDebateRoomAndLikedUserIds",
         debateId: debateId ? `[REDACTED_DEBATE_ID]` : "undefined",
@@ -199,7 +241,6 @@ export default function DebateRoom() {
         setNextPage(data.data.nextPage);
       }
     } catch (err: any) {
-      // Log error to Sentry
       logError(err, {
         context: "DebateRoom.fetchOpinions",
         debateId: debateId ? `[REDACTED_DEBATE_ID]` : "undefined",
@@ -251,7 +292,6 @@ export default function DebateRoom() {
         }, 300);
       }
     } catch (err: any) {
-      // Log error to Sentry
       logError(err, {
         context: "DebateRoom.onSubmit",
         debateId: debateId ? `[REDACTED_DEBATE_ID]` : "undefined",
@@ -290,7 +330,6 @@ export default function DebateRoom() {
         }
       }
     } catch (err: any) {
-      // Log error to Sentry
       logError(err, {
         context: "DebateRoom.handleLike",
         debateId: debateId ? `[REDACTED_DEBATE_ID]` : "undefined",
@@ -532,18 +571,17 @@ export default function DebateRoom() {
           agreePct={endedRoomResults.agreementRatio}
           opinions={[]}
           debateTitle={debateTitle}
-          debateImage={
-            Array.isArray(debateImage) ? debateImage[0] : debateImage
-          }
+          debateImage={finalDebateImage}
           insets={insets}
           isDebateEnded={true}
+          loadingImage={loadingImage}
         />
 
         <DebateEndedResults
           results={endedRoomResults}
           insets={insets}
           debateTitle={debateTitle}
-          debateImage={debateImage}
+          debateImage={finalDebateImage}
         />
       </SafeAreaView>
     );
@@ -563,8 +601,9 @@ export default function DebateRoom() {
         agreePct={agreePct}
         opinions={opinions}
         debateTitle={debateTitle}
-        debateImage={Array.isArray(debateImage) ? debateImage[0] : debateImage}
+        debateImage={finalDebateImage}
         insets={insets}
+        loadingImage={loadingImage}
       />
 
       {!loadingOpinions ? (
@@ -604,12 +643,13 @@ export default function DebateRoom() {
           agreePct={agreePct}
           setShowModal={setShowModal}
           debateDescription={debateDescription}
-          debateImage={debateImage}
+          debateImage={finalDebateImage}
           debateTitle={debateTitle}
           timeRemaining={timeRemaining}
           opinions={opinions}
           insets={insets}
           debateId={debateId}
+          loadingImage={loadingImage}
         />
       )}
     </SafeAreaView>

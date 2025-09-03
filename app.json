@@ -11,9 +11,7 @@
       "resizeMode": "cover",
       "backgroundColor": "#0A0E13"
     },
-    "assetBundlePatterns": [
-      "**/*"
-    ],
+    "assetBundlePatterns": ["**/*"],
     "userInterfaceStyle": "automatic",
     "jsEngine": "hermes",
     "newArchEnabled": true,
@@ -36,16 +34,22 @@
       "intentFilters": [
         {
           "action": "VIEW",
-          "category": [
-            "BROWSABLE",
-            "DEFAULT"
-          ],
+          "category": ["BROWSABLE", "DEFAULT"],
           "autoVerify": true,
           "data": [
             {
               "scheme": "https",
               "host": "links-dev.dtrue.online",
               "pathPrefix": "/"
+            }
+          ]
+        },
+        {
+          "action": "VIEW",
+          "category": ["BROWSABLE", "DEFAULT"],
+          "data": [
+            {
+              "scheme": "dtrue"
             }
           ]
         }

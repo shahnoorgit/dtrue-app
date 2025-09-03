@@ -95,7 +95,7 @@ export default function SignInScreen() {
         await new Promise((r) => setTimeout(r, 400));
         router.replace("/(tabs)");
         // fallback redirect
-        setTimeout(() => router.replace("/(tabs)/profile"), 1000);
+        setTimeout(() => router.replace("/(tabs)"), 1000);
       } else {
         console.error("signInAttempt", signInAttempt);
         // Log unexpected non-complete status to Sentry

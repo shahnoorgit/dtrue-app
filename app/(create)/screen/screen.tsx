@@ -132,7 +132,7 @@ export default function CreateDebateRoomScreen() {
       }
 
       // 4. Construct public CDN URL
-      const publicUrl = `https://r2-image-cdn.letsdebate0.workers.dev/letsdebate-media/  ${key}`;
+      const publicUrl = `https://r2-image-cdn.letsdebate0.workers.dev/letsdebate-media/${key}`;
       setCloudUrl(publicUrl);
       setImageUri(uri);
     } catch (err) {
