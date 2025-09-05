@@ -271,6 +271,12 @@ const handleDeepLinkNavigation = (
     return;
   }
 
+  // Handle trending deeplink
+  if (path === "trending") {
+    router.replace("/(tabs)/trending");
+    return;
+  }
+
   console.log("[DEEP LINK] Unknown path, ignoring:", path);
 };
 
