@@ -228,7 +228,7 @@ export default function CreateDebateRoomScreen() {
       }
       if (data.success) {
         Alert.alert("Success", "Debate created!", [
-          { text: "OK", onPress: () => router.push("/(tabs)/debates") },
+          { text: "OK", onPress: () => router.push("/(tabs)") },
         ]);
       }
     } catch (err: any) {

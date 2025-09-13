@@ -22,7 +22,7 @@ import { useAuth } from "@clerk/clerk-expo";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { logError } from "@/utils/sentry/sentry"; // Added Sentry import
+import { logError } from "@/utils/sentry/sentry";
 
 const DEBATES_STORAGE_KEY = "cached_debates";
 const DEBATES_TIMESTAMP_KEY = "cached_debates_timestamp";
@@ -31,7 +31,7 @@ const SCROLL_POSITION_KEY = "saved_scroll_offset";
 const CACHE_EXPIRY = 1000 * 60 * 60; // 1 hour
 const tabBarHeight = 70;
 const screenHeight = Dimensions.get("window").height;
-const HEADER_HEIGHT = 110; // keep same visual spacing as before
+const HEADER_HEIGHT = 110;
 
 export default function DebateFeed() {
   const [debates, setDebates] = useState([]);
@@ -41,10 +41,12 @@ export default function DebateFeed() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
+  const [unseenCount, setUnseenCount] = useState(0); // 🔹 new state
+
   const { getToken } = useAuth();
   const router = useRouter();
   const tokenRef = useRef(null);
-  const momentumRef = useRef(false); // updated logic: true while momentum scroll is happening
+  const momentumRef = useRef(false);
   const scrollY = useRef(new Animated.Value(0)).current;
   const flatListRef = useRef(null);
   const scrollOffsetRef = useRef(0);
@@ -61,24 +63,20 @@ export default function DebateFeed() {
 
       tokenRef.current = await getToken({ template: "lets_debate_jwt" });
       fetchDebates(null, true);
+      fetchUnseenCount(); // 🔹 fetch unseen count
     };
     initialize();
 
-    // persist scroll offset when component unmounts
     return () => {
       try {
         AsyncStorage.setItem(
           SCROLL_POSITION_KEY,
           scrollOffsetRef.current.toString()
         );
-      } catch (e) {
-        /* ignore */
-      }
+      } catch (e) {}
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // restore scroll position once we have data
   useEffect(() => {
     if (isInitialMount.current && debates.length > 0 && flatListRef.current) {
       const restoreScroll = async () => {
@@ -95,14 +93,12 @@ export default function DebateFeed() {
     }
   }, [debates]);
 
-  // cache debates after changes (preserve your previous behaviour)
   useEffect(() => {
     if (debates.length > 0 && !refreshing && !loadingMore && !loading) {
       cacheDebates(debates);
     }
   }, [debates, refreshing, loadingMore, loading]);
 
-  // save cursor whenever it changes to avoid stale writes on unmount
   useEffect(() => {
     if (cursor !== null && cursor !== undefined) {
       AsyncStorage.setItem(CURSOR_STORAGE_KEY, cursor).catch(() => {});
@@ -120,10 +116,7 @@ export default function DebateFeed() {
       return cachedData ? JSON.parse(cachedData) : [];
     } catch (error: any) {
       console.warn("Error loading cached debates:", error);
-      // Log error to Sentry
-      logError(error, {
-        context: "DebateFeed.loadCachedDebates",
-      });
+      logError(error, { context: "DebateFeed.loadCachedDebates" });
       return [];
     }
   };
@@ -136,13 +129,28 @@ export default function DebateFeed() {
       ]);
     } catch (error: any) {
       console.warn("Error caching debates:", error);
-      // Log error to Sentry
       logError(error, {
         context: "DebateFeed.cacheDebates",
         debatesCount: data.length,
       });
     }
   };
+
+  const fetchUnseenCount = useCallback(async () => {
+    if (!tokenRef.current) return;
+    try {
+      const url = `${process.env.EXPO_PUBLIC_BASE_URL}/notifications/unseen-count`;
+      const { data } = await axios.get(url, {
+        headers: { Authorization: `Bearer ${tokenRef.current}` },
+      });
+      if (data?.success) {
+        setUnseenCount(data.data.unseenCount);
+      }
+    } catch (error: any) {
+      console.warn("Error fetching unseen count:", error);
+      logError(error, { context: "DebateFeed.fetchUnseenCount" });
+    }
+  }, []);
 
   const fetchDebates = useCallback(
     async (fetchCursor = null, shouldRefresh = false) => {
@@ -176,7 +184,6 @@ export default function DebateFeed() {
           }
         }
       } catch (error: any) {
-        // Log error to Sentry
         logError(error, {
           context: "DebateFeed.fetchDebates",
           cursor: fetchCursor ? "[REDACTED_CURSOR]" : "null",
@@ -184,23 +191,16 @@ export default function DebateFeed() {
         });
 
         if (error.response?.status === 401) {
-          // 🔑 Handle expired/invalid token
-          console.log("Got 401 — refreshing token and retrying feed fetch");
           try {
             tokenRef.current = await getToken({ template: "lets_debate_jwt" });
             return fetchDebates(fetchCursor, shouldRefresh);
           } catch (tokenErr: any) {
-            console.error("Error refreshing token:", tokenErr);
-            // Log token refresh error to Sentry
             logError(tokenErr, {
               context: "DebateFeed.fetchDebates.tokenRefresh",
             });
           }
         } else if (error.response?.status === 404) {
-          // 🎯 404 likely means empty feed
           console.log("Feed not found — no debates available for this query");
-        } else {
-          console.error("Error fetching debates:", error);
         }
       } finally {
         setLoading(false);
@@ -215,11 +215,11 @@ export default function DebateFeed() {
     if (!loading && !refreshing) {
       setRefreshing(true);
       fetchDebates(null, true);
+      fetchUnseenCount(); // refresh unseen count too
     }
-  }, [fetchDebates, loading, refreshing]);
+  }, [fetchDebates, loading, refreshing, fetchUnseenCount]);
 
   const onEndReachedCallback = useCallback(() => {
-    // only load more if we are NOT in momentum scrolling, to prevent duplicate triggers
     if (
       !momentumRef.current &&
       hasNextPage &&
@@ -347,7 +347,6 @@ export default function DebateFeed() {
     []
   );
 
-  // header translate animation
   const headerTranslate = scrollY.interpolate({
     inputRange: [0, 120],
     outputRange: [0, -120],
@@ -361,7 +360,6 @@ export default function DebateFeed() {
         backgroundColor: "#080F12",
       }}
     >
-      {/* Animated header — visually same as before but slides up on scroll */}
       <Animated.View
         style={{
           transform: [{ translateY: headerTranslate }],
@@ -372,7 +370,6 @@ export default function DebateFeed() {
           zIndex: 10,
         }}
       >
-        {/* Subtle gradient overlay for depth */}
         <LinearGradient
           colors={["rgba(0, 0, 0, 1)", "rgba(8, 15, 18, 0.95)"]}
           style={{
@@ -387,7 +384,6 @@ export default function DebateFeed() {
             borderBottomColor: "rgba(255, 255, 255, 0.08)",
           }}
         >
-          {/* Left side - Logo and Brand */}
           <View
             style={{
               flexDirection: "row",
@@ -395,7 +391,6 @@ export default function DebateFeed() {
               flex: 1,
             }}
           >
-            {/* Modern logo container with subtle glow effect */}
             <View
               style={{
                 width: 42,
@@ -425,7 +420,6 @@ export default function DebateFeed() {
               />
             </View>
 
-            {/* Brand name with modern typography */}
             <View>
               <Text
                 style={{
@@ -460,11 +454,9 @@ export default function DebateFeed() {
           >
             <Pressable
               hitSlop={10}
-              onPress={() =>
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-              }
+              onPress={() => router.push("/(noti)/screen/screen")}
               style={({ pressed }) => ({
-                width: 56, // larger hit area
+                width: 56,
                 height: 56,
                 borderRadius: 28,
                 backgroundColor: pressed
@@ -477,7 +469,6 @@ export default function DebateFeed() {
                   ? "rgba(255, 255, 255, 0.16)"
                   : "rgba(255, 255, 255, 0.06)",
                 transform: [{ scale: pressed ? 0.96 : 1 }],
-                // subtle shadow so the badge pops more
                 shadowColor: "#000",
                 shadowOffset: { width: 0, height: 1 },
                 shadowOpacity: 0.12,
@@ -488,45 +479,44 @@ export default function DebateFeed() {
             >
               <Icon
                 name='bell-outline'
-                size={28} // bigger icon
+                size={28}
                 color='rgba(255, 255, 255, 0.95)'
               />
 
-              {/* Modern notification badge */}
-              <View
-                style={{
-                  position: "absolute",
-                  top: 4, // sit a bit more on top of the bell
-                  right: 4,
-                  minWidth: 10,
-                  height: 12,
-                  paddingHorizontal: 3,
-                  borderRadius: 10,
-                  backgroundColor: "#FF4757",
-                  justifyContent: "center",
-                  alignItems: "center",
-                  borderWidth: 1.25,
-                  borderColor: "rgba(0,0,0,0.65)",
-                  // badge shadow
-                  shadowColor: "#FF4757",
-                  shadowOffset: { width: 0, height: 2 },
-                  shadowOpacity: 0.35,
-                  shadowRadius: 3,
-                  elevation: 6,
-                }}
-              >
-                <Text
+              {unseenCount > 0 && (
+                <View
                   style={{
-                    color: "#FFFFFF",
-                    fontSize: 8,
-                    fontWeight: "700",
-                    lineHeight: 8,
-                    paddingHorizontal: 0,
+                    position: "absolute",
+                    top: 4,
+                    right: 4,
+                    minWidth: 10,
+                    height: 12,
+                    paddingHorizontal: 3,
+                    borderRadius: 10,
+                    backgroundColor: "#FF4757",
+                    justifyContent: "center",
+                    alignItems: "center",
+                    borderWidth: 1.25,
+                    borderColor: "rgba(0,0,0,0.65)",
+                    shadowColor: "#FF4757",
+                    shadowOffset: { width: 0, height: 2 },
+                    shadowOpacity: 0.35,
+                    shadowRadius: 3,
+                    elevation: 6,
                   }}
                 >
-                  8
-                </Text>
-              </View>
+                  <Text
+                    style={{
+                      color: "#FFFFFF",
+                      fontSize: 8,
+                      fontWeight: "700",
+                      lineHeight: 8,
+                    }}
+                  >
+                    {unseenCount}
+                  </Text>
+                </View>
+              )}
             </Pressable>
           </View>
         </LinearGradient>
@@ -555,7 +545,6 @@ export default function DebateFeed() {
           ListEmptyComponent={renderEmptyComponent}
           ItemSeparatorComponent={() => <View style={{ height: 16 }} />}
           onScroll={(event) => {
-            // update Animated.Value and also keep track of offset for saving
             Animated.event(
               [{ nativeEvent: { contentOffset: { y: scrollY } } }],
               { useNativeDriver: false }
@@ -597,7 +586,7 @@ export default function DebateFeed() {
             ) : null
           }
           contentContainerStyle={{
-            paddingTop: HEADER_HEIGHT, // keep visual spacing as before
+            paddingTop: HEADER_HEIGHT,
             paddingBottom: insets.bottom + tabBarHeight,
             flexGrow: 1,
           }}
