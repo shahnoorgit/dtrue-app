@@ -97,6 +97,7 @@
       "typedRoutes": true
     },
     "extra": {
+      "posthogApiKey": "phc_j1d6CVG1Ba0xEWy1VTtX4QrdUubcQzq8xi6zCrNeL0n",
       "router": {
         "origin": "https://links-dev.dtrue.online"
       },

@@ -24,6 +24,8 @@ import Constants from "expo-constants";
 import "./globals.css";
 import * as Sentry from "@sentry/react-native";
 import { setSentryUser, logError } from "@/utils/sentry/sentry";
+import { PostHogProvider } from "posthog-react-native";
+import { posthog } from "@/lib/posthog/posthog";
 
 // Prevent the splash screen from auto-hiding. We will control this manually.
 SplashScreen.preventAutoHideAsync();
@@ -648,19 +650,21 @@ export default Sentry.wrap(function RootLayout() {
             barStyle='light-content'
             backgroundColor={cyberpunkTheme.colors.background.dark}
           />
-          <LinearGradient
-            colors={
-              cyberpunkTheme.colors.gradients.background as [string, string]
-            }
-            className='absolute inset-0'
-          />
+          <PostHogProvider autocapture={false} client={posthog}>
+            <LinearGradient
+              colors={
+                cyberpunkTheme.colors.gradients.background as [string, string]
+              }
+              className='absolute inset-0'
+            />
 
-          <SentryUserWrapper />
-          <InitialStateNavigator />
-          <RuntimeDeepLinkHandlerWrapper />
+            <SentryUserWrapper />
+            <InitialStateNavigator />
+            <RuntimeDeepLinkHandlerWrapper />
 
-          {/* Slot renders the current page determined by the navigator */}
-          <Slot />
+            {/* Slot renders the current page determined by the navigator */}
+            <Slot />
+          </PostHogProvider>
         </View>
       </ErrorBoundary>
     </ClerkProvider>
