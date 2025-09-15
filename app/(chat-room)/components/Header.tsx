@@ -11,6 +11,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { formatTimeRemaining } from "../utils";
+import { posthog } from "@/lib/posthog/posthog";
 
 interface HeaderProps {
   timeRemaining: number | null;
@@ -55,7 +56,12 @@ const Header: React.FC<HeaderProps> = ({
 
           <TouchableOpacity
             style={styles.titleContainer}
-            onPress={() => setShowModal(true)}
+            onPress={() => {
+              posthog.capture("debate_header_tapped", {
+                debateTitle: debateTitle ? "[REDACTED_TITLE]" : "undefined",
+              });
+              setShowModal(true);
+            }}
             activeOpacity={0.7}
           >
             <Text style={styles.titleText} numberOfLines={1}>

@@ -20,6 +20,7 @@ import { useAuthToken } from "@/hook/clerk/useFetchjwtToken";
 import { useRouter } from "expo-router";
 import { useAuth } from "@clerk/clerk-expo";
 import { logError } from "@/utils/sentry/sentry"; // Added Sentry import
+import { posthog } from "@/lib/posthog/posthog";
 
 // Define theme as a constant outside the component to avoid recreation on re-render
 const THEME = {
@@ -48,6 +49,11 @@ const TrendingDebatesPage = () => {
   const retryCount = useRef(0);
   const maxRetries = 3;
   const isMountedRef = useRef(true);
+
+  useEffect(() => {
+    posthog.screen("Trending Debates");
+    posthog.capture("Viewed Trending Debates");
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -128,6 +134,7 @@ const TrendingDebatesPage = () => {
   }, [token]);
 
   const handleRefresh = useCallback(() => {
+    posthog.capture("Refreshed Trending Debates");
     setRefreshing(true);
     retryCount.current = 0;
     fetchTrendingDebates();
@@ -135,6 +142,11 @@ const TrendingDebatesPage = () => {
 
   const openDebate = useCallback(async (debate) => {
     if (!debate) return;
+    posthog.capture("Entered Debate", {
+      debateId: debate.id ? "[REDACTED_DEBATE_ID]" : "undefined",
+      title: debate.title,
+    });
+    setJoiningDebateId(debate.id);
     router.push({
       pathname: "/(chat-room)/screen",
       params: {
@@ -148,6 +160,11 @@ const TrendingDebatesPage = () => {
   const handleShare = useCallback(async (e, debate) => {
     // prevent parent Pressable from triggering
     e?.stopPropagation?.();
+
+    posthog.capture("Shared Debate", {
+      debateId: debate.id ? "[REDACTED_DEBATE_ID]" : "undefined",
+      title: debate.title,
+    });
 
     const base =
       process.env.EXPO_PUBLIC_SHARE_URL || "https://links-dev.dtrue.online  ";

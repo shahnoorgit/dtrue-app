@@ -21,6 +21,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useAuthToken } from "@/hook/clerk/useFetchjwtToken";
 import { LinearGradient } from "expo-linear-gradient";
 import { logError } from "@/utils/sentry/sentry"; // Added Sentry import
+import { posthog } from "@/lib/posthog/posthog";
 
 const { width } = Dimensions.get("window");
 
@@ -83,7 +84,14 @@ export default function FollowingsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [hasMore, setHasMore] = useState(true);
 
-  console.log(backTo, "backTo");
+  useEffect(() => {
+    posthog.screen("Following screen");
+    posthog.capture("page_viewed", {
+      page: "Following",
+      userId: id ? "[REDACTED_USER_ID]" : "undefined",
+      username: username ? "[REDACTED_USERNAME]" : "undefined",
+    });
+  }, [username, id, token]);
 
   const fetchFollowings = useCallback(
     async (loadMore = false, retry = false, refresh = false) => {

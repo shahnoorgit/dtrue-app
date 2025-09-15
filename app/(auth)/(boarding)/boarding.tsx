@@ -29,6 +29,7 @@ import {
 import { cyberpunkTheme } from "@/constants/theme";
 import { useCreateUser } from "@/hook/useCreateUser";
 import { useAuthToken } from "@/hook/clerk/useFetchjwtToken";
+import { posthog } from "@/lib/posthog/posthog";
 
 // Interest Modal Component using NativeWind classes
 const InterestModal = ({
@@ -658,6 +659,11 @@ export default function OnboardingScreen() {
     validateUsername,
   } = useUsernameValidator();
 
+  useEffect(() => {
+    posthog.screen("Onboarding screen");
+    posthog.capture("page_viewed", { page: "onboarding" });
+  }, []);
+
   const { profileImage, profileImageUrl, isUploading, pickImage, takePhoto } =
     useImageHandler();
 
@@ -755,7 +761,7 @@ export default function OnboardingScreen() {
         try {
           const response = await addUser(submissionData);
           if (response) {
-            console.log("User created successfully:", response);
+            posthog.capture("user_onboarding_completed", {});
             await new Promise((resolve) => setTimeout(resolve, 500));
             router.replace("/(tabs)");
             setTimeout(() => {

@@ -23,6 +23,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { logError } from "@/utils/sentry/sentry";
+import { posthog } from "@/lib/posthog/posthog";
 
 const DEBATES_STORAGE_KEY = "cached_debates";
 const DEBATES_TIMESTAMP_KEY = "cached_debates_timestamp";
@@ -52,6 +53,11 @@ export default function DebateFeed() {
   const scrollOffsetRef = useRef(0);
   const isInitialMount = useRef(true);
   const insets = useSafeAreaInsets();
+
+  useEffect(() => {
+    posthog.screen("Debate Feed");
+    posthog.capture("Viewed Debate Feed");
+  }, []);
 
   useEffect(() => {
     const initialize = async () => {
@@ -233,7 +239,8 @@ export default function DebateFeed() {
   }, [fetchDebates, cursor, hasNextPage, loading, loadingMore, refreshing]);
 
   const handleExplorePress = useCallback(() => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    posthog.capture("Explore More Debates Pressed");
+
     router.push("/explore");
   }, [router]);
 

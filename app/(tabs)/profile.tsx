@@ -24,6 +24,7 @@ import * as ImagePicker from "expo-image-picker";
 import ProfileSkeleton from "@/components/profile/ProfileSkeliton";
 import { logError } from "@/utils/sentry/sentry"; // Added Sentry import
 import { invalidateUserCache } from "../_layout";
+import { posthog } from "@/lib/posthog/posthog";
 
 const THEME = {
   colors: {
@@ -167,6 +168,11 @@ const ProfilePage: React.FC = () => {
   const { username, userId } =
     (route.params as { username: string; userId: string }) || {};
 
+  useEffect(() => {
+    posthog.screen("Profile Screen");
+    posthog.capture("Viewed its own Profile Screen", { username });
+  }, [userId, username]);
+
   const fetchWithAuthRetry = useCallback(
     async (url: string): Promise<Response> => {
       let currentToken = token;
@@ -206,7 +212,10 @@ const ProfilePage: React.FC = () => {
   // Share profile function
   const handleShareProfile = async () => {
     if (!user) return;
-
+    posthog.capture("Shared Own Profile", {
+      userId: user.id ? "[REDACTED_USER_ID]" : "undefined",
+      username: user.username,
+    });
     try {
       await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
@@ -266,7 +275,17 @@ const ProfilePage: React.FC = () => {
           headers: { "Content-Type": "image/jpeg" },
           body: blob,
         });
-        if (!uploadRes.ok) throw new Error("Upload failed");
+        if (!uploadRes.ok) {
+          posthog.capture("Image Upload Failed", {
+            status: uploadRes.status,
+          });
+          throw new Error("Upload failed");
+        }
+        posthog.capture("Image Uploaded to R2", {
+          key,
+          fileName: name,
+          userId: userId ? "[REDACTED_USER_ID]" : "undefined",
+        });
       } catch (error: any) {
         console.error("Image upload error:", error);
         // Log error to Sentry
@@ -577,6 +596,10 @@ const ProfilePage: React.FC = () => {
   const handleJoinPress = useCallback(
     async (debate: Debate) => {
       if (!token || !debate?.id) return;
+      posthog.capture("Joining Debate", {
+        debateId: debate.id ? "[REDACTED_DEBATE_ID]" : "undefined",
+        userId: userId ? "[REDACTED_USER_ID]" : "undefined",
+      });
       setJoiningDebateId(debate.id);
       try {
         router.push({
@@ -605,6 +628,9 @@ const ProfilePage: React.FC = () => {
 
   const handleLogout = async () => {
     try {
+      posthog.capture("User Logged Out", {
+        userId: userId ? "[REDACTED_USER_ID]" : "undefined",
+      });
       await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       await invalidateUserCache();
       await clerk.signOut();
@@ -737,6 +763,10 @@ const ProfilePage: React.FC = () => {
           <View style={styles.statsContainer}>
             <Pressable
               onPress={() => {
+                posthog.capture("Viewed Followers List", {
+                  userId: user.id ? "[REDACTED_USER_ID]" : "undefined",
+                  username: user.username,
+                });
                 router.push({
                   pathname: "/(follow)/followers/[id]/page",
                   params: {
@@ -757,6 +787,10 @@ const ProfilePage: React.FC = () => {
             </Pressable>
             <Pressable
               onPress={() => {
+                posthog.capture("Viewed Following List", {
+                  userId: user.id ? "[REDACTED_USER_ID]" : "undefined",
+                  username: user.username,
+                });
                 router.push({
                   pathname: "/(follow)/following/[id]/page",
                   params: {

@@ -23,6 +23,7 @@ import { useRouter } from "expo-router";
 import { useAuth } from "@clerk/clerk-expo";
 import ProfileCard from "@/components/explore/profiles/profile-cards";
 import { logError } from "@/utils/sentry/sentry"; // Added Sentry import
+import { posthog } from "@/lib/posthog/posthog";
 
 const THEME = {
   colors: {
@@ -64,6 +65,11 @@ const ExploreDebatesPage = () => {
   const isMountedRef = useRef(true);
   const searchTimeout = useRef<NodeJS.Timeout>();
   const limit = 5;
+
+  useEffect(() => {
+    posthog.screen("Explore Debates");
+    posthog.capture("Viewed Explore Debates");
+  }, []);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -187,6 +193,12 @@ const ExploreDebatesPage = () => {
     async (query: string, page = 1) => {
       if (!token || !query) return;
 
+      posthog.capture("Searched Debates", {
+        query: query ? "[REDACTED_QUERY]" : "undefined",
+        page,
+        searchType,
+      });
+
       setFetchError(null);
       setIsSearching(true);
       if (page === 1) setSearchLoading(true);
@@ -276,6 +288,10 @@ const ExploreDebatesPage = () => {
       setSearchLoading(true);
 
       try {
+        posthog.capture("Searched Profiles", {
+          query: query ? "[REDACTED_QUERY]" : "undefined",
+          searchType,
+        });
         const res = await fetch(
           `${
             process.env.EXPO_PUBLIC_BASE_URL
@@ -342,6 +358,7 @@ const ExploreDebatesPage = () => {
   );
 
   const handleRefresh = useCallback(() => {
+    posthog.capture("Refreshed Explore Debates");
     setRefreshing(true);
     retryCount.current = 0;
     if (searchQuery.trim()) {
@@ -379,7 +396,11 @@ const ExploreDebatesPage = () => {
     async (debate: any) => {
       if (!token || !debate?.id) return;
       setJoiningDebateId(debate.id);
-
+      posthog.capture("Joined Debate", {
+        debateId: debate.id ? "[REDACTED_DEBATE_ID]" : "undefined",
+        title: debate.title,
+        userId: userId ? "[REDACTED_USER_ID]" : "undefined",
+      });
       try {
         router.push({
           pathname: "/(chat-room)/screen",
@@ -406,6 +427,11 @@ const ExploreDebatesPage = () => {
   );
 
   const handleProfilePress = useCallback((profile: any) => {
+    if (!profile?.id) return;
+    posthog.capture("Viewed Profile from Explore", {
+      profileId: profile.id ? "[REDACTED_PROFILE_ID]" : "undefined",
+      userId: userId ? "[REDACTED_USER_ID]" : "undefined",
+    });
     router.push({
       pathname: "/(tabs)/[id]/page",
       params: { id: profile.id },
@@ -514,6 +540,10 @@ const ExploreDebatesPage = () => {
       e?.stopPropagation?.();
 
       try {
+        posthog.capture("Shared Debate from explore screen", {
+          debateId: item.id ? "[REDACTED_DEBATE_ID]" : "undefined",
+          title: item.title,
+        });
         await Share.share({
           title: item?.title ?? "Debate",
           message: `${item?.title ?? "Join this debate"}\n\n${shareUrl}`,

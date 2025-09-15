@@ -13,7 +13,8 @@ import { router } from "expo-router";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import { cyberpunkTheme } from "@/constants/theme";
 import * as Haptics from "expo-haptics";
-import { logError } from "@/utils/sentry/sentry"; // Added Sentry import
+import { logError } from "@/utils/sentry/sentry";
+import { posthog } from "@/lib/posthog/posthog";
 
 const { width } = Dimensions.get("window");
 
@@ -55,10 +56,10 @@ const slides = [
 
 export default function OnboardingScreen() {
   const [currentIndex, setCurrentIndex] = useState(0);
-  const scrollX = useRef(new Animated.Value(0)).current;
+  const scrollX = useRef(new Animated.Value(0)).current; // <-- fixed: declare scrollX
   const slidesRef = useRef(null);
 
-  // Animation values
+  // Animation values (kept for polish)
   const iconScale = useRef(new Animated.Value(0.5)).current;
   const titleOpacity = useRef(new Animated.Value(0)).current;
   const descriptionTranslateY = useRef(new Animated.Value(20)).current;
@@ -102,42 +103,16 @@ export default function OnboardingScreen() {
     setCurrentIndex(newIndex);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     animateContent();
-
-    if (newIndex === slides.length - 1) {
-      Animated.sequence([
-        Animated.delay(300),
-        Animated.parallel([
-          Animated.timing(buttonWidth, {
-            toValue: 200,
-            duration: 600,
-            useNativeDriver: false,
-            easing: Easing.out(Easing.back(1)),
-          }),
-          Animated.timing(buttonTextOpacity, {
-            toValue: 1,
-            duration: 400,
-            delay: 300,
-            useNativeDriver: true,
-          }),
-        ]),
-      ]).start();
-    } else {
-      Animated.parallel([
-        Animated.timing(buttonWidth, {
-          toValue: 64,
-          duration: 300,
-          useNativeDriver: false,
-        }),
-        Animated.timing(buttonTextOpacity, {
-          toValue: 0,
-          duration: 200,
-          useNativeDriver: true,
-        }),
-      ]).start();
-    }
   }).current;
 
   useEffect(() => {
+    // Minimal analytics: record the screen once on mount.
+    try {
+      posthog.screen("Onboarding");
+    } catch (err) {
+      console.warn("PostHog screen call failed", err);
+    }
+
     Animated.timing(skipButtonAnim, {
       toValue: 1,
       duration: 800,
@@ -169,16 +144,22 @@ export default function OnboardingScreen() {
     };
   }, [isLastSlide, buttonScale, skipButtonAnim]);
 
-  useEffect(() => {
-    console.log("ONBOARDING SCREEN: Onboarding page loaded successfully");
-  }, []);
-
   const viewConfig = useRef({ viewAreaCoveragePercentThreshold: 50 }).current;
 
   const scrollTo = useCallback(() => {
     if (currentIndex < slides.length - 1) {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      slidesRef.current.scrollToIndex({ index: currentIndex + 1 });
+      try {
+        slidesRef.current?.scrollToIndex({ index: currentIndex + 1 });
+        // Track user progressing through onboarding
+        try {
+          posthog.capture("onboarding_next", { nextIndex: currentIndex + 1 });
+        } catch (e) {
+          console.warn("PostHog capture failed", e);
+        }
+      } catch (error: any) {
+        console.error("Scroll error:", error);
+      }
     } else {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       Animated.sequence([
@@ -204,14 +185,26 @@ export default function OnboardingScreen() {
         }),
       ]).start(() => {
         try {
+          // Track completion
+          try {
+            posthog.capture("onboarding_completed");
+          } catch (e) {
+            console.warn("PostHog capture failed", e);
+          }
           router.replace("/(auth)/sign-in");
         } catch (error: any) {
           console.error("Navigation error:", error);
-          // Log error to Sentry
           logError(error, {
             context: "OnboardingScreen.scrollTo",
             action: "navigate_to_signin",
           });
+          try {
+            posthog.capture("onboarding_navigation_error", {
+              message: error?.message,
+            });
+          } catch (e) {
+            /* ignore */
+          }
         }
       });
     }
@@ -220,14 +213,25 @@ export default function OnboardingScreen() {
   const skipOnboarding = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     try {
+      posthog.capture("onboarding_skipped");
+    } catch (e) {
+      console.warn("PostHog capture failed", e);
+    }
+    try {
       router.replace("/(auth)/sign-in");
     } catch (error: any) {
       console.error("Navigation error:", error);
-      // Log error to Sentry
       logError(error, {
         context: "OnboardingScreen.skipOnboarding",
         action: "skip_to_signin",
       });
+      try {
+        posthog.capture("onboarding_navigation_error", {
+          message: error?.message,
+        });
+      } catch (e) {
+        /* ignore */
+      }
     }
   }, []);
 
@@ -286,7 +290,7 @@ export default function OnboardingScreen() {
         pagingEnabled
         showsHorizontalScrollIndicator={false}
         bounces={false}
-        keyExtractor={(item, idx) => idx.toString()}
+        keyExtractor={(item) => item.id}
         onScroll={Animated.event(
           [{ nativeEvent: { contentOffset: { x: scrollX } } }],
           { useNativeDriver: false }

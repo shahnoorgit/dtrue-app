@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -22,6 +22,7 @@ import { cyberpunkTheme } from "@/constants/theme";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuthToken } from "@/hook/clerk/useFetchjwtToken";
 import { logError } from "@/utils/sentry/sentry"; // Added Sentry import
+import { posthog } from "@/lib/posthog/posthog";
 
 // Duration Options
 const DURATION_OPTIONS = [
@@ -81,6 +82,11 @@ export default function CreateDebateRoomScreen() {
 
   const router = useRouter();
 
+  useEffect(() => {
+    posthog.screen("Create Debate Room screen");
+    posthog.capture("page_viewed", { page: "create_debate_room" });
+  }, []);
+
   const requestPermission = async (
     permissionFn: () => Promise<any>,
     errorMsg: string
@@ -97,6 +103,7 @@ export default function CreateDebateRoomScreen() {
 
   const uploadToR2 = async (uri: string) => {
     setUploading(true);
+    posthog.capture("image_upload_initiated");
     try {
       // 1. Generate a unique file key
       const name = uri.split("/").pop() || "upload.jpg";
@@ -207,6 +214,11 @@ export default function CreateDebateRoomScreen() {
   const handleSubmit = async () => {
     if (!validate()) return;
     setSubmitting(true);
+    posthog.capture("debate_room_creation_initiated", {
+      title: title ? "[REDACTED_TITLE]" : "undefined",
+      descriptionLength: description.length,
+      selectedDuration,
+    });
     try {
       const { data } = await axios.post(
         `${process.env.EXPO_PUBLIC_BASE_URL}/debate-room`,
@@ -238,6 +250,11 @@ export default function CreateDebateRoomScreen() {
         title: title ? "[REDACTED_TITLE]" : "undefined",
         descriptionLength: description.length,
         selectedDuration,
+      });
+
+      posthog.capture("debate_room_creation_failed", {
+        error: err.message ? "[REDACTED_ERROR_MESSAGE]" : "undefined",
+        status: err.response?.status || "no_response",
       });
 
       if (err.response?.status === 400) {

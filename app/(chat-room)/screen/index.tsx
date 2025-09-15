@@ -30,6 +30,7 @@ import ModalSheet from "../components/ModalSheet";
 import DebateEndedResults from "./ResultsScreen";
 import { router } from "expo-router";
 import { logError } from "@/utils/sentry/sentry";
+import { posthog } from "@/lib/posthog/posthog";
 
 export default function DebateRoom() {
   const { debateId, debateImage, clerkId } = useLocalSearchParams();
@@ -58,6 +59,14 @@ export default function DebateRoom() {
   const [isDebateActive, setIsDebateActive] = useState<boolean | null>(null);
   const [endedRoomResults, setEndedRoomResults] = useState<any>(null);
   const [loadingInitial, setLoadingInitial] = useState(true);
+
+  useEffect(() => {
+    posthog.screen("Debate Room screen");
+    posthog.capture("page_viewed", {
+      page: "debate_room",
+      debateId: debateId ? "[REDACTED_DEBATE_ID]" : "undefined",
+    });
+  }, [debateId]);
 
   // New state for dynamic image fetching
   const [fetchedDebateImage, setFetchedDebateImage] = useState<string | null>(
@@ -272,6 +281,10 @@ export default function DebateRoom() {
   const onSubmit = useCallback(async () => {
     if (!userOpinion.trim() || !stance || isLoading || !isDebateActive) return;
     setIsLoading(true);
+    posthog.capture("opinion_submitted", {
+      debateId: debateId ? "[REDACTED_DEBATE_ID]" : "undefined",
+      stance,
+    });
     try {
       const { data } = await axios.put(
         `${process.env.EXPO_PUBLIC_BASE_URL}/debate-participant/opinion`,
@@ -311,6 +324,7 @@ export default function DebateRoom() {
   // Handle like/unlike
   const handleLike = async (userId: string) => {
     if (!token || !isDebateActive) return;
+
     try {
       const { data } = await axios.put(
         `${process.env.EXPO_PUBLIC_BASE_URL}/debate-participant/opinion/like/${userId}/${debateId}`,
@@ -318,6 +332,10 @@ export default function DebateRoom() {
         { headers: { Authorization: `Bearer ${token}` } }
       );
       if (data.success) {
+        posthog.capture("opinion_liked", {
+          debateId: debateId ? "[REDACTED_DEBATE_ID]" : "undefined",
+          likedUserId: userId ? "[REDACTED_USER_ID]" : "undefined",
+        });
         setOpinions((prevOpinions) =>
           prevOpinions.map((op) =>
             op.userId === userId ? { ...op, upvotes: data.data.likes } : op
