@@ -19,6 +19,7 @@ import { useAuthToken } from "@/hook/clerk/useFetchjwtToken";
 import { router } from "expo-router";
 import { useAuth } from "@clerk/clerk-expo";
 import { theme } from "@/app/(chat-room)/theme";
+import { trackDebateJoined, trackContentShared } from "@/lib/posthog/events";
 
 const { width } = Dimensions.get("window");
 // Slightly wider card
@@ -145,6 +146,13 @@ const DebateCard = ({ debate, onJoinPress }) => {
       Alert.alert("Please wait", "Authenticating...");
       return;
     }
+    
+    // Track debate join
+    trackDebateJoined({
+      debateId: debate.id,
+      source: 'feed',
+      debateTitle: debate.title
+    });
 
     setLoading(true);
     try {
@@ -193,6 +201,13 @@ const DebateCard = ({ debate, onJoinPress }) => {
     async (e) => {
       // prevent parent Pressable from triggering
       e?.stopPropagation?.();
+
+      // Track content share
+      trackContentShared({
+        type: 'debate',
+        contentId: debate.id,
+        method: 'native'
+      });
 
       const base =
         process.env.EXPO_PUBLIC_SHARE_URL || "https://links-dev.dtrue.online";

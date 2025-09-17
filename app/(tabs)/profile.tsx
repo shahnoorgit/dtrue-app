@@ -24,7 +24,11 @@ import * as ImagePicker from "expo-image-picker";
 import ProfileSkeleton from "@/components/profile/ProfileSkeliton";
 import { logError } from "@/utils/sentry/sentry"; // Added Sentry import
 import { invalidateUserCache } from "../_layout";
-import { posthog } from "@/lib/posthog/posthog";
+import {
+  trackContentShared,
+  trackProfileViewed,
+  trackUserLoggedOut,
+} from "@/lib/posthog/events";
 
 const THEME = {
   colors: {
@@ -169,8 +173,14 @@ const ProfilePage: React.FC = () => {
     (route.params as { username: string; userId: string }) || {};
 
   useEffect(() => {
-    posthog.screen("Profile Screen");
-    posthog.capture("Viewed its own Profile Screen", { username });
+    // Track profile view when user views their own profile
+    if (username) {
+      trackProfileViewed({
+        profileId: userId || "",
+        source: "own_profile",
+        isOwnProfile: true,
+      });
+    }
   }, [userId, username]);
 
   const fetchWithAuthRetry = useCallback(
@@ -212,9 +222,10 @@ const ProfilePage: React.FC = () => {
   // Share profile function
   const handleShareProfile = async () => {
     if (!user) return;
-    posthog.capture("Shared Own Profile", {
-      userId: user.id ? "[REDACTED_USER_ID]" : "undefined",
-      username: user.username,
+    trackContentShared({
+      type: "profile",
+      contentId: user.id,
+      method: "native",
     });
     try {
       await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -258,7 +269,7 @@ const ProfilePage: React.FC = () => {
     try {
       // 1. Generate a unique file key
       const name = uri.split("/").pop() || "profile.jpg";
-      const key = `profile-images/${Date.now()}_${name}`;
+      const key = `letsdebate-media/profiles/${Date.now()}_${name}`;
 
       // 2. Get signed URL from backend
       const response = await fetchWithAuthRetry(
@@ -276,16 +287,9 @@ const ProfilePage: React.FC = () => {
           body: blob,
         });
         if (!uploadRes.ok) {
-          posthog.capture("Image Upload Failed", {
-            status: uploadRes.status,
-          });
           throw new Error("Upload failed");
         }
-        posthog.capture("Image Uploaded to R2", {
-          key,
-          fileName: name,
-          userId: userId ? "[REDACTED_USER_ID]" : "undefined",
-        });
+        // Image upload success - not critical for user behavior analysis
       } catch (error: any) {
         console.error("Image upload error:", error);
         // Log error to Sentry
@@ -297,7 +301,7 @@ const ProfilePage: React.FC = () => {
       }
 
       // 4. Construct public CDN URL
-      const publicUrl = `https://r2-image-cdn.letsdebate0.workers.dev/letsdebate-media/${key}`;
+      const publicUrl = `https://r2-image-cdn.letsdebate0.workers.dev/${key}`;
       setNewCloudUrl(publicUrl);
       setNewImageUri(uri);
     } catch (err: any) {
@@ -596,10 +600,6 @@ const ProfilePage: React.FC = () => {
   const handleJoinPress = useCallback(
     async (debate: Debate) => {
       if (!token || !debate?.id) return;
-      posthog.capture("Joining Debate", {
-        debateId: debate.id ? "[REDACTED_DEBATE_ID]" : "undefined",
-        userId: userId ? "[REDACTED_USER_ID]" : "undefined",
-      });
       setJoiningDebateId(debate.id);
       try {
         router.push({
@@ -628,8 +628,8 @@ const ProfilePage: React.FC = () => {
 
   const handleLogout = async () => {
     try {
-      posthog.capture("User Logged Out", {
-        userId: userId ? "[REDACTED_USER_ID]" : "undefined",
+      trackUserLoggedOut({
+        reason: "manual",
       });
       await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       await invalidateUserCache();
@@ -763,10 +763,6 @@ const ProfilePage: React.FC = () => {
           <View style={styles.statsContainer}>
             <Pressable
               onPress={() => {
-                posthog.capture("Viewed Followers List", {
-                  userId: user.id ? "[REDACTED_USER_ID]" : "undefined",
-                  username: user.username,
-                });
                 router.push({
                   pathname: "/(follow)/followers/[id]/page",
                   params: {
@@ -787,10 +783,6 @@ const ProfilePage: React.FC = () => {
             </Pressable>
             <Pressable
               onPress={() => {
-                posthog.capture("Viewed Following List", {
-                  userId: user.id ? "[REDACTED_USER_ID]" : "undefined",
-                  username: user.username,
-                });
                 router.push({
                   pathname: "/(follow)/following/[id]/page",
                   params: {

@@ -20,7 +20,7 @@ import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import { cyberpunkTheme } from "@/constants/theme";
 import { useFocusEffect } from "@react-navigation/native";
 import { logError } from "@/utils/sentry/sentry";
-import { posthog } from "@/lib/posthog/posthog";
+import { trackUserSignedIn } from "@/lib/posthog/events";
 
 export default function SignInScreen() {
   const { signIn, setActive, isLoaded } = useSignIn();
@@ -46,10 +46,7 @@ export default function SignInScreen() {
   const [resetPasswordError, setResetPasswordError] = useState("");
   const [resetError, setResetError] = useState("");
 
-  useEffect(() => {
-    posthog.screen("Sign In screen");
-    posthog.capture("page_viewed", { page: "sign_in" });
-  }, []);
+  // Removed page view tracking - not critical for user behavior analysis
 
   // Reset transient UI / errors when this screen is focused
   useFocusEffect(
@@ -99,18 +96,16 @@ export default function SignInScreen() {
         await setActive({ session: signInAttempt.createdSessionId });
         // small pause so session is fully registered
         await new Promise((r) => setTimeout(r, 400));
-        posthog.capture("user_signed_in", {
-          emailAddress: emailAddress ? "[REDACTED_EMAIL]" : "undefined",
+        trackUserSignedIn({
+          email: emailAddress,
+          method: "email",
         });
         router.replace("/(tabs)");
         // fallback redirect
         setTimeout(() => router.replace("/(tabs)"), 1000);
       } else {
         console.error("signInAttempt", signInAttempt);
-        posthog.capture("sign_in_attempt_not_complete", {
-          status: signInAttempt.status,
-          emailAddress: emailAddress ? "[REDACTED_EMAIL]" : "undefined", // Redact PII
-        });
+        // Sign in attempt not complete - no need to track this as it's not a meaningful user action
 
         // Log unexpected non-complete status to Sentry
         logError(new Error("SignIn attempt not complete"), {
@@ -185,9 +180,6 @@ export default function SignInScreen() {
         "Check your email",
         "We sent a reset code to your inbox. Enter it below with a new password."
       );
-      posthog.capture("password_reset_requested", {
-        resetEmail: resetEmail ? "[REDACTED_EMAIL]" : "undefined", // Redact PII
-      });
     } catch (err: any) {
       console.error("requestResetCode err:", JSON.stringify(err, null, 2));
       // Log the actual error to Sentry
@@ -238,9 +230,6 @@ export default function SignInScreen() {
 
       if (result.status === "complete") {
         // Set active session (user is signed in with new password)
-        posthog.capture("password_reset_completed", {
-          resetEmail: resetEmail ? "[REDACTED_EMAIL]" : "undefined", // Redact PII
-        });
         await setActive({ session: result.createdSessionId });
         Alert.alert(
           "Password reset",

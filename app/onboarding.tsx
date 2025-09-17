@@ -14,7 +14,10 @@ import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import { cyberpunkTheme } from "@/constants/theme";
 import * as Haptics from "expo-haptics";
 import { logError } from "@/utils/sentry/sentry";
-import { posthog } from "@/lib/posthog/posthog";
+import {
+  trackOnboardingCompleted,
+  trackOnboardingAbandoned,
+} from "@/lib/posthog/events";
 
 const { width } = Dimensions.get("window");
 
@@ -151,12 +154,6 @@ export default function OnboardingScreen() {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       try {
         slidesRef.current?.scrollToIndex({ index: currentIndex + 1 });
-        // Track user progressing through onboarding
-        try {
-          posthog.capture("onboarding_next", { nextIndex: currentIndex + 1 });
-        } catch (e) {
-          console.warn("PostHog capture failed", e);
-        }
       } catch (error: any) {
         console.error("Scroll error:", error);
       }
@@ -185,12 +182,6 @@ export default function OnboardingScreen() {
         }),
       ]).start(() => {
         try {
-          // Track completion
-          try {
-            posthog.capture("onboarding_completed");
-          } catch (e) {
-            console.warn("PostHog capture failed", e);
-          }
           router.replace("/(auth)/sign-in");
         } catch (error: any) {
           console.error("Navigation error:", error);
@@ -198,13 +189,6 @@ export default function OnboardingScreen() {
             context: "OnboardingScreen.scrollTo",
             action: "navigate_to_signin",
           });
-          try {
-            posthog.capture("onboarding_navigation_error", {
-              message: error?.message,
-            });
-          } catch (e) {
-            /* ignore */
-          }
         }
       });
     }
@@ -212,11 +196,10 @@ export default function OnboardingScreen() {
 
   const skipOnboarding = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    try {
-      posthog.capture("onboarding_skipped");
-    } catch (e) {
-      console.warn("PostHog capture failed", e);
-    }
+    trackOnboardingAbandoned({
+      step: currentIndex,
+      reason: "skipped",
+    });
     try {
       router.replace("/(auth)/sign-in");
     } catch (error: any) {
@@ -225,13 +208,6 @@ export default function OnboardingScreen() {
         context: "OnboardingScreen.skipOnboarding",
         action: "skip_to_signin",
       });
-      try {
-        posthog.capture("onboarding_navigation_error", {
-          message: error?.message,
-        });
-      } catch (e) {
-        /* ignore */
-      }
     }
   }, []);
 

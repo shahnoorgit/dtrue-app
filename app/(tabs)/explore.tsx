@@ -23,7 +23,12 @@ import { useRouter } from "expo-router";
 import { useAuth } from "@clerk/clerk-expo";
 import ProfileCard from "@/components/explore/profiles/profile-cards";
 import { logError } from "@/utils/sentry/sentry"; // Added Sentry import
-import { posthog } from "@/lib/posthog/posthog";
+import {
+  trackSearchPerformed,
+  trackDebateJoined,
+  trackProfileViewed,
+  trackContentShared,
+} from "@/lib/posthog/events";
 
 const THEME = {
   colors: {
@@ -65,11 +70,6 @@ const ExploreDebatesPage = () => {
   const isMountedRef = useRef(true);
   const searchTimeout = useRef<NodeJS.Timeout>();
   const limit = 5;
-
-  useEffect(() => {
-    posthog.screen("Explore Debates");
-    posthog.capture("Viewed Explore Debates");
-  }, []);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -193,10 +193,10 @@ const ExploreDebatesPage = () => {
     async (query: string, page = 1) => {
       if (!token || !query) return;
 
-      posthog.capture("Searched Debates", {
-        query: query ? "[REDACTED_QUERY]" : "undefined",
-        page,
-        searchType,
+      trackSearchPerformed({
+        query: query,
+        type: "debates",
+        resultsCount: 0, // Will be updated when results come back
       });
 
       setFetchError(null);
@@ -288,9 +288,10 @@ const ExploreDebatesPage = () => {
       setSearchLoading(true);
 
       try {
-        posthog.capture("Searched Profiles", {
-          query: query ? "[REDACTED_QUERY]" : "undefined",
-          searchType,
+        trackSearchPerformed({
+          query: query,
+          type: "profiles",
+          resultsCount: 0, // Will be updated when results come back
         });
         const res = await fetch(
           `${
@@ -358,7 +359,6 @@ const ExploreDebatesPage = () => {
   );
 
   const handleRefresh = useCallback(() => {
-    posthog.capture("Refreshed Explore Debates");
     setRefreshing(true);
     retryCount.current = 0;
     if (searchQuery.trim()) {
@@ -396,10 +396,10 @@ const ExploreDebatesPage = () => {
     async (debate: any) => {
       if (!token || !debate?.id) return;
       setJoiningDebateId(debate.id);
-      posthog.capture("Joined Debate", {
-        debateId: debate.id ? "[REDACTED_DEBATE_ID]" : "undefined",
-        title: debate.title,
-        userId: userId ? "[REDACTED_USER_ID]" : "undefined",
+      trackDebateJoined({
+        debateId: debate.id,
+        source: "explore",
+        debateTitle: debate.title,
       });
       try {
         router.push({
@@ -428,9 +428,10 @@ const ExploreDebatesPage = () => {
 
   const handleProfilePress = useCallback((profile: any) => {
     if (!profile?.id) return;
-    posthog.capture("Viewed Profile from Explore", {
-      profileId: profile.id ? "[REDACTED_PROFILE_ID]" : "undefined",
-      userId: userId ? "[REDACTED_USER_ID]" : "undefined",
+    trackProfileViewed({
+      profileId: profile.id,
+      source: "explore",
+      isOwnProfile: profile.id === userId,
     });
     router.push({
       pathname: "/(tabs)/[id]/page",
@@ -540,9 +541,10 @@ const ExploreDebatesPage = () => {
       e?.stopPropagation?.();
 
       try {
-        posthog.capture("Shared Debate from explore screen", {
-          debateId: item.id ? "[REDACTED_DEBATE_ID]" : "undefined",
-          title: item.title,
+        trackContentShared({
+          type: "debate",
+          contentId: item.id,
+          method: "native",
         });
         await Share.share({
           title: item?.title ?? "Debate",

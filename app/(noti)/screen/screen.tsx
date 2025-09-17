@@ -18,7 +18,6 @@ import { useAuthToken } from "@/hook/clerk/useFetchjwtToken";
 import { useRouter } from "expo-router";
 import { useAuth } from "@clerk/clerk-expo";
 import { logError } from "@/utils/sentry/sentry";
-import { posthog } from "@/lib/posthog/posthog";
 
 // Theme (keeps your palette)
 const THEME = {
@@ -128,11 +127,6 @@ const NotificationsPage: React.FC = () => {
   const limit = 10;
 
   useEffect(() => {
-    posthog.screen("Notifications screen");
-    posthog.capture("page_viewed", { page: "notifications" });
-  }, []);
-
-  useEffect(() => {
     return () => {
       isMountedRef.current = false;
     };
@@ -207,7 +201,6 @@ const NotificationsPage: React.FC = () => {
   }, [token]);
 
   const handleRefresh = useCallback(() => {
-    posthog.capture("notifications_refreshed");
     setRefreshing(true);
     fetchNotifications(1, true);
   }, [fetchNotifications]);
@@ -268,16 +261,9 @@ const NotificationsPage: React.FC = () => {
 
   const handleNotificationPress = useCallback(
     async (notification: Notification) => {
-      // Mark as read in background if unread (don't wait for it)
       if (!notification.isSeen) {
         markAsRead(notification.id);
       }
-
-      posthog.capture("notification_clicked", {
-        notificationId: notification.id,
-        debateRoomId: notification.debateRoomId,
-        actorUserId: notification.actorUserId,
-      });
 
       // Always navigate regardless of read status
       const deeplink = notification.data?.deeplink;

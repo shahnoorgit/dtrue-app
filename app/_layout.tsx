@@ -50,20 +50,14 @@ enum UserStatus {
 }
 
 // --- POSTHOG HELPER ---
-// A small helper that safely captures events. We intentionally avoid sending
-// raw PII. If userId exists we include a short truncated id for debugging.
-const capture = (event: string, properties: Record<string, any> = {}) => {
-  try {
-    // avoid sending long identifiers; truncate userId if present
-    if (properties.userId) {
-      properties.truncatedUserId = String(properties.userId).slice(0, 8);
-      delete properties.userId;
-    }
-    posthog?.capture(event, properties);
-  } catch (err) {
-    console.warn("PostHog capture failed", err);
-  }
-};
+import {
+  trackAppOpened,
+  trackDeepLinkOpened,
+  trackAppError,
+  trackApiError,
+  identifyUser,
+  resetUser,
+} from "@/lib/posthog/events";
 
 function SentryUserWrapper() {
   const { isLoaded, isSignedIn, userId } = useAuth();
@@ -71,14 +65,10 @@ function SentryUserWrapper() {
   useEffect(() => {
     if (isLoaded && isSignedIn && userId) {
       setSentryUser(userId);
-      // PostHog: track auth state change
-      capture("user.auth", {
-        action: "signed_in",
-        userId,
-      });
+      // User is signed in - identification handled in AppOpenTracker
     } else if (isLoaded && !isSignedIn) {
       setSentryUser("");
-      capture("user.auth", { action: "signed_out" });
+      resetUser();
     }
   }, [isLoaded, isSignedIn, userId]);
 
@@ -110,10 +100,10 @@ class ErrorBoundary extends React.Component<
     console.error("ErrorBoundary caught:", error, info);
     this.setState({ errorInfo: error.message });
     // send to Sentry (already wired) and PostHog
-    capture("app.error", {
-      message: error.message,
-      stack: error.stack?.slice(0, 1000),
-      componentStack: info.componentStack?.slice(0, 1000),
+    trackAppError({
+      error: error.message,
+      component: "ErrorBoundary",
+      severity: "high",
     });
   }
 
@@ -142,8 +132,6 @@ class ErrorBoundary extends React.Component<
             <TouchableOpacity
               className='bg-blue-500 p-3 rounded-md'
               onPress={() => {
-                // track retry attempt
-                capture("app.error.retry", { action: "try_again" });
                 this.setState({ hasError: false });
               }}
             >
@@ -265,9 +253,11 @@ const handleDeepLinkNavigation = (
   userId: string | null | undefined
 ) => {
   console.log(`[DEEP LINK] Navigating to path:`, path, "with query:", query);
-  capture("deep_link.opened", { path, query });
+
+  let destination: "debate" | "profile" | "trending" | undefined;
 
   if (path.startsWith("debate/")) {
+    destination = "debate";
     const parts = path.split("/");
     const debateId = parts[1] || "";
     let debateImage = parts.slice(2).join("/");
@@ -275,39 +265,35 @@ const handleDeepLinkNavigation = (
       debateImage = decodeURIComponent(debateImage);
     } catch {}
     if (debateId) {
-      capture("deep_link.navigated", { path, destination: "debate", debateId });
       router.push({
         pathname: "/(chat-room)/screen",
         params: { clerkId: userId, debateId, debateImage },
       });
     }
-    return;
-  }
-
-  if (path.startsWith("profile/")) {
+  } else if (path.startsWith("profile/")) {
+    destination = "profile";
     const profileId = path.split("/")[1] || "";
     if (profileId) {
-      capture("deep_link.navigated", {
-        path,
-        destination: "profile",
-        profileId,
-      });
       router.push({
         pathname: "/(tabs)/[id]/page",
         params: { id: profileId },
       });
     }
-    return;
-  }
-
-  // Handle trending deeplink
-  if (path === "trending") {
-    capture("deep_link.navigated", { path, destination: "trending" });
+  } else if (path === "trending") {
+    destination = "trending";
     router.replace("/(tabs)/trending");
-    return;
   }
 
-  console.log("[DEEP LINK] Unknown path, ignoring:", path);
+  // Track deep link opened
+  trackDeepLinkOpened({
+    path,
+    source: "external",
+    destination,
+  });
+
+  if (!destination) {
+    console.log("[DEEP LINK] Unknown path, ignoring:", path);
+  }
 };
 
 function useRuntimeDeepLinkHandler() {
@@ -355,14 +341,6 @@ async function registerPushTokenIfNeeded(clerkId: string) {
       const { status } = await Notifications.requestPermissionsAsync();
       finalStatus = status;
     }
-
-    capture("push.permission", { status: finalStatus, clerkId });
-
-    if (finalStatus !== "granted") {
-      capture("push.permission.denied", { clerkId });
-      return;
-    }
-
     const tokenResp = await Notifications.getExpoPushTokenAsync({
       projectId: Constants.expoConfig?.extra?.eas?.projectId,
     });
@@ -388,10 +366,10 @@ async function registerPushTokenIfNeeded(clerkId: string) {
       const errorText = await res
         .text()
         .catch(() => "Failed to read error response");
-      capture("push.token.register_failed", {
-        status: res.status,
-        errorText,
-        clerkId,
+      trackApiError({
+        endpoint: "push-token",
+        statusCode: res.status,
+        error: errorText,
       });
       throw new Error(
         `Failed to POST push token: ${res.status} - ${errorText}`
@@ -399,7 +377,6 @@ async function registerPushTokenIfNeeded(clerkId: string) {
     }
 
     await AsyncStorage.setItem(STORAGE_KEY, currentToken);
-    capture("push.token.registered", { clerkId });
     console.log("Registered new push token and saved locally");
   } catch (err: any) {
     // *** CORRECTED: Explicitly typed 'err' ***
@@ -408,7 +385,10 @@ async function registerPushTokenIfNeeded(clerkId: string) {
         ? "Push token registration timed out"
         : "registerPushTokenIfNeeded error";
     console.error(errorMessage, err);
-    capture("push.token.error", { message: errorMessage, clerkId });
+    trackApiError({
+      endpoint: "push-token",
+      error: errorMessage,
+    });
     logError(err, { message: errorMessage, clerkId });
   }
 }
@@ -453,10 +433,6 @@ function InitialStateNavigator() {
           userStatus: UserStatus.NOT_SIGNED_IN,
           isUserStatusChecked: true,
         }));
-        capture("user.status.local", {
-          status: UserStatus.NOT_SIGNED_IN,
-          clerkId,
-        });
         return;
       }
 
@@ -468,7 +444,6 @@ function InitialStateNavigator() {
             userStatus: cachedStatus,
             isUserStatusChecked: true,
           }));
-          capture("user.status.cache", { status: cachedStatus, clerkId });
           if (cachedStatus === UserStatus.SIGNED_IN_IN_DB) {
             registerPushTokenIfNeeded(clerkId).catch(console.error);
           }
@@ -509,11 +484,6 @@ function InitialStateNavigator() {
         }
 
         await setCachedUserStatus(finalStatus, clerkId);
-        capture("user.status.checked", {
-          finalStatus,
-          httpStatus: res.status,
-          clerkId,
-        });
         setAppState((s) => ({
           ...s,
           userStatus: finalStatus,
@@ -524,7 +494,10 @@ function InitialStateNavigator() {
       } catch (err: any) {
         // *** CORRECTED: Explicitly typed 'err' ***
         console.error("[API] checkUserStatus error", err);
-        capture("user.status.check_failed", { message: err?.message, clerkId });
+        trackApiError({
+          endpoint: "user-status",
+          error: err?.message,
+        });
         logError(err, { clerkId });
         setAppState((s) => ({ ...s, retryCount: s.retryCount + 1 }));
       }
@@ -546,7 +519,11 @@ function InitialStateNavigator() {
         },
         isUserStatusChecked: true,
       }));
-      capture("user.status.retry_failed", { retryCount, userId });
+      trackApiError({
+        endpoint: "user-status",
+        error: "retry_failed",
+        retryCount,
+      });
       return;
     }
 
@@ -595,9 +572,12 @@ function InitialStateNavigator() {
           ? "link"
           : "cold_start";
 
-        capture("app.launch", {
-          launchSource,
-          initialUrl: notificationDeeplink || url,
+        trackAppOpened({
+          launchSource: launchSource as
+            | "cold_start"
+            | "notification"
+            | "deep_link",
+          isSignedIn: false, // Will be updated when auth state is known
         });
 
         setAppState((s) => ({
@@ -608,7 +588,10 @@ function InitialStateNavigator() {
       } catch (e: any) {
         // *** CORRECTED: Explicitly typed 'e' ***
         console.error("[DEEP LINK] Failed to get initial URL", e);
-        capture("app.launch.failed", { message: e?.message });
+        trackAppError({
+          error: e?.message || "Failed to get initial URL",
+          component: "InitialStateNavigator",
+        });
         setAppState((s) => ({ ...s, isInitialUrlChecked: true }));
       }
     };
@@ -645,19 +628,12 @@ function InitialStateNavigator() {
     const parsedUrl = parseIncomingUrl(initialUrl);
 
     if (parsedUrl && isSignedIn) {
-      capture("navigation.initial", {
-        reason: "deeplink",
-        parsedPath: parsedUrl.path,
-      });
       handleDeepLinkNavigation(parsedUrl.path, parsedUrl.query, router, userId);
     } else if (userStatus === UserStatus.SIGNED_IN_IN_DB) {
-      capture("navigation.initial", { destination: "home", userStatus });
       router.replace("/(tabs)");
     } else if (userStatus === UserStatus.SIGNED_IN_NOT_IN_DB) {
-      capture("navigation.initial", { destination: "boarding", userStatus });
       router.replace("/(auth)/(boarding)/boarding");
     } else {
-      capture("navigation.initial", { destination: "onboarding", userStatus });
       router.replace("/onboarding");
     }
 
@@ -690,7 +666,6 @@ function InitialStateNavigator() {
                   apiError: null,
                   isUserStatusChecked: false,
                 }));
-                capture("user.action.retry_check", { userId });
               }
             }}
           >
@@ -760,7 +735,6 @@ const invalidateUserCache = async (): Promise<void> => {
       AsyncStorage.removeItem("expoPushToken"),
     ]);
     console.log("[CACHE] Invalidated all user caches on sign out");
-    capture("user.cache.invalidated");
   } catch (error) {
     console.error("[CACHE] Error invalidating user caches:", error);
     logError(error, { context: "invalidateUserCache" });

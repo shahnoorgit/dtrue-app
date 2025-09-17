@@ -12,6 +12,7 @@ import {
   Alert,
 } from "react-native";
 import * as ImagePicker from "expo-image-picker";
+import * as ImageManipulator from "expo-image-manipulator";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import { LinearGradient } from "expo-linear-gradient";
 import { StatusBar } from "expo-status-bar";
@@ -21,8 +22,11 @@ import axios from "axios";
 import { cyberpunkTheme } from "@/constants/theme";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuthToken } from "@/hook/clerk/useFetchjwtToken";
-import { logError } from "@/utils/sentry/sentry"; // Added Sentry import
-import { posthog } from "@/lib/posthog/posthog";
+import { logError } from "@/utils/sentry/sentry";
+import {
+  trackDebateCreated,
+  trackDebateCreationFailed,
+} from "@/lib/posthog/events";
 
 // Duration Options
 const DURATION_OPTIONS = [
@@ -37,6 +41,11 @@ const DebateRoomImageSelector = ({
   uploading,
   onPick,
   onCapture,
+}: {
+  imageUri: string | null;
+  uploading: boolean;
+  onPick: () => Promise<void>;
+  onCapture: () => Promise<void>;
 }) => (
   <View>
     <TouchableOpacity
@@ -66,6 +75,14 @@ const DebateRoomImageSelector = ({
         </View>
       )}
     </TouchableOpacity>
+    <View className='flex-row justify-between'>
+      <TouchableOpacity onPress={onPick} className='p-2'>
+        <Text style={{ color: cyberpunkTheme.colors.primary }}>Pick</Text>
+      </TouchableOpacity>
+      <TouchableOpacity onPress={onCapture} className='p-2'>
+        <Text style={{ color: cyberpunkTheme.colors.primary }}>Camera</Text>
+      </TouchableOpacity>
+    </View>
   </View>
 );
 
@@ -73,19 +90,14 @@ export default function CreateDebateRoomScreen() {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [selectedDuration, setSelectedDuration] = useState(24);
-  const [imageUri, setImageUri] = useState<string | null>(null);
-  const [cloudUrl, setCloudUrl] = useState<string | null>(null);
+  const [imageUri, setImageUri] = useState<string | null>(null); // local compressed preview
+  const [cloudUrl, setCloudUrl] = useState<string | null>(null); // CDN url
   const [uploading, setUploading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [errors, setErrors] = useState({ title: "", description: "" });
   const [token, refreshToken] = useAuthToken();
 
   const router = useRouter();
-
-  useEffect(() => {
-    posthog.screen("Create Debate Room screen");
-    posthog.capture("page_viewed", { page: "create_debate_room" });
-  }, []);
 
   const requestPermission = async (
     permissionFn: () => Promise<any>,
@@ -101,15 +113,61 @@ export default function CreateDebateRoomScreen() {
     return true;
   };
 
-  const uploadToR2 = async (uri: string) => {
-    setUploading(true);
-    posthog.capture("image_upload_initiated");
-    try {
-      // 1. Generate a unique file key
-      const name = uri.split("/").pop() || "upload.jpg";
-      const key = `uploads/${Date.now()}_${name}`;
+  // ---------- Image compression helper ----------
+  const compressImage = async (
+    uri: string,
+    {
+      maxWidth = 1080,
+      compress = 0.8,
+      format = ImageManipulator.SaveFormat.JPEG,
+    } = {}
+  ): Promise<{ uri: string; width?: number; height?: number }> => {
+    // Resize + convert to JPEG
+    const result = await ImageManipulator.manipulateAsync(
+      uri,
+      [{ resize: { width: maxWidth } }],
+      { compress, format, base64: false }
+    );
+    return { uri: result.uri, width: result.width, height: result.height };
+  };
 
-      // 2. Get signed URL from backend
+  // ---------- Utility: extract filename from URI ----------
+  const getFileNameFromUri = (uri: string, fallback = "upload.jpg") => {
+    try {
+      const parts = uri.split("/");
+      const last = parts[parts.length - 1];
+      // Ensure .jpg extension
+      if (last && last.includes(".")) {
+        const name = last.split("?")[0];
+        return name.endsWith(".jpg") || name.endsWith(".jpeg")
+          ? name
+          : `${name.split(".")[0]}.jpg`;
+      }
+      return fallback;
+    } catch {
+      return fallback;
+    }
+  };
+
+  // ---------- Upload compressed image to R2 using signed URL ----------
+  const uploadToR2 = async (originalUri: string) => {
+    setUploading(true);
+    try {
+      // 1) Compress image locally
+      const compressed = await compressImage(originalUri, {
+        maxWidth: 1080,
+        compress: 0.8,
+        format: ImageManipulator.SaveFormat.JPEG,
+      });
+
+      // 2) Determine key & filename (use timestamp + original name)
+      const baseName = getFileNameFromUri(originalUri);
+      const key = `uploads/${Date.now()}_${baseName.replace(
+        /\.[^.]+$/,
+        ".jpg"
+      )}`;
+
+      // 3) Request signed URL from backend
       const { data } = await axios.get(
         `${process.env.EXPO_PUBLIC_BASE_URL}/uploads/signed-url`,
         {
@@ -119,35 +177,37 @@ export default function CreateDebateRoomScreen() {
       );
       const signedUrl: string = data.data.signedUrl;
 
-      // 3. Upload directly to R2
+      // 4) Convert compressed URI to blob and upload
       try {
-        const blob = await fetch(uri).then((r) => r.blob());
+        const blob = await (await fetch(compressed.uri)).blob();
+
         const uploadRes = await fetch(signedUrl, {
           method: "PUT",
           headers: { "Content-Type": "image/jpeg" },
           body: blob,
         });
-        if (!uploadRes.ok) throw new Error("Upload failed");
+
+        if (!uploadRes.ok) {
+          throw new Error(`Upload failed with status ${uploadRes.status}`);
+        }
       } catch (error) {
         console.error("Image upload error:", error);
-        // Log error to Sentry
         logError(error, {
           context: "CreateDebateRoomScreen.uploadToR2",
-          fileName: name,
+          fileName: baseName,
         });
         throw error;
       }
 
-      // 4. Construct public CDN URL
+      // 5) Construct public CDN URL (your existing CDN pattern)
       const publicUrl = `https://r2-image-cdn.letsdebate0.workers.dev/letsdebate-media/${key}`;
       setCloudUrl(publicUrl);
-      setImageUri(uri);
+      setImageUri(compressed.uri);
     } catch (err) {
       console.error(err);
-      // Log error to Sentry
       logError(err, {
         context: "CreateDebateRoomScreen.uploadToR2",
-        uri: uri ? "[REDACTED_URI]" : "undefined",
+        uri: originalUri ? "[REDACTED_URI]" : "undefined",
       });
       Alert.alert("Upload Error", "Unable to upload image. Please try again.");
     } finally {
@@ -155,6 +215,7 @@ export default function CreateDebateRoomScreen() {
     }
   };
 
+  // ---------- Pick from gallery ----------
   const pickImage = async () => {
     if (
       !(await requestPermission(
@@ -163,17 +224,20 @@ export default function CreateDebateRoomScreen() {
       ))
     )
       return;
+
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
       aspect: [16, 9],
-      quality: 1,
+      quality: 1, // keep highest, we'll compress ourselves
     });
-    if (!result.canceled) {
+
+    if (!result.canceled && result.assets?.[0]?.uri) {
       await uploadToR2(result.assets[0].uri);
     }
   };
 
+  // ---------- Take photo ----------
   const takePhoto = async () => {
     if (
       !(await requestPermission(
@@ -182,12 +246,14 @@ export default function CreateDebateRoomScreen() {
       ))
     )
       return;
+
     const result = await ImagePicker.launchCameraAsync({
       allowsEditing: true,
       aspect: [16, 9],
       quality: 1,
     });
-    if (!result.canceled) {
+
+    if (!result.canceled && result.assets?.[0]?.uri) {
       await uploadToR2(result.assets[0].uri);
     }
   };
@@ -214,11 +280,6 @@ export default function CreateDebateRoomScreen() {
   const handleSubmit = async () => {
     if (!validate()) return;
     setSubmitting(true);
-    posthog.capture("debate_room_creation_initiated", {
-      title: title ? "[REDACTED_TITLE]" : "undefined",
-      descriptionLength: description.length,
-      selectedDuration,
-    });
     try {
       const { data } = await axios.post(
         `${process.env.EXPO_PUBLIC_BASE_URL}/debate-room`,
@@ -239,12 +300,18 @@ export default function CreateDebateRoomScreen() {
         return handleSubmit();
       }
       if (data.success) {
+        trackDebateCreated({
+          debateId: data.data.id,
+          title: title,
+          duration: selectedDuration,
+          hasImage: !!imageUrl,
+          descriptionLength: description.length,
+        });
         Alert.alert("Success", "Debate created!", [
           { text: "OK", onPress: () => router.push("/(tabs)") },
         ]);
       }
     } catch (err: any) {
-      // Log error to Sentry
       logError(err, {
         context: "CreateDebateRoomScreen.handleSubmit",
         title: title ? "[REDACTED_TITLE]" : "undefined",
@@ -252,9 +319,10 @@ export default function CreateDebateRoomScreen() {
         selectedDuration,
       });
 
-      posthog.capture("debate_room_creation_failed", {
-        error: err.message ? "[REDACTED_ERROR_MESSAGE]" : "undefined",
-        status: err.response?.status || "no_response",
+      trackDebateCreationFailed({
+        error: err.message,
+        step: "api_call",
+        statusCode: err.response?.status,
       });
 
       if (err.response?.status === 400) {

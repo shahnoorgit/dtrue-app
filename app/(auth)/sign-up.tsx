@@ -19,7 +19,7 @@ import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import { cyberpunkTheme } from "@/constants/theme";
 import { useFocusEffect } from "@react-navigation/native";
 import { logError } from "@/utils/sentry/sentry";
-import { posthog } from "@/lib/posthog/posthog";
+import { trackUserSignedUp } from "@/lib/posthog/events";
 
 export default function SignUpScreen() {
   const { isLoaded, signUp, setActive } = useSignUp();
@@ -36,10 +36,7 @@ export default function SignUpScreen() {
   const [verificationError, setVerificationError] = useState("");
   const [secureTextEntry, setSecureTextEntry] = useState(true);
 
-  useEffect(() => {
-    posthog.screen("Sign Up screen");
-    posthog.capture("page_viewed", { page: "sign_up" });
-  }, []);
+  // Removed page view tracking - not critical for user behavior analysis
 
   // Reset transient UI / errors when screen is focused
   useFocusEffect(
@@ -92,10 +89,6 @@ export default function SignUpScreen() {
         password,
       });
 
-      posthog.capture("sign_up_initiated", {
-        emailAddress: emailAddress ? "[REDACTED_EMAIL]" : "undefined",
-      });
-
       // Send verification code by email
       await signUp.prepareEmailAddressVerification({ strategy: "email_code" });
 
@@ -137,8 +130,9 @@ export default function SignUpScreen() {
 
       if (signUpAttempt.status === "complete") {
         await setActive({ session: signUpAttempt.createdSessionId });
-        posthog.capture("user_signed_up", {
-          emailAddress: emailAddress ? "[REDACTED_EMAIL]" : "undefined",
+        trackUserSignedUp({
+          email: emailAddress,
+          method: "email",
         });
         router.replace("/boarding");
       } else {

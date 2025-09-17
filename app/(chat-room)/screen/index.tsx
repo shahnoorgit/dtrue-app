@@ -30,7 +30,7 @@ import ModalSheet from "../components/ModalSheet";
 import DebateEndedResults from "./ResultsScreen";
 import { router } from "expo-router";
 import { logError } from "@/utils/sentry/sentry";
-import { posthog } from "@/lib/posthog/posthog";
+import { trackOpinionSubmitted, trackOpinionLiked, trackDebateJoined } from "@/lib/posthog/events";
 
 export default function DebateRoom() {
   const { debateId, debateImage, clerkId } = useLocalSearchParams();
@@ -61,11 +61,13 @@ export default function DebateRoom() {
   const [loadingInitial, setLoadingInitial] = useState(true);
 
   useEffect(() => {
-    posthog.screen("Debate Room screen");
-    posthog.capture("page_viewed", {
-      page: "debate_room",
-      debateId: debateId ? "[REDACTED_DEBATE_ID]" : "undefined",
-    });
+    // Track debate joined when user enters the room
+    if (debateId) {
+      trackDebateJoined({
+        debateId: debateId as string,
+        source: 'feed'
+      });
+    }
   }, [debateId]);
 
   // New state for dynamic image fetching
@@ -281,9 +283,11 @@ export default function DebateRoom() {
   const onSubmit = useCallback(async () => {
     if (!userOpinion.trim() || !stance || isLoading || !isDebateActive) return;
     setIsLoading(true);
-    posthog.capture("opinion_submitted", {
-      debateId: debateId ? "[REDACTED_DEBATE_ID]" : "undefined",
-      stance,
+    trackOpinionSubmitted({
+      debateId: debateId as string,
+      stance: stance as 'for' | 'against',
+      opinionLength: userOpinion.length,
+      hasEvidence: userOpinion.length > 50 // Simple heuristic for evidence
     });
     try {
       const { data } = await axios.put(
@@ -332,9 +336,10 @@ export default function DebateRoom() {
         { headers: { Authorization: `Bearer ${token}` } }
       );
       if (data.success) {
-        posthog.capture("opinion_liked", {
-          debateId: debateId ? "[REDACTED_DEBATE_ID]" : "undefined",
-          likedUserId: userId ? "[REDACTED_USER_ID]" : "undefined",
+        trackOpinionLiked({
+          debateId: debateId as string,
+          likedUserId: userId as string,
+          opinionAuthorId: opinion.userId
         });
         setOpinions((prevOpinions) =>
           prevOpinions.map((op) =>

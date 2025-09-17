@@ -29,7 +29,11 @@ import {
 import { cyberpunkTheme } from "@/constants/theme";
 import { useCreateUser } from "@/hook/useCreateUser";
 import { useAuthToken } from "@/hook/clerk/useFetchjwtToken";
-import { posthog } from "@/lib/posthog/posthog";
+import { useFetchWithToken } from "@/hook/api/useFetchWithToken.";
+import {
+  trackOnboardingCompleted,
+  trackOnboardingAbandoned,
+} from "@/lib/posthog/events";
 
 // Interest Modal Component using NativeWind classes
 const InterestModal = ({
@@ -402,6 +406,7 @@ const useUsernameValidator = () => {
   const [isUsernameAvailable, setIsUsernameAvailable] = useState(null);
   const [suggestedUsernames, setSuggestedUsernames] = useState([]);
   const [debounceTimeout, setDebounceTimeout] = useState(null);
+  const { fetchWithToken } = useFetchWithToken();
 
   const generateUsernameSuggestions = useCallback((baseUsername) => {
     const suggestions = [
@@ -427,18 +432,18 @@ const useUsernameValidator = () => {
       }
       setIsCheckingUsername(true);
       try {
-        const response = await axios.get(
+        const response = await fetchWithToken(
           `${process.env.EXPO_PUBLIC_BASE_URL}/user/username/available?username=${usernameToCheck}`
         );
-        if (response.data.success && response.data.statusCode === 200) {
-          setIsUsernameAvailable(response.data.data.available);
-          if (!response.data.data.available) {
+        if (response.success && response.statusCode === 200) {
+          setIsUsernameAvailable(response.data.available);
+          if (!response.data.available) {
             generateUsernameSuggestions(usernameToCheck);
           } else {
             setSuggestedUsernames([]);
           }
         } else {
-          console.error("Username check failed:", response.data);
+          console.error("Username check failed:", response);
           setIsUsernameAvailable(null);
         }
       } catch (error) {
@@ -448,7 +453,7 @@ const useUsernameValidator = () => {
         setIsCheckingUsername(false);
       }
     },
-    [generateUsernameSuggestions]
+    [generateUsernameSuggestions, fetchWithToken]
   );
 
   const handleUsernameChange = useCallback(
@@ -528,6 +533,7 @@ const useImageHandler = () => {
   const [profileImageUrl, setProfileImageUrl] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
   const [token, refreshToken] = useAuthToken();
+  const { fetchWithToken } = useFetchWithToken();
 
   const requestPermission = async (
     permissionFn: () => Promise<any>,
@@ -551,14 +557,14 @@ const useImageHandler = () => {
       const key = `profiles/${Date.now()}_${name}`;
 
       // 2. Get signed URL from backend
-      const { data } = await axios.get(
-        `${process.env.EXPO_PUBLIC_BASE_URL}/uploads/signed-url`,
-        {
-          params: { filename: key, type: "image/jpeg" },
-          headers: { Authorization: `Bearer ${token}` },
-        }
+      const response = await fetchWithToken(
+        `${
+          process.env.EXPO_PUBLIC_BASE_URL
+        }/uploads/signed-url?filename=${encodeURIComponent(
+          key
+        )}&type=image/jpeg`
       );
-      const signedUrl: string = data.data.signedUrl;
+      const signedUrl: string = response.data.signedUrl;
 
       // 3. Upload directly to R2
       try {
@@ -575,7 +581,7 @@ const useImageHandler = () => {
       }
 
       // 4. Construct public CDN URL
-      const publicUrl = `https://r2-image-cdn.letsdebate0.workers.dev/letsdebate-media/${key}`;
+      const publicUrl = `https://r2-image-cdn.letsdebate0.workers.dev/${key}`;
       setProfileImageUrl(publicUrl);
       setProfileImage(imageUri);
       console.log("Image uploaded to R2:", publicUrl);
@@ -647,6 +653,7 @@ export default function OnboardingScreen() {
   );
   const [animatedValue] = useState(new Animated.Value(0));
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [onboardingStartTime] = useState(Date.now());
 
   const {
     username,
@@ -658,11 +665,6 @@ export default function OnboardingScreen() {
     selectSuggestedUsername,
     validateUsername,
   } = useUsernameValidator();
-
-  useEffect(() => {
-    posthog.screen("Onboarding screen");
-    posthog.capture("page_viewed", { page: "onboarding" });
-  }, []);
 
   const { profileImage, profileImageUrl, isUploading, pickImage, takePhoto } =
     useImageHandler();
@@ -761,7 +763,11 @@ export default function OnboardingScreen() {
         try {
           const response = await addUser(submissionData);
           if (response) {
-            posthog.capture("user_onboarding_completed", {});
+            trackOnboardingCompleted({
+              hasProfileImage: !!profileImageUrl,
+              username: username,
+              timeToComplete: Date.now() - onboardingStartTime,
+            });
             await new Promise((resolve) => setTimeout(resolve, 500));
             router.replace("/(tabs)");
             setTimeout(() => {

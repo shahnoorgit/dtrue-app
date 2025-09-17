@@ -24,7 +24,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useAuthToken } from "@/hook/clerk/useFetchjwtToken";
 import { Modal } from "react-native";
 import { logError } from "@/utils/sentry/sentry"; // Added Sentry import
-import { posthog } from "@/lib/posthog/posthog";
+import { trackDebateJoined } from "@/lib/posthog/events";
 
 // Define theme as a constant outside the component to avoid recreation on re-render
 const THEME = {
@@ -164,11 +164,6 @@ const Rooms = () => {
   const isMountedRef = useRef(true);
 
   useEffect(() => {
-    posthog.screen("Rooms Screen");
-    posthog.capture("Viewed Rooms Screen");
-  }, []);
-
-  useEffect(() => {
     return () => {
       isMountedRef.current = false;
     };
@@ -197,8 +192,6 @@ const Rooms = () => {
   const getCreateRoomEligibility = useCallback(async () => {
     if (!token) return;
 
-    posthog.capture("Attempted to Create Debate Room");
-
     setFetchError(null);
     try {
       setCreateRoomLoading(true);
@@ -214,9 +207,6 @@ const Rooms = () => {
       );
 
       if (!response.ok) {
-        posthog.capture("Create Debate Room Eligibility Check Failed", {
-          status: response.status,
-        });
         if (response.status === 401) {
           refreshToken();
           return;
@@ -227,7 +217,6 @@ const Rooms = () => {
 
       const data = await response.json();
       if (data && data.data == true) {
-        posthog.capture("Eligible to Create Debate Room");
         router.push("/(create)/screen/screen");
       } else {
         setShowNotEligible(true);
@@ -247,9 +236,6 @@ const Rooms = () => {
   const joinDebateRoom = useCallback(
     async (roomId) => {
       if (!token || !roomId) return;
-      posthog.capture("Joining Debate Room", {
-        roomId: roomId ? "[REDACTED_ROOM_ID]" : "undefined",
-      });
       setJoiningRoomId(roomId);
       try {
         const response = await fetch(
@@ -398,7 +384,6 @@ const Rooms = () => {
 
   const onRefresh = useCallback(() => {
     retryCount.current = 0;
-    posthog.capture("Refreshed Debate Rooms");
     setRefreshing(true);
     setTabDataCache((prev) => ({ ...prev, [activeTab]: null }));
 
@@ -412,7 +397,6 @@ const Rooms = () => {
   const handleTabChange = useCallback(
     (tab) => {
       if (tab === activeTab) return;
-      posthog.capture("Changed Debate Rooms Tab", { tab });
 
       setRooms([]);
       setActiveTab(tab);
