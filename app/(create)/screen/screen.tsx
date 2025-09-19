@@ -304,7 +304,7 @@ export default function CreateDebateRoomScreen() {
           debateId: data.data.id,
           title: title,
           duration: selectedDuration,
-          hasImage: !!imageUrl,
+          hasImage: !!imageUri,
           descriptionLength: description.length,
         });
         Alert.alert("Success", "Debate created!", [
@@ -321,16 +321,11 @@ export default function CreateDebateRoomScreen() {
 
       trackDebateCreationFailed({
         error: err.message,
-        step: "api_call",
         statusCode: err.response?.status,
       });
 
-      if (err.response?.status === 400) {
-        Alert.alert("Notice", "You already have an active debate.");
-      } else {
-        console.error(err);
-        Alert.alert("Error", "Failed to create debate room.");
-      }
+      console.error(err);
+      Alert.alert("Error", "Failed to create debate room.");
     } finally {
       setSubmitting(false);
     }

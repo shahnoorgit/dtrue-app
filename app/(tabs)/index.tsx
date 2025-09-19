@@ -62,7 +62,9 @@ export default function DebateFeed() {
       const cachedCursor = await AsyncStorage.getItem(CURSOR_STORAGE_KEY);
       if (cachedCursor) setCursor(cachedCursor);
 
-      tokenRef.current = await getToken({ template: "lets_debate_jwt" });
+      tokenRef.current = await getToken({
+        template: process.env.EXPO_PUBLIC_JWT_TEMPLATE_NAME,
+      });
       fetchDebates(null, true);
       fetchUnseenCount(); // 🔹 fetch unseen count
     };
@@ -193,7 +195,9 @@ export default function DebateFeed() {
 
         if (error.response?.status === 401) {
           try {
-            tokenRef.current = await getToken({ template: "lets_debate_jwt" });
+            tokenRef.current = await getToken({
+              template: process.env.EXPO_PUBLIC_JWT_TEMPLATE_NAME,
+            });
             return fetchDebates(fetchCursor, shouldRefresh);
           } catch (tokenErr: any) {
             logError(tokenErr, {

@@ -49,7 +49,7 @@ export default function DebateRoom() {
   const [userOpinion, setUserOpinion] = useState("");
   const [submitted, setSubmitted] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [showModal, setShowModal] = useState(true);
+  const [showModal, setShowModal] = useState(false);
   const [endTime, setEndTime] = useState<Date | null>(null);
   const [timeRemaining, setTimeRemaining] = useState<number>(0);
   const [isLoadingMore, setIsLoadingMore] = useState(false);

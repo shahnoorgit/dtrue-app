@@ -12,6 +12,8 @@ import {
   ScrollView,
   Share,
   Pressable,
+  Modal,
+  Animated,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRoute, useNavigation } from "@react-navigation/native";
@@ -142,6 +144,112 @@ const DebateCard: React.FC<{
   </View>
 );
 
+// Logout Confirmation Modal Component
+const LogoutConfirmationModal = ({ 
+  visible, 
+  onClose, 
+  onConfirm, 
+  isLoggingOut 
+}: {
+  visible: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+  isLoggingOut: boolean;
+}) => {
+  const scaleAnim = React.useRef(new Animated.Value(0)).current;
+  const opacityAnim = React.useRef(new Animated.Value(0)).current;
+
+  React.useEffect(() => {
+    if (visible) {
+      Animated.parallel([
+        Animated.spring(scaleAnim, {
+          toValue: 1,
+          useNativeDriver: true,
+          tension: 100,
+          friction: 8,
+        }),
+        Animated.timing(opacityAnim, {
+          toValue: 1,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    } else {
+      Animated.parallel([
+        Animated.spring(scaleAnim, {
+          toValue: 0.8,
+          useNativeDriver: true,
+          tension: 100,
+          friction: 8,
+        }),
+        Animated.timing(opacityAnim, {
+          toValue: 0,
+          duration: 150,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }
+  }, [visible]);
+
+  return (
+    <Modal
+      transparent
+      visible={visible}
+      animationType="fade"
+      onRequestClose={onClose}
+    >
+      <View style={styles.modalOverlay}>
+        <Animated.View
+          style={[
+            styles.modalContainer,
+            {
+              transform: [{ scale: scaleAnim }],
+              opacity: opacityAnim,
+            },
+          ]}
+        >
+          <View style={styles.modalContent}>
+            <View style={styles.modalIconContainer}>
+              <Ionicons
+                name="log-out-outline"
+                size={32}
+                color={THEME.colors.primary}
+              />
+            </View>
+            
+            <Text style={styles.modalTitle}>Logout</Text>
+            <Text style={styles.modalMessage}>
+              Are you sure you want to logout? You'll need to sign in again to access your account.
+            </Text>
+            
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+rr                style={[styles.modalButton, styles.modalCancelButton]}
+                onPress={onClose}
+                disabled={isLoggingOut}
+              >
+                <Text style={styles.modalCancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalConfirmButton]}
+                onPress={onConfirm}
+                disabled={isLoggingOut}
+              >
+                {isLoggingOut ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Text style={styles.modalConfirmButtonText}>Logout</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Animated.View>
+      </View>
+    </Modal>
+  );
+};
+
 const ProfilePage: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
   const [debates, setDebates] = useState<Debate[]>([]);
@@ -161,6 +269,10 @@ const ProfilePage: React.FC = () => {
   const [isEditingAbout, setIsEditingAbout] = useState(false);
   const [newAboutText, setNewAboutText] = useState("");
   const [updatingAbout, setUpdatingAbout] = useState(false);
+
+  // Logout confirmation modal states
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   const pathname = usePathname();
 
@@ -626,7 +738,12 @@ const ProfilePage: React.FC = () => {
     [token, router, userId]
   );
 
-  const handleLogout = async () => {
+  const handleLogoutPress = () => {
+    setShowLogoutModal(true);
+  };
+
+  const handleLogoutConfirm = async () => {
+    setIsLoggingOut(true);
     try {
       trackUserLoggedOut({
         reason: "manual",
@@ -641,7 +758,15 @@ const ProfilePage: React.FC = () => {
       logError(error, {
         context: "ProfilePage.handleLogout",
       });
+      Alert.alert("Error", "Failed to logout. Please try again.");
+    } finally {
+      setIsLoggingOut(false);
+      setShowLogoutModal(false);
     }
+  };
+
+  const handleLogoutCancel = () => {
+    setShowLogoutModal(false);
   };
 
   if (loading) {
@@ -695,7 +820,7 @@ const ProfilePage: React.FC = () => {
 
           <TouchableOpacity
             style={styles.logoutButton}
-            onPress={handleLogout}
+            onPress={handleLogoutPress}
             accessibilityLabel='Logout'
           >
             <Ionicons
@@ -862,6 +987,14 @@ const ProfilePage: React.FC = () => {
             </Text>
           </View>
         }
+      />
+      
+      {/* Logout Confirmation Modal */}
+      <LogoutConfirmationModal
+        visible={showLogoutModal}
+        onClose={handleLogoutCancel}
+        onConfirm={handleLogoutConfirm}
+        isLoggingOut={isLoggingOut}
       />
     </View>
   );
@@ -1202,6 +1335,85 @@ const styles = StyleSheet.create({
   },
   saveButtonText: {
     color: "white",
+    fontWeight: "600",
+    fontSize: 14,
+  },
+  // Modal styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.7)",
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 20,
+  },
+  modalContainer: {
+    width: "100%",
+    maxWidth: 320,
+    backgroundColor: THEME.colors.cardBackground,
+    borderRadius: 16,
+    padding: 0,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.3,
+    shadowRadius: 20,
+    elevation: 20,
+  },
+  modalContent: {
+    padding: 24,
+    alignItems: "center",
+  },
+  modalIconContainer: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: "rgba(0, 255, 148, 0.1)",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: "600",
+    color: THEME.colors.text,
+    marginBottom: 8,
+    textAlign: "center",
+  },
+  modalMessage: {
+    fontSize: 14,
+    color: THEME.colors.textSecondary,
+    textAlign: "center",
+    lineHeight: 20,
+    marginBottom: 24,
+  },
+  modalButtons: {
+    flexDirection: "row",
+    gap: 12,
+    width: "100%",
+  },
+  modalButton: {
+    flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 44,
+  },
+  modalCancelButton: {
+    backgroundColor: THEME.colors.surface,
+    borderWidth: 1,
+    borderColor: THEME.colors.border,
+  },
+  modalConfirmButton: {
+    backgroundColor: THEME.colors.primary,
+  },
+  modalCancelButtonText: {
+    color: THEME.colors.text,
+    fontWeight: "600",
+    fontSize: 14,
+  },
+  modalConfirmButtonText: {
+    color: "#FFFFFF",
     fontWeight: "600",
     fontSize: 14,
   },

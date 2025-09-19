@@ -12,7 +12,9 @@ export const useFetchWithToken = () => {
       !tokenCache || !lastFetchedAt || now - lastFetchedAt > 4 * 60 * 1000;
 
     if (isStale) {
-      tokenCache = await getToken({ template: "lets_debate_jwt" });
+      tokenCache = await getToken({
+        template: process.env.EXPO_PUBLIC_JWT_TEMPLATE_NAME,
+      });
       lastFetchedAt = now;
     }
 

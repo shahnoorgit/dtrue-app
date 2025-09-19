@@ -38,53 +38,6 @@ const THEME = {
   },
 };
 
-const ActiveDebateModal = ({ visible, onClose }) => {
-  return (
-    <Modal
-      transparent={true}
-      visible={visible}
-      animationType='fade'
-      onRequestClose={onClose}
-    >
-      <TouchableWithoutFeedback onPress={onClose}>
-        <View style={styles.overlay}>
-          <TouchableWithoutFeedback onPress={(e) => e.stopPropagation()}>
-            <View style={styles.modalContainer}>
-              <TouchableOpacity
-                style={styles.closeButton}
-                onPress={onClose}
-                hitSlop={{ top: 15, right: 15, bottom: 15, left: 15 }}
-              >
-                <Ionicons
-                  name='close-circle'
-                  size={24}
-                  color={THEME.colors.textMuted}
-                />
-              </TouchableOpacity>
-
-              <View style={styles.contentContainer}>
-                <Text style={styles.title}>Debate Room Still Active</Text>
-
-                <Text style={styles.message}>
-                  Your previous debate room is still active. Please wait until
-                  it finishes before creating a new one.
-                </Text>
-
-                <TouchableOpacity
-                  style={styles.button}
-                  onPress={onClose}
-                  activeOpacity={0.8}
-                >
-                  <Text style={styles.buttonText}>Close</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </TouchableWithoutFeedback>
-        </View>
-      </TouchableWithoutFeedback>
-    </Modal>
-  );
-};
 
 // Skeleton component for debate room card
 const SkeletonDebateCard = () => {
@@ -146,8 +99,6 @@ const Rooms = () => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [fetchError, setFetchError] = useState(null);
-  const [createRoomLoading, setCreateRoomLoading] = useState(false);
-  const [showNotEligible, setShowNotEligible] = useState(false);
   const [activeTab, setActiveTab] = useState("active");
   const [joiningRoomId, setJoiningRoomId] = useState(null);
   const router = useRouter();
@@ -155,7 +106,9 @@ const Rooms = () => {
   const retryCount = useRef(0);
   const maxRetries = 3;
 
-  const [tabDataCache, setTabDataCache] = useState({
+  const [tabDataCache, setTabDataCache] = useState<{
+    [key: string]: any;
+  }>({
     active: null,
     ended: null,
     mine: null,
@@ -189,49 +142,9 @@ const Rooms = () => {
     }
   }, [activeTab, token]);
 
-  const getCreateRoomEligibility = useCallback(async () => {
-    if (!token) return;
-
-    setFetchError(null);
-    try {
-      setCreateRoomLoading(true);
-      const response = await fetch(
-        `${process.env.EXPO_PUBLIC_BASE_URL}/debate-room/get-user-debate-create-eligible`,
-        {
-          method: "GET",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-        }
-      );
-
-      if (!response.ok) {
-        if (response.status === 401) {
-          refreshToken();
-          return;
-        }
-        const errorText = await response.text();
-        throw new Error(`API error ${response.status}: ${errorText}`);
-      }
-
-      const data = await response.json();
-      if (data && data.data == true) {
-        router.push("/(create)/screen/screen");
-      } else {
-        setShowNotEligible(true);
-      }
-    } catch (error: any) {
-      console.error("Failed to check eligibility:", error);
-      // Log error to Sentry
-      logError(error, {
-        context: "Rooms.getCreateRoomEligibility",
-      });
-      Alert.alert("Error", "Unable to check if you can create a debate room.");
-    } finally {
-      setCreateRoomLoading(false);
-    }
-  }, [token, router, refreshToken]);
+  const handleCreateDebate = useCallback(() => {
+    router.push("/(create)/screen/screen");
+  }, [router]);
 
   const joinDebateRoom = useCallback(
     async (roomId) => {
@@ -707,27 +620,18 @@ const Rooms = () => {
         <Text style={styles.headerTitle}>Rooms</Text>
         <TouchableOpacity
           style={styles.newDebateButton}
-          onPress={getCreateRoomEligibility}
-          disabled={createRoomLoading}
+          onPress={handleCreateDebate}
         >
-          {createRoomLoading ? (
-            <ActivityIndicator size='small' color={THEME.colors.primary} />
-          ) : (
-            <Ionicons
-              name='add-circle'
-              size={24}
-              color={THEME.colors.primary}
-            />
-          )}
+          <Ionicons
+            name='add-circle'
+            size={24}
+            color={THEME.colors.primary}
+          />
         </TouchableOpacity>
       </View>
 
       <TabBar />
 
-      <ActiveDebateModal
-        visible={showNotEligible}
-        onClose={() => setShowNotEligible(false)}
-      />
 
       {fetchError ? (
         <View style={styles.errorContainer}>

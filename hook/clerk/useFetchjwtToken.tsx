@@ -3,7 +3,7 @@ import { useAuth } from "@clerk/clerk-expo";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export function useAuthToken(
-  template = "lets_debate_jwt"
+  template = process.env.EXPO_PUBLIC_JWT_TEMPLATE_NAME
 ): [string | null, () => Promise<void>] {
   const { getToken } = useAuth();
   const [token, setToken] = useState<string | null>(null);
