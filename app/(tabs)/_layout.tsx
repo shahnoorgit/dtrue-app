@@ -102,8 +102,8 @@ function TabButton({ icon, label, isFocused, onPress, index }: TabButtonProps) {
         </Animated.View>
         <Animated.Text
           style={{
-            marginTop: 2,
-            fontSize: 11,
+            marginTop: 4,
+            fontSize: 13,
             fontWeight: isFocused ? "600" : "400",
             color: isFocused ? "#00FF94" : "#888",
             opacity: textOpacityAnim,

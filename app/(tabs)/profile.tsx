@@ -15,6 +15,7 @@ import {
   Modal,
   Animated,
 } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { useRoute, useNavigation } from "@react-navigation/native";
 import { useAuthToken } from "@/hook/clerk/useFetchjwtToken";
@@ -24,6 +25,8 @@ import { useClerk } from "@clerk/clerk-expo";
 import * as Haptics from "expo-haptics";
 import * as ImagePicker from "expo-image-picker";
 import ProfileSkeleton from "@/components/profile/ProfileSkeliton";
+import DebateGrid from "@/components/debate/DebateGrid";
+import TabScreenWrapper from "./components/TabScreenWrapper";
 import { logError } from "@/utils/sentry/sentry"; // Added Sentry import
 import { invalidateUserCache } from "../_layout";
 import {
@@ -224,7 +227,7 @@ const LogoutConfirmationModal = ({
             
             <View style={styles.modalButtons}>
               <TouchableOpacity
-rr                style={[styles.modalButton, styles.modalCancelButton]}
+                style={[styles.modalButton, styles.modalCancelButton]}
                 onPress={onClose}
                 disabled={isLoggingOut}
               >
@@ -273,6 +276,9 @@ const ProfilePage: React.FC = () => {
   // Logout confirmation modal states
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+
+  // Image options modal states
+  const [showImageOptions, setShowImageOptions] = useState(false);
 
   const pathname = usePathname();
 
@@ -710,7 +716,7 @@ const ProfilePage: React.FC = () => {
   };
 
   const handleJoinPress = useCallback(
-    async (debate: Debate) => {
+    (debate: Debate) => {
       if (!token || !debate?.id) return;
       setJoiningDebateId(debate.id);
       try {
@@ -797,10 +803,16 @@ const ProfilePage: React.FC = () => {
 
   const renderHeader = () => (
     <View>
-      <View style={styles.headerSection}>
+      <LinearGradient
+        colors={['#080F12', '#0A1A1F', '#080F12']}
+        style={styles.headerSection}
+      >
         <TouchableOpacity
           style={styles.backButton}
-          onPress={() => navigation.goBack()}
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            navigation.goBack();
+          }}
         >
           <Ionicons name='chevron-back' size={24} color={THEME.colors.text} />
         </TouchableOpacity>
@@ -808,7 +820,10 @@ const ProfilePage: React.FC = () => {
         <View style={styles.headerActions}>
           <TouchableOpacity
             style={styles.shareButton}
-            onPress={handleShareProfile}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              handleShareProfile();
+            }}
             accessibilityLabel='Share Profile'
           >
             <Ionicons
@@ -820,7 +835,10 @@ const ProfilePage: React.FC = () => {
 
           <TouchableOpacity
             style={styles.logoutButton}
-            onPress={handleLogoutPress}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              handleLogoutPress();
+            }}
             accessibilityLabel='Logout'
           >
             <Ionicons
@@ -835,59 +853,25 @@ const ProfilePage: React.FC = () => {
           <View style={styles.profileImageContainer}>
             <TouchableOpacity
               onPress={() => {
-                if (isEditingImage) {
-                  showImagePickerOptions();
-                } else {
-                  setIsEditingImage(true);
-                }
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                setShowImageOptions(true);
               }}
-              disabled={uploading || updating}
             >
-              <Image
-                source={{ uri: newImageUri || user.image }}
-                style={styles.profileImage}
-              />
-              <View style={styles.profileImageBorder} />
-
-              {/* Edit overlay */}
-              <View style={styles.editOverlay}>
-                {uploading ? (
-                  <ActivityIndicator size='small' color='white' />
-                ) : (
-                  <Ionicons name='camera' size={20} color='white' />
-                )}
+              <View style={styles.profileImageWrapper}>
+                <Image
+                  source={{ uri: newImageUri || user.image }}
+                  style={styles.profileImage}
+                />
+                <View style={styles.profileImageBorder} />
+                <View style={styles.profileImageShadow} />
               </View>
             </TouchableOpacity>
-
-            {/* Edit buttons */}
-            {isEditingImage && (
-              <View style={styles.editButtons}>
-                <TouchableOpacity
-                  style={[styles.editButton, styles.cancelButton]}
-                  onPress={handleCancelImageEdit}
-                  disabled={updating}
-                >
-                  <Text style={styles.cancelButtonText}>Cancel</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[styles.editButton, styles.saveButton]}
-                  onPress={handleSaveImage}
-                  disabled={!newCloudUrl || updating}
-                >
-                  {updating ? (
-                    <ActivityIndicator size='small' color='white' />
-                  ) : (
-                    <Text style={styles.saveButtonText}>Save</Text>
-                  )}
-                </TouchableOpacity>
-              </View>
-            )}
           </View>
 
           <View style={styles.statsContainer}>
             <Pressable
               onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                 router.push({
                   pathname: "/(follow)/followers/[id]/page",
                   params: {
@@ -901,13 +885,16 @@ const ProfilePage: React.FC = () => {
               }}
               style={styles.statItem}
             >
-              <Text style={styles.statNumber}>
-                {user.followers?.length || 0}
-              </Text>
-              <Text style={styles.statLabel}>Followers</Text>
+              <View style={styles.statItemContent}>
+                <Text style={styles.statNumber}>
+                  {user.followers?.length || 0}
+                </Text>
+                <Text style={styles.statLabel}>Followers</Text>
+              </View>
             </Pressable>
             <Pressable
               onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                 router.push({
                   pathname: "/(follow)/following/[id]/page",
                   params: {
@@ -921,20 +908,24 @@ const ProfilePage: React.FC = () => {
               }}
               style={styles.statItem}
             >
-              <Text style={styles.statNumber}>
-                {user.following?.length || 0}
-              </Text>
-              <Text style={styles.statLabel}>Following</Text>
+              <View style={styles.statItemContent}>
+                <Text style={styles.statNumber}>
+                  {user.following?.length || 0}
+                </Text>
+                <Text style={styles.statLabel}>Following</Text>
+              </View>
             </Pressable>
             <View style={styles.statItem}>
-              <Text style={styles.statNumber}>
-                {user.created_debates?.length || 0}
-              </Text>
-              <Text style={styles.statLabel}>Debates</Text>
+              <View style={styles.statItemContent}>
+                <Text style={styles.statNumber}>
+                  {user.created_debates?.length || 0}
+                </Text>
+                <Text style={styles.statLabel}>Debates</Text>
+              </View>
             </View>
           </View>
         </View>
-      </View>
+      </LinearGradient>
       <View style={styles.bioSection}>
         <Text style={styles.name}>@{user.name}</Text>
         {user.about && <Text style={styles.bio}>{user.about}</Text>}
@@ -952,19 +943,8 @@ const ProfilePage: React.FC = () => {
   );
 
   return (
-    <View style={styles.container}>
-      <FlatList
-        data={debates}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <DebateCard
-            item={item}
-            onJoin={handleJoinPress}
-            loading={joiningDebateId === item.id}
-          />
-        )}
-        ListHeaderComponent={renderHeader}
-        contentContainerStyle={styles.scrollContent}
+    <TabScreenWrapper>
+      <ScrollView
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
@@ -974,20 +954,14 @@ const ProfilePage: React.FC = () => {
             tintColor={THEME.colors.primary}
           />
         }
-        ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <Ionicons
-              name='chatbubbles-outline'
-              size={64}
-              color={THEME.colors.textMuted}
-            />
-            <Text style={styles.emptyText}>No debates created yet</Text>
-            <Text style={styles.emptySubText}>
-              Start your first debate to see it here
-            </Text>
-          </View>
-        }
-      />
+      >
+        {renderHeader()}
+        <DebateGrid
+          debates={debates}
+          onDebatePress={handleJoinPress}
+          loading={loading}
+        />
+      </ScrollView>
       
       {/* Logout Confirmation Modal */}
       <LogoutConfirmationModal
@@ -996,7 +970,56 @@ const ProfilePage: React.FC = () => {
         onConfirm={handleLogoutConfirm}
         isLoggingOut={isLoggingOut}
       />
-    </View>
+
+      {/* Image Options Modal */}
+      <Modal
+        visible={showImageOptions}
+        transparent={true}
+        onRequestClose={() => setShowImageOptions(false)}
+        animationType="fade"
+      >
+        <View style={styles.imageOptionsOverlay}>
+          <View style={styles.imageOptionsContainer}>
+            <View style={styles.imageOptionsHeader}>
+              <Text style={styles.imageOptionsTitle}>Profile Image</Text>
+              <TouchableOpacity
+                onPress={() => setShowImageOptions(false)}
+                style={styles.imageOptionsCloseButton}
+              >
+                <Ionicons name="close" size={24} color={THEME.colors.text} />
+              </TouchableOpacity>
+            </View>
+            
+            <View style={styles.imageOptionsContent}>
+              <TouchableOpacity
+                style={styles.imageOptionButton}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  setShowImageOptions(false);
+                  // Open image in full screen view
+                  // You can implement this later
+                }}
+              >
+                <Ionicons name="eye" size={24} color={THEME.colors.primary} />
+                <Text style={styles.imageOptionText}>View Image</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.imageOptionButton}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  setShowImageOptions(false);
+                  showImagePickerOptions();
+                }}
+              >
+                <Ionicons name="camera" size={24} color={THEME.colors.primary} />
+                <Text style={styles.imageOptionText}>Upload Image</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    </TabScreenWrapper>
   );
 };
 
@@ -1048,7 +1071,6 @@ const styles = StyleSheet.create({
   headerSection: {
     paddingTop: 50,
     paddingBottom: THEME.spacing.md,
-    backgroundColor: THEME.colors.background,
     borderBottomWidth: 1,
     borderBottomColor: THEME.colors.border,
   },
@@ -1103,6 +1125,9 @@ const styles = StyleSheet.create({
     position: "relative",
     marginBottom: THEME.spacing.md,
   },
+  profileImageWrapper: {
+    position: "relative",
+  },
   profileImage: {
     width: 120,
     height: 120,
@@ -1118,12 +1143,38 @@ const styles = StyleSheet.create({
     borderWidth: 3,
     borderColor: THEME.colors.primary,
   },
+  profileImageShadow: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderRadius: 60,
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    shadowColor: THEME.colors.primary,
+    shadowOffset: {
+      width: 0,
+      height: 8,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 8,
+  },
   statsContainer: {
     flexDirection: "row",
     marginBottom: THEME.spacing.lg,
     gap: THEME.spacing.xl,
   },
   statItem: {
+    alignItems: "center",
+    paddingVertical: THEME.spacing.sm,
+    paddingHorizontal: THEME.spacing.md,
+    borderRadius: THEME.borderRadius.md,
+    backgroundColor: 'rgba(0, 255, 148, 0.05)',
+    borderWidth: 1,
+    borderColor: 'rgba(0, 255, 148, 0.1)',
+  },
+  statItemContent: {
     alignItems: "center",
   },
   statNumber: {
@@ -1284,19 +1335,45 @@ const styles = StyleSheet.create({
     paddingVertical: 80,
     paddingHorizontal: THEME.spacing.xl,
   },
+  emptyIconContainer: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: 'rgba(0, 255, 148, 0.1)',
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: THEME.spacing.md,
+    borderWidth: 2,
+    borderColor: 'rgba(0, 255, 148, 0.2)',
+  },
   emptyText: {
-    fontSize: 18,
-    color: THEME.colors.textSecondary,
+    fontSize: 20,
+    color: THEME.colors.text,
     marginTop: THEME.spacing.md,
-    fontWeight: "600",
+    fontWeight: "bold",
     textAlign: "center",
   },
   emptySubText: {
-    fontSize: 14,
-    color: THEME.colors.textMuted,
+    fontSize: 16,
+    color: THEME.colors.textSecondary,
     marginTop: THEME.spacing.sm,
     textAlign: "center",
-    lineHeight: 20,
+    lineHeight: 24,
+    marginBottom: THEME.spacing.lg,
+  },
+  createDebateButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: THEME.colors.primary,
+    paddingHorizontal: THEME.spacing.lg,
+    paddingVertical: THEME.spacing.md,
+    borderRadius: THEME.borderRadius.lg,
+    gap: THEME.spacing.sm,
+  },
+  createDebateButtonText: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontWeight: "600",
   },
   editOverlay: {
     position: "absolute",
@@ -1416,6 +1493,56 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontWeight: "600",
     fontSize: 14,
+  },
+  // Image Options Modal Styles
+  imageOptionsOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  imageOptionsContainer: {
+    backgroundColor: THEME.colors.cardBackground,
+    borderRadius: THEME.borderRadius.lg,
+    width: "80%",
+    maxWidth: 300,
+    borderWidth: 1,
+    borderColor: THEME.colors.border,
+  },
+  imageOptionsHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: THEME.spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: THEME.colors.border,
+  },
+  imageOptionsTitle: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: THEME.colors.text,
+  },
+  imageOptionsCloseButton: {
+    padding: 4,
+  },
+  imageOptionsContent: {
+    padding: THEME.spacing.md,
+  },
+  imageOptionButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: THEME.spacing.md,
+    borderRadius: THEME.borderRadius.md,
+    backgroundColor: "rgba(0, 255, 148, 0.05)",
+    borderWidth: 1,
+    borderColor: "rgba(0, 255, 148, 0.1)",
+    marginBottom: THEME.spacing.sm,
+  },
+  imageOptionText: {
+    marginLeft: THEME.spacing.md,
+    fontSize: 16,
+    fontWeight: "500",
+    color: THEME.colors.text,
   },
 });
 

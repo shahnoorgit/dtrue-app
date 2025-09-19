@@ -1,4 +1,6 @@
-// Cyberpunk theme configuration
+import { typography } from './typography';
+
+// Cyberpunk theme configuration with Instagram-inspired typography
 export const cyberpunkTheme = {
   colors: {
     primary: "#00FF94",
@@ -42,8 +44,10 @@ export const cyberpunkTheme = {
       elevation: 5,
     },
   },
-  // New typography settings
+  // Enhanced typography system
   typography: {
+    ...typography,
+    // Keep existing cyberpunk-specific typography
     headings: {
       fontWeight: "bold",
       glow: {

@@ -23,6 +23,7 @@ import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuthToken } from "@/hook/clerk/useFetchjwtToken";
 import { Modal } from "react-native";
+import TabScreenWrapper from "./components/TabScreenWrapper";
 import { logError } from "@/utils/sentry/sentry"; // Added Sentry import
 import { trackDebateJoined } from "@/lib/posthog/events";
 
@@ -615,7 +616,8 @@ const Rooms = () => {
   }
 
   return (
-    <View style={styles.container}>
+    <TabScreenWrapper>
+      <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Rooms</Text>
         <TouchableOpacity
@@ -694,7 +696,8 @@ const Rooms = () => {
           }}
         />
       )}
-    </View>
+      </View>
+    </TabScreenWrapper>
   );
 };
 

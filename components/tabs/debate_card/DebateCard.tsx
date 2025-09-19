@@ -423,6 +423,20 @@ const DebateCard = ({ debate, onJoinPress }) => {
           {debate.title}
         </Text>
 
+        {debate.description && (
+          <Text
+            style={{
+              color: "#8F9BB3",
+              fontSize: 16,
+              marginBottom: 10,
+              lineHeight: 22,
+            }}
+            numberOfLines={2}
+          >
+            {debate.description}
+          </Text>
+        )}
+
         <View
           style={{ flexDirection: "row", flexWrap: "wrap", marginBottom: 10 }}
         >
