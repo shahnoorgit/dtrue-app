@@ -23,6 +23,7 @@ import axios from "axios";
 import * as Haptics from "expo-haptics";
 
 import { cyberpunkTheme } from "@/constants/theme";
+import { useError } from "@/contexts/ErrorContext";
 
 const THEME = {
   colors: {
@@ -300,6 +301,8 @@ export default function CreateDebateRoomScreen() {
   const [selectedDuration, setSelectedDuration] = useState(24);
   const [imageUri, setImageUri] = useState<string | null>(null);
   const [cloudUrl, setCloudUrl] = useState<string | null>(null);
+  
+  const { showError } = useError();
   const [uploading, setUploading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [errors, setErrors] = useState({ title: "", description: "" });
@@ -315,7 +318,7 @@ export default function CreateDebateRoomScreen() {
     if (Platform.OS !== "web") {
       const { status } = await permissionFn();
       if (status !== "granted") {
-        Alert.alert("Permission Required", errorMsg);
+        showError("Permission Required", errorMsg, { type: 'warning' });
         return false;
       }
     }
@@ -400,7 +403,7 @@ export default function CreateDebateRoomScreen() {
         throw error;
       }
 
-      const cdnUrl = `https://cdn.dtrue.app/${key}`;
+      const cdnUrl = `https://dtrueimageworker.tech-10f.workers.dev/${key}`;
       setCloudUrl(cdnUrl);
       return cdnUrl;
     } catch (error) {
@@ -434,7 +437,7 @@ export default function CreateDebateRoomScreen() {
       }
     } catch (error) {
       console.error("Error picking image:", error);
-      Alert.alert("Error", "Failed to pick image");
+      showError("Image Error", "Failed to pick image", { type: 'error' });
     }
   };
 
@@ -460,7 +463,7 @@ export default function CreateDebateRoomScreen() {
       }
     } catch (error) {
       console.error("Error taking photo:", error);
-      Alert.alert("Error", "Failed to take photo");
+      showError("Camera Error", "Failed to take photo", { type: 'error' });
     }
   };
 
@@ -494,7 +497,7 @@ export default function CreateDebateRoomScreen() {
     setSubmitting(true);
     try {
       const { data } = await axios.post(
-        `${process.env.EXPO_PUBLIC_BASE_URL}/debates`,
+        `${process.env.EXPO_PUBLIC_BASE_URL}/debate-room`,
         {
           title: title.trim(),
           description: description.trim(),
@@ -534,8 +537,16 @@ export default function CreateDebateRoomScreen() {
         statusCode: err.response?.status,
       });
 
-      console.error(err);
-      Alert.alert("Error", "Failed to create debate room.");
+      console.error("Error creating debate:", err);
+      console.error("Error response:", err.response?.data);
+      console.error("Error status:", err.response?.status);
+      
+      const errorMessage = err.response?.data?.message || err.message || "Failed to create debate room.";
+      showError("Creation Error", errorMessage, {
+        type: 'error',
+        showRetry: true,
+        onRetry: () => handleSubmit()
+      });
     } finally {
       setSubmitting(false);
     }

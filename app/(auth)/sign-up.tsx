@@ -20,11 +20,13 @@ import { cyberpunkTheme } from "@/constants/theme";
 import { useFocusEffect } from "@react-navigation/native";
 import { logError } from "@/utils/sentry/sentry";
 import { trackUserSignedUp } from "@/lib/posthog/events";
+import { useError } from "@/contexts/ErrorContext";
 
 export default function SignUpScreen() {
   const { isLoaded, signUp, setActive } = useSignUp();
   const router = useRouter();
   const { width } = Dimensions.get("window");
+  const { showError } = useError();
 
   const [emailAddress, setEmailAddress] = useState("");
   const [password, setPassword] = useState("");
@@ -104,10 +106,11 @@ export default function SignUpScreen() {
         emailAddress: emailAddress ? "[REDACTED_EMAIL]" : "undefined",
       });
 
-      Alert.alert(
-        "Sign Up Failed",
-        err?.errors?.[0]?.message || "An error occurred during sign up"
-      );
+      showError("Sign Up Failed", err?.errors?.[0]?.message || "An error occurred during sign up", {
+        type: 'error',
+        showRetry: true,
+        onRetry: () => onSignUpPress()
+      });
       setIsSubmitting(false);
     }
   };
@@ -145,10 +148,11 @@ export default function SignUpScreen() {
           emailAddress: emailAddress ? "[REDACTED_EMAIL]" : "undefined",
         });
 
-        Alert.alert(
-          "Verification Error",
-          "Unable to verify your account. Please try again."
-        );
+        showError("Verification Error", "Unable to verify your account. Please try again.", {
+          type: 'error',
+          showRetry: true,
+          onRetry: () => onVerifyPress()
+        });
       }
     } catch (err: any) {
       console.error(JSON.stringify(err, null, 2));
@@ -160,10 +164,11 @@ export default function SignUpScreen() {
         codeProvided: !!code,
       });
 
-      Alert.alert(
-        "Verification Failed",
-        err?.errors?.[0]?.message || "Invalid verification code"
-      );
+      showError("Verification Failed", err?.errors?.[0]?.message || "Invalid verification code", {
+        type: 'error',
+        showRetry: true,
+        onRetry: () => onVerifyPress()
+      });
     } finally {
       setIsSubmitting(false);
     }

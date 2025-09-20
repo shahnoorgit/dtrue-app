@@ -21,11 +21,13 @@ import { cyberpunkTheme } from "@/constants/theme";
 import { useFocusEffect } from "@react-navigation/native";
 import { logError } from "@/utils/sentry/sentry";
 import { trackUserSignedIn } from "@/lib/posthog/events";
+import { useError } from "@/contexts/ErrorContext";
 
 export default function SignInScreen() {
   const { signIn, setActive, isLoaded } = useSignIn();
   const router = useRouter();
   const { width } = Dimensions.get("window");
+  const { showError } = useError();
 
   const [emailAddress, setEmailAddress] = useState("");
   const [password, setPassword] = useState("");
@@ -116,10 +118,11 @@ export default function SignInScreen() {
             // Add non-PII details if relevant, e.g., supportedFirstFactors
           },
         });
-        Alert.alert(
-          "Error",
-          "Unable to sign in. Please check your credentials."
-        );
+        showError("Sign In Error", "Unable to sign in. Please check your credentials.", {
+          type: 'error',
+          showRetry: true,
+          onRetry: () => onSignInPress()
+        });
       }
     } catch (err: any) {
       console.error("sign in error", JSON.stringify(err, null, 2));
@@ -136,11 +139,11 @@ export default function SignInScreen() {
       } else if (code === "form_password_incorrect") {
         setPasswordError("Incorrect password");
       } else {
-        Alert.alert(
-          "Sign In Failed",
-          err?.errors?.[0]?.message ||
-            "Please check your credentials and try again."
-        );
+        showError("Sign In Failed", err?.errors?.[0]?.message || "Please check your credentials and try again.", {
+          type: 'error',
+          showRetry: true,
+          onRetry: () => onSignInPress()
+        });
       }
     } finally {
       setIsSubmitting(false);
@@ -171,15 +174,14 @@ export default function SignInScreen() {
     try {
       // Send the reset code to the user's email
       // Clerk: signIn.create with strategy 'reset_password_email_code' sends code to email. :contentReference[oaicite:3]{index=3}
-      await signIn.create({
-        strategy: "reset_password_email_code",
-        identifier: resetEmail,
-      });
+      if (signIn) {
+        await signIn.create({
+          strategy: "reset_password_email_code",
+          identifier: resetEmail,
+        });
+      }
       setResetStep("confirm");
-      Alert.alert(
-        "Check your email",
-        "We sent a reset code to your inbox. Enter it below with a new password."
-      );
+      showError("Check your email", "We sent a reset code to your inbox. Enter it below with a new password.", { type: 'info' });
     } catch (err: any) {
       console.error("requestResetCode err:", JSON.stringify(err, null, 2));
       // Log the actual error to Sentry
@@ -222,6 +224,8 @@ export default function SignInScreen() {
 
     try {
       // Clerk: attemptFirstFactor with strategy 'reset_password_email_code' to verify code and set new password. :contentReference[oaicite:4]{index=4}
+      if (!signIn) return;
+      
       const result = await signIn.attemptFirstFactor({
         strategy: "reset_password_email_code",
         code: resetCode,
@@ -231,10 +235,7 @@ export default function SignInScreen() {
       if (result.status === "complete") {
         // Set active session (user is signed in with new password)
         await setActive({ session: result.createdSessionId });
-        Alert.alert(
-          "Password reset",
-          "Your password has been updated — you are now signed in."
-        );
+        showError("Password reset", "Your password has been updated — you are now signed in.", { type: 'success' });
         setResetVisible(false);
         // navigate into app
         router.replace("/(tabs)");

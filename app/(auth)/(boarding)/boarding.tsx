@@ -30,10 +30,12 @@ import { cyberpunkTheme } from "@/constants/theme";
 import { useCreateUser } from "@/hook/useCreateUser";
 import { useAuthToken } from "@/hook/clerk/useFetchjwtToken";
 import { useFetchWithToken } from "@/hook/api/useFetchWithToken.";
+import { useError } from "@/contexts/ErrorContext";
 import {
   trackOnboardingCompleted,
   trackOnboardingAbandoned,
 } from "@/lib/posthog/events";
+import { ImageManipulator } from "expo-image-manipulator";
 
 // Interest Modal Component using NativeWind classes
 const InterestModal = ({
@@ -214,9 +216,9 @@ const ProfileImageSelector = ({
     >
       {isUploading ? (
         <ActivityIndicator size='large' color={cyberpunkTheme.colors.primary} />
-      ) : profileImage ? (
+      ) : profileImageUrl ? (
         <Image
-          source={{ uri: profileImage }}
+          source={{ uri: profileImageUrl }}
           className='w-full h-full rounded-full'
         />
       ) : (
@@ -528,7 +530,7 @@ const useUsernameValidator = () => {
 };
 
 // Custom hook for image handling with R2 upload
-const useImageHandler = () => {
+const useImageHandler = (showError: any) => {
   const [profileImage, setProfileImage] = useState(null);
   const [profileImageUrl, setProfileImageUrl] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -542,21 +544,45 @@ const useImageHandler = () => {
     if (Platform.OS !== "web") {
       const { status } = await permissionFn();
       if (status !== "granted") {
-        Alert.alert("Permission Required", errorMsg);
+        showError("Permission Required", errorMsg, { type: 'warning' });
         return false;
       }
     }
     return true;
   };
 
+  // Image compression helper
+  const compressImage = async (
+    uri: string,
+    {
+      maxWidth = 1080,
+      compress = 0.8,
+      format = ImageManipulator.SaveFormat.JPEG,
+    } = {}
+  ): Promise<{ uri: string; width?: number; height?: number }> => {
+    const result = await ImageManipulator.manipulateAsync(
+      uri,
+      [{ resize: { width: maxWidth } }],
+      { compress, format, base64: false }
+    );
+    return { uri: result.uri, width: result.width, height: result.height };
+  };
+
   const uploadToR2 = async (imageUri) => {
     setIsUploading(true);
     try {
-      // 1. Generate a unique file key
-      const name = imageUri.split("/").pop() || "profile.jpg";
-      const key = `profiles/${Date.now()}_${name}`;
+      // 1. Compress image first
+      const compressed = await compressImage(imageUri, {
+        maxWidth: 1080,
+        compress: 0.8,
+        format: ImageManipulator.SaveFormat.JPEG,
+      });
 
-      // 2. Get signed URL from backend
+      // 2. Generate a unique file key
+      const name = imageUri.split("/").pop() || "profile.jpg";
+      const key = `letsdebate-media/profiles/${Date.now()}_${name}`;
+
+      // 3. Get signed URL from backend
       const response = await fetchWithToken(
         `${
           process.env.EXPO_PUBLIC_BASE_URL
@@ -566,9 +592,9 @@ const useImageHandler = () => {
       );
       const signedUrl: string = response.data.signedUrl;
 
-      // 3. Upload directly to R2
+      // 4. Upload compressed image to R2
       try {
-        const blob = await fetch(imageUri).then((r) => r.blob());
+        const blob = await fetch(compressed.uri).then((r) => r.blob());
         const uploadRes = await fetch(signedUrl, {
           method: "PUT",
           headers: { "Content-Type": "image/jpeg" },
@@ -581,16 +607,17 @@ const useImageHandler = () => {
       }
 
       // 4. Construct public CDN URL
-      const publicUrl = `https://r2-image-cdn.letsdebate0.workers.dev/${key}`;
+      const publicUrl = `https://dtrueimageworker.tech-10f.workers.dev/${key}`;
       setProfileImageUrl(publicUrl);
       setProfileImage(imageUri);
       console.log("Image uploaded to R2:", publicUrl);
     } catch (error) {
       console.error("Error uploading to R2:", error);
-      Alert.alert(
-        "Upload Error",
-        "Error uploading image. Please check your connection and try again."
-      );
+      showError("Upload Error", "Error uploading image. Please check your connection and try again.", {
+        type: 'error',
+        showRetry: true,
+        onRetry: () => uploadToR2(profileImage!)
+      });
     } finally {
       setIsUploading(false);
     }
@@ -644,6 +671,8 @@ export default function OnboardingScreen() {
     [key in CategoryEnum]?: string[];
   }>({});
   const [bio, setBio] = useState("");
+  
+  const { showError } = useError();
   const [modalVisible, setModalVisible] = useState(false);
   const [currentCategory, setCurrentCategory] = useState<CategoryEnum | null>(
     null
@@ -667,7 +696,7 @@ export default function OnboardingScreen() {
   } = useUsernameValidator();
 
   const { profileImage, profileImageUrl, isUploading, pickImage, takePhoto } =
-    useImageHandler();
+    useImageHandler(showError);
 
   const { addUser } = useCreateUser();
   const router = useRouter();
@@ -742,7 +771,7 @@ export default function OnboardingScreen() {
   const goToNextStep = useCallback(() => {
     if (currentStep === 0) {
       if (Object.keys(selectedCategories).length === 0) {
-        Alert.alert("Validation", "Please select at least one category");
+        showError("Validation Error", "Please select at least one category", { type: 'warning' });
         return;
       }
       setCurrentStep(1);
@@ -776,18 +805,20 @@ export default function OnboardingScreen() {
           } else {
             console.error("Failed to create user");
             setIsSubmitting(false);
-            Alert.alert(
-              "Error",
-              "Failed to create user profile. Please try again."
-            );
+            showError("Creation Error", "Failed to create user profile. Please try again.", {
+              type: 'error',
+              showRetry: true,
+              onRetry: () => goToNextStep()
+            });
           }
         } catch (error) {
           console.error("Error creating user:", error);
           setIsSubmitting(false);
-          Alert.alert(
-            "Error",
-            "An error occurred while creating your profile. Please try again."
-          );
+          showError("Creation Error", "An error occurred while creating your profile. Please try again.", {
+            type: 'error',
+            showRetry: true,
+            onRetry: () => goToNextStep()
+          });
         }
       })();
     }

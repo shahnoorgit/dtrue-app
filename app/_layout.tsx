@@ -27,6 +27,7 @@ import { setSentryUser, logError } from "@/utils/sentry/sentry";
 import { PostHogProvider } from "posthog-react-native";
 import { posthog } from "@/lib/posthog/posthog";
 import { AppOpenTracker } from "@/lib/posthog/PosthogWrapper";
+import { ErrorProvider } from "@/contexts/ErrorContext";
 
 // Prevent the splash screen from auto-hiding. We will control this manually.
 SplashScreen.preventAutoHideAsync();
@@ -696,28 +697,30 @@ export default Sentry.wrap(function RootLayout() {
   return (
     <ClerkProvider tokenCache={tokenCache} publishableKey={publishableKey}>
       <ErrorBoundary>
-        <View className='flex-1 bg-gray-900'>
-          <StatusBar
-            barStyle='light-content'
-            backgroundColor={cyberpunkTheme.colors.background.dark}
-          />
-          <PostHogProvider autocapture={false} client={posthog}>
-            <LinearGradient
-              colors={
-                cyberpunkTheme.colors.gradients.background as [string, string]
-              }
-              className='absolute inset-0'
+        <ErrorProvider>
+          <View className='flex-1 bg-gray-900'>
+            <StatusBar
+              barStyle='light-content'
+              backgroundColor={cyberpunkTheme.colors.background.dark}
             />
+            <PostHogProvider autocapture={false} client={posthog}>
+              <LinearGradient
+                colors={
+                  cyberpunkTheme.colors.gradients.background as [string, string]
+                }
+                className='absolute inset-0'
+              />
 
-            <SentryUserWrapper />
-            <AppOpenTracker />
-            <InitialStateNavigator />
-            <RuntimeDeepLinkHandlerWrapper />
+              <SentryUserWrapper />
+              <AppOpenTracker />
+              <InitialStateNavigator />
+              <RuntimeDeepLinkHandlerWrapper />
 
-            {/* Slot renders the current page determined by the navigator */}
-            <Slot />
-          </PostHogProvider>
-        </View>
+              {/* Slot renders the current page determined by the navigator */}
+              <Slot />
+            </PostHogProvider>
+          </View>
+        </ErrorProvider>
       </ErrorBoundary>
     </ClerkProvider>
   );

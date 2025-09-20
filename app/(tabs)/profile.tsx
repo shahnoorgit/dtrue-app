@@ -24,6 +24,7 @@ import { usePathname, useRouter } from "expo-router";
 import { useClerk } from "@clerk/clerk-expo";
 import * as Haptics from "expo-haptics";
 import * as ImagePicker from "expo-image-picker";
+import * as ImageManipulator from "expo-image-manipulator";
 import ProfileSkeleton from "@/components/profile/ProfileSkeliton";
 import DebateGrid from "@/components/debate/DebateGrid";
 import TabScreenWrapper from "./components/TabScreenWrapper";
@@ -34,6 +35,7 @@ import {
   trackProfileViewed,
   trackUserLoggedOut,
 } from "@/lib/posthog/events";
+import { useError } from "@/contexts/ErrorContext";
 
 const THEME = {
   colors: {
@@ -260,6 +262,8 @@ const ProfilePage: React.FC = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [dataFetched, setDataFetched] = useState(false);
   const [joiningDebateId, setJoiningDebateId] = useState<string | null>(null);
+  
+  const { showError } = useError();
 
   // Image update states
   const [isEditingImage, setIsEditingImage] = useState(false);
@@ -279,6 +283,10 @@ const ProfilePage: React.FC = () => {
 
   // Image options modal states
   const [showImageOptions, setShowImageOptions] = useState(false);
+  
+  // Image modal states
+  const [imageModalVisible, setImageModalVisible] = useState(false);
+  const [modalImageUri, setModalImageUri] = useState("");
 
   const pathname = usePathname();
 
@@ -363,7 +371,7 @@ const ProfilePage: React.FC = () => {
         context: "ProfilePage.handleShareProfile",
         userId: user.id ? "[REDACTED_USER_ID]" : "undefined",
       });
-      Alert.alert("Error", "Unable to share profile. Please try again.");
+      showError("Share Error", "Unable to share profile. Please try again.");
     }
   };
 
@@ -374,31 +382,55 @@ const ProfilePage: React.FC = () => {
   ) => {
     const { status } = await permissionFn();
     if (status !== "granted") {
-      Alert.alert("Permission Required", errorMsg);
+      showError("Permission Required", errorMsg, { type: 'warning' });
       return false;
     }
 
     return true;
   };
 
+  // Image compression helper
+  const compressImage = async (
+    uri: string,
+    {
+      maxWidth = 1080,
+      compress = 0.8,
+      format = ImageManipulator.SaveFormat.JPEG,
+    } = {}
+  ): Promise<{ uri: string; width?: number; height?: number }> => {
+    const result = await ImageManipulator.manipulateAsync(
+      uri,
+      [{ resize: { width: maxWidth } }],
+      { compress, format, base64: false }
+    );
+    return { uri: result.uri, width: result.width, height: result.height };
+  };
+
   // Upload image to R2
   const uploadImageToR2 = async (uri: string) => {
     setUploading(true);
     try {
-      // 1. Generate a unique file key
+      // 1. Compress image first
+      const compressed = await compressImage(uri, {
+        maxWidth: 1080,
+        compress: 0.8,
+        format: ImageManipulator.SaveFormat.JPEG,
+      });
+
+      // 2. Generate a unique file key
       const name = uri.split("/").pop() || "profile.jpg";
       const key = `letsdebate-media/profiles/${Date.now()}_${name}`;
 
-      // 2. Get signed URL from backend
+      // 3. Get signed URL from backend
       const response = await fetchWithAuthRetry(
         `${process.env.EXPO_PUBLIC_BASE_URL}/uploads/signed-url?filename=${key}&type=image/jpeg`
       );
       const data = await response.json();
       const signedUrl: string = data.data.signedUrl;
 
-      // 3. Upload directly to R2
+      // 4. Upload compressed image to R2
       try {
-        const blob = await fetch(uri).then((r) => r.blob());
+        const blob = await fetch(compressed.uri).then((r) => r.blob());
         const uploadRes = await fetch(signedUrl, {
           method: "PUT",
           headers: { "Content-Type": "image/jpeg" },
@@ -419,9 +451,12 @@ const ProfilePage: React.FC = () => {
       }
 
       // 4. Construct public CDN URL
-      const publicUrl = `https://r2-image-cdn.letsdebate0.workers.dev/${key}`;
+      const publicUrl = `https://dtrueimageworker.tech-10f.workers.dev/${key}`;
       setNewCloudUrl(publicUrl);
       setNewImageUri(uri);
+      
+      // 5. Automatically save to database after successful upload
+      await handleSaveImageWithUrl(publicUrl);
     } catch (err: any) {
       console.error(err);
       // Log error to Sentry
@@ -429,7 +464,11 @@ const ProfilePage: React.FC = () => {
         context: "ProfilePage.uploadImageToR2",
         uri: uri ? "[REDACTED_URI]" : "undefined",
       });
-      Alert.alert("Upload Error", "Unable to upload image. Please try again.");
+      showError("Upload Error", "Unable to upload image. Please try again.", { 
+        type: 'error',
+        showRetry: true,
+        onRetry: () => uploadImageToR2(uri)
+      });
     } finally {
       setUploading(false);
     }
@@ -480,20 +519,12 @@ const ProfilePage: React.FC = () => {
 
   // Show image picker options
   const showImagePickerOptions = () => {
-    Alert.alert("Update Profile Image", "Choose an option", [
-      { text: "Camera", onPress: takePhoto },
-      { text: "Gallery", onPress: pickImage },
-      { text: "Cancel", style: "cancel" },
-    ]);
+    // This will be handled by the image options modal instead of Alert
+    setShowImageOptions(true);
   };
 
-  // Save updated profile image
-  const handleSaveImage = async () => {
-    if (!newCloudUrl) {
-      Alert.alert("Error", "Please select an image first.");
-      return;
-    }
-
+  // Save updated profile image with URL parameter
+  const handleSaveImageWithUrl = async (imageUrl: string) => {
     setUpdating(true);
     try {
       // Get current token for the PATCH request
@@ -515,9 +546,7 @@ const ProfilePage: React.FC = () => {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          data: {
-            image: newCloudUrl,
-          },
+          image: imageUrl,
         }),
       });
 
@@ -528,7 +557,7 @@ const ProfilePage: React.FC = () => {
         if (!currentToken) throw new Error("Token refresh failed");
 
         response = await fetch(
-          `${process.env.EXPO_PUBLIC_BASE_URL}/user/image-update`,
+          `${process.env.EXPO_PUBLIC_BASE_URL}/user`,
           {
             method: "PATCH",
             headers: {
@@ -536,7 +565,7 @@ const ProfilePage: React.FC = () => {
               "Content-Type": "application/json",
             },
             body: JSON.stringify({
-              image: newCloudUrl,
+              image: imageUrl,
             }),
           }
         );
@@ -548,27 +577,46 @@ const ProfilePage: React.FC = () => {
 
       const result = await response.json();
 
-      if (result.success) {
-        // Update local user state
-        setUser((prev) => (prev ? { ...prev, image: newCloudUrl } : null));
+      console.log("API Response:", result);
+      console.log("New Cloud URL:", imageUrl);
+      console.log("Response Status:", response.status);
+
+      // Check if the update was successful
+      if (response.ok) {
+        // Update local user state regardless of response format
+        setUser((prev) => (prev ? { ...prev, image: imageUrl } : null));
         setIsEditingImage(false);
         setNewImageUri(null);
         setNewCloudUrl(null);
-        Alert.alert("Success", "Profile image updated successfully!");
+        showError("Success", "Profile image updated successfully!", { type: 'success' });
       } else {
-        throw new Error(result.message || "Update failed");
+        console.error("Update failed - Response:", result);
+        throw new Error(result.message || result.error || "Update failed");
       }
     } catch (error: any) {
       console.error("Error updating profile image:", error);
       // Log error to Sentry
       logError(error, {
-        context: "ProfilePage.handleSaveImage",
-        newCloudUrl: newCloudUrl ? "[REDACTED_URL]" : "undefined",
+        context: "ProfilePage.handleSaveImageWithUrl",
+        imageUrl: imageUrl ? "[REDACTED_URL]" : "undefined",
       });
-      Alert.alert("Error", "Failed to update profile image. Please try again.");
+      showError("Update Error", "Failed to update profile image. Please try again.", {
+        type: 'error',
+        showRetry: true,
+        onRetry: () => handleSaveImageWithUrl(imageUrl)
+      });
     } finally {
       setUpdating(false);
     }
+  };
+
+  // Save updated profile image (original function for manual saves)
+  const handleSaveImage = async () => {
+    if (!newCloudUrl) {
+      showError("Validation Error", "Please select an image first.", { type: 'warning' });
+      return;
+    }
+    await handleSaveImageWithUrl(newCloudUrl);
   };
 
   // Cancel image editing
@@ -576,6 +624,18 @@ const ProfilePage: React.FC = () => {
     setIsEditingImage(false);
     setNewImageUri(null);
     setNewCloudUrl(null);
+  };
+
+  // Open image modal
+  const openImageModal = (uri: string) => {
+    setModalImageUri(uri);
+    setImageModalVisible(true);
+  };
+
+  // Close image modal
+  const closeImageModal = () => {
+    setImageModalVisible(false);
+    setModalImageUri("");
   };
 
   // Start editing about section
@@ -587,7 +647,7 @@ const ProfilePage: React.FC = () => {
   // Save updated about text
   const handleSaveAbout = async () => {
     if (!newAboutText.trim() && !user?.about) {
-      Alert.alert("Error", "Please enter some text for your bio.");
+      showError("Validation Error", "Please enter some text for your bio.", { type: 'warning' });
       return;
     }
 
@@ -653,7 +713,7 @@ const ProfilePage: React.FC = () => {
         );
         setIsEditingAbout(false);
         setNewAboutText("");
-        Alert.alert("Success", "Bio updated successfully!");
+        showError("Success", "Bio updated successfully!", { type: 'success' });
       } else {
         throw new Error(result.message || "Update failed");
       }
@@ -664,7 +724,11 @@ const ProfilePage: React.FC = () => {
         context: "ProfilePage.handleSaveAbout",
         newAboutTextLength: newAboutText.length,
       });
-      Alert.alert("Error", "Failed to update bio. Please try again.");
+      showError("Update Error", "Failed to update bio. Please try again.", {
+        type: 'error',
+        showRetry: true,
+        onRetry: () => handleSaveAbout()
+      });
     } finally {
       setUpdatingAbout(false);
     }
@@ -736,7 +800,11 @@ const ProfilePage: React.FC = () => {
           debateId: debate.id ? "[REDACTED_DEBATE_ID]" : "undefined",
           userId: userId ? "[REDACTED_USER_ID]" : "undefined",
         });
-        Alert.alert("Error", "Unable to join debate. Please try again.");
+        showError("Join Error", "Unable to join debate. Please try again.", {
+          type: 'error',
+          showRetry: true,
+          onRetry: () => handleJoinPress(debate)
+        });
       } finally {
         setJoiningDebateId(null);
       }
@@ -764,7 +832,11 @@ const ProfilePage: React.FC = () => {
       logError(error, {
         context: "ProfilePage.handleLogout",
       });
-      Alert.alert("Error", "Failed to logout. Please try again.");
+      showError("Logout Error", "Failed to logout. Please try again.", {
+        type: 'error',
+        showRetry: true,
+        onRetry: () => handleLogoutConfirm()
+      });
     } finally {
       setIsLoggingOut(false);
       setShowLogoutModal(false);
@@ -996,8 +1068,7 @@ const ProfilePage: React.FC = () => {
                 onPress={() => {
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                   setShowImageOptions(false);
-                  // Open image in full screen view
-                  // You can implement this later
+                  openImageModal(user?.image || "");
                 }}
               >
                 <Ionicons name="eye" size={24} color={THEME.colors.primary} />
@@ -1017,6 +1088,45 @@ const ProfilePage: React.FC = () => {
               </TouchableOpacity>
             </View>
           </View>
+        </View>
+      </Modal>
+
+      {/* Enhanced Image Modal */}
+      <Modal
+        visible={imageModalVisible}
+        transparent={true}
+        onRequestClose={closeImageModal}
+        animationType="fade"
+      >
+        <View style={styles.imageModalContainer}>
+          <TouchableOpacity
+            style={styles.modalBackdrop}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              closeImageModal();
+            }}
+            activeOpacity={1}
+          >
+            <View style={styles.modalImageContainer}>
+              <Image
+                source={{ uri: modalImageUri }}
+                style={styles.modalImage}
+                resizeMode='contain'
+              />
+            </View>
+            <TouchableOpacity
+              style={styles.closeModalButton}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                closeImageModal();
+              }}
+            >
+              <Ionicons name='close' size={30} color='#FFFFFF' />
+            </TouchableOpacity>
+            <View style={styles.modalInfo}>
+              <Text style={styles.modalInfoText}>Tap to close</Text>
+            </View>
+          </TouchableOpacity>
         </View>
       </Modal>
     </TabScreenWrapper>
@@ -1543,6 +1653,58 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "500",
     color: THEME.colors.text,
+  },
+  // Enhanced Modal Styles
+  imageModalContainer: {
+    flex: 1,
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.95)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  modalImageContainer: {
+    width: "90%",
+    height: "70%",
+    justifyContent: "center",
+    alignItems: "center",
+    borderRadius: 12,
+    overflow: "hidden",
+    shadowColor: THEME.colors.primary,
+    shadowOffset: {
+      width: 0,
+      height: 10,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  modalImage: {
+    width: "100%",
+    height: "100%",
+  },
+  closeModalButton: {
+    position: "absolute",
+    top: 50,
+    right: 20,
+    padding: 12,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    borderRadius: 25,
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.2)",
+  },
+  modalInfo: {
+    position: "absolute",
+    bottom: 50,
+    left: 0,
+    right: 0,
+    alignItems: "center",
+  },
+  modalInfoText: {
+    color: "rgba(255, 255, 255, 0.8)",
+    fontSize: 14,
+    fontWeight: "500",
   },
 });
 
