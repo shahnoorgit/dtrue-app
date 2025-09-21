@@ -1,11 +1,10 @@
-import React, { useState, useCallback, useEffect } from "react";
+import React, { useState, useCallback } from "react";
 import {
   Text,
   TextInput,
   TouchableOpacity,
   View,
   SafeAreaView,
-  KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
   Alert,
@@ -38,6 +37,7 @@ export default function SignInScreen() {
   const [passwordError, setPasswordError] = useState("");
   const [secureTextEntry, setSecureTextEntry] = useState(true);
 
+
   // --- Modal state for in-app reset ---
   const [resetVisible, setResetVisible] = useState(false);
   const [resetStep, setResetStep] = useState<"request" | "confirm">("request");
@@ -48,7 +48,6 @@ export default function SignInScreen() {
   const [resetPasswordError, setResetPasswordError] = useState("");
   const [resetError, setResetError] = useState("");
 
-  // Removed page view tracking - not critical for user behavior analysis
 
   // Reset transient UI / errors when this screen is focused
   useFocusEffect(
@@ -58,6 +57,7 @@ export default function SignInScreen() {
       setIsSubmitting(false);
       setIsResetting(false);
       setSecureTextEntry(true);
+      
       return () => {};
     }, [])
   );
@@ -284,135 +284,184 @@ export default function SignInScreen() {
   };
 
   return (
-    <SafeAreaView className='flex-1'>
+    <SafeAreaView style={{ flex: 1 }}>
       <StatusBar style='light' />
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        className='flex-1'
-      >
-        <View className='absolute top-10 left-0 right-0 items-center'>
-          <View className='w-64 h-1 bg-green-400/20 rounded-full' />
-        </View>
+      <View style={{ flex: 1, paddingHorizontal: 24 }}>
+          {/* Header Section */}
+          <View style={{ paddingTop: 32, paddingBottom: 16 }}>
+            <View className='items-center mb-8'>
+              <View
+                className='w-20 h-20 rounded-full bg-gray-800/80 items-center justify-center mb-6 border-2 border-green-400/50'
+                style={{
+                  shadowColor: cyberpunkTheme.colors.primary,
+                  shadowOffset: { width: 0, height: 0 },
+                  shadowOpacity: 0.6,
+                  shadowRadius: 20,
+                  elevation: 10,
+                }}
+              >
+                <Icon
+                  name='shield-key'
+                  size={40}
+                  color={cyberpunkTheme.colors.primary}
+                />
+              </View>
+              
+              <Text
+                className='text-white text-3xl font-bold text-center mb-3'
+                style={{
+                  textShadowColor: cyberpunkTheme.colors.primary,
+                  textShadowOffset: { width: 0, height: 0 },
+                  textShadowRadius: 8,
+                }}
+              >
+                Welcome Back
+              </Text>
 
-        <View className='flex-1 justify-center px-6'>
-          <View
-            className='w-24 h-24 rounded-full bg-gray-800/70 items-center justify-center self-center mb-10 border border-green-400/40'
-            style={{
-              shadowColor: cyberpunkTheme.colors.primary,
-              shadowOffset: { width: 0, height: 0 },
-              shadowOpacity: 0.5,
-              shadowRadius: 20,
-            }}
-          >
-            <Icon
-              name='shield-key'
-              size={48}
-              color={cyberpunkTheme.colors.primary}
-            />
+              <Text className='text-gray-300 text-center text-base leading-6'>
+                Sign in to continue your journey
+              </Text>
+            </View>
           </View>
 
-          <Text
-            className='text-white text-4xl font-bold text-center mb-2'
-            style={{
-              textShadowColor: cyberpunkTheme.colors.primary,
-              textShadowOffset: { width: 0, height: 0 },
-              textShadowRadius: 10,
-            }}
-          >
-            Welcome Back
-          </Text>
+          {/* Form Section */}
+          <View style={{ flex: 1, justifyContent: 'center' }}>
 
-          <Text className='text-gray-400 text-center mb-10'>
-            Please sign in to continue
-          </Text>
-
-          <View className='gap-5'>
-            <View>
-              <View className='bg-gray-800/70 rounded-xl border border-gray-700 overflow-hidden'>
-                <View className='flex-row items-center'>
-                  <Icon
-                    name='at'
-                    size={20}
-                    color={cyberpunkTheme.colors.primary}
-                    className='ml-4'
-                    style={{ marginLeft: 16 }}
-                  />
-                  <TextInput
-                    className='flex-1 px-3 py-4 text-white'
-                    placeholderTextColor='#8F9BB3'
-                    autoCapitalize='none'
-                    keyboardType='email-address'
-                    value={emailAddress}
-                    placeholder='Email'
-                    onChangeText={(text) => {
-                      setEmailAddress(text);
-                      if (emailError) setEmailError("");
-                    }}
-                  />
-                </View>
-              </View>
-              {emailError ? (
-                <Text className='text-red-400 text-sm mt-2 ml-1 flex-row items-center'>
-                  <Icon name='alert-circle-outline' size={14} color='#f87171' />{" "}
-                  {emailError}
+            <View className='space-y-6'>
+              {/* Email Input */}
+              <View>
+                <Text className='text-gray-300 text-sm font-medium mb-3 ml-1'>
+                  Email Address
                 </Text>
-              ) : null}
-            </View>
-
-            <View>
-              <View className='bg-gray-800/70 rounded-xl border border-gray-700 overflow-hidden'>
-                <View className='flex-row items-center'>
-                  <Icon
-                    name='lock'
-                    size={20}
-                    color={cyberpunkTheme.colors.primary}
-                    className='ml-4'
-                    style={{ marginLeft: 16 }}
-                  />
-                  <TextInput
-                    className='flex-1 px-3 py-4 text-white'
-                    placeholderTextColor='#8F9BB3'
-                    value={password}
-                    placeholder='Password'
-                    secureTextEntry={secureTextEntry}
-                    onChangeText={(text) => {
-                      setPassword(text);
-                      if (passwordError) setPasswordError("");
-                    }}
-                  />
-                  <TouchableOpacity
-                    onPress={() => setSecureTextEntry(!secureTextEntry)}
-                    className='pr-4'
-                  >
+                <View 
+                  className={`bg-gray-800/60 rounded-xl border-2 overflow-hidden ${
+                    emailError ? 'border-red-400/60' : 'border-gray-600/40'
+                  } ${emailAddress ? 'border-green-400/40' : ''}`}
+                  style={{
+                    shadowColor: emailAddress ? cyberpunkTheme.colors.primary : 'transparent',
+                    shadowOffset: { width: 0, height: 0 },
+                    shadowOpacity: 0.3,
+                    shadowRadius: 8,
+                    elevation: 5,
+                  }}
+                >
+                  <View className='flex-row items-center px-4 py-4'>
                     <Icon
-                      name={secureTextEntry ? "eye-outline" : "eye-off-outline"}
-                      size={20}
-                      color='#8F9BB3'
+                      name='at'
+                      size={22}
+                      color={emailError ? '#f87171' : emailAddress ? cyberpunkTheme.colors.primary : '#6B7280'}
+                      style={{ marginRight: 12 }}
                     />
-                  </TouchableOpacity>
+                    <TextInput
+                      style={{
+                        flex: 1,
+                        color: 'white',
+                        fontSize: 16,
+                        paddingVertical: 4,
+                      }}
+                      placeholderTextColor='#9CA3AF'
+                      autoCapitalize='none'
+                      keyboardType='email-address'
+                      autoComplete='email'
+                      value={emailAddress}
+                      placeholder='Enter your email'
+                      onChangeText={(text) => {
+                        setEmailAddress(text);
+                        if (emailError) setEmailError("");
+                      }}
+                    />
+                    {emailAddress && !emailError && (
+                      <Icon name='check-circle' size={20} color={cyberpunkTheme.colors.primary} />
+                    )}
+                  </View>
                 </View>
+                {emailError && (
+                  <View className='flex-row items-center mt-2 ml-1'>
+                    <Icon name='alert-circle-outline' size={16} color='#f87171' />
+                    <Text className='text-red-400 text-sm ml-2'>{emailError}</Text>
+                  </View>
+                )}
               </View>
-              {passwordError ? (
-                <Text className='text-red-400 text-sm mt-2 ml-1 flex-row items-center'>
-                  <Icon name='alert-circle-outline' size={14} color='#f87171' />{" "}
-                  {passwordError}
+
+              {/* Password Input */}
+              <View>
+                <Text className='text-gray-300 text-sm font-medium mb-3 ml-1'>
+                  Password
                 </Text>
-              ) : null}
+                <View 
+                  className={`bg-gray-800/60 rounded-xl border-2 overflow-hidden ${
+                    passwordError ? 'border-red-400/60' : 'border-gray-600/40'
+                  } ${password ? 'border-green-400/40' : ''}`}
+                  style={{
+                    shadowColor: password ? cyberpunkTheme.colors.primary : 'transparent',
+                    shadowOffset: { width: 0, height: 0 },
+                    shadowOpacity: 0.3,
+                    shadowRadius: 8,
+                    elevation: 5,
+                  }}
+                >
+                  <View className='flex-row items-center px-4 py-4'>
+                    <Icon
+                      name='lock'
+                      size={22}
+                      color={passwordError ? '#f87171' : password ? cyberpunkTheme.colors.primary : '#6B7280'}
+                      style={{ marginRight: 12 }}
+                    />
+                    <TextInput
+                      className='flex-1 text-white text-base'
+                      placeholderTextColor='#9CA3AF'
+                      autoComplete='password'
+                      value={password}
+                      placeholder='Enter your password'
+                      secureTextEntry={secureTextEntry}
+                      onChangeText={(text) => {
+                        setPassword(text);
+                        if (passwordError) setPasswordError("");
+                      }}
+                      key="password-input"
+                    />
+                    <TouchableOpacity
+                      onPress={() => setSecureTextEntry(!secureTextEntry)}
+                      className='ml-3 p-1'
+                    >
+                      <Icon
+                        name={secureTextEntry ? "eye-outline" : "eye-off-outline"}
+                        size={22}
+                        color='#9CA3AF'
+                      />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+                {passwordError && (
+                  <View className='flex-row items-center mt-2 ml-1'>
+                    <Icon name='alert-circle-outline' size={16} color='#f87171' />
+                    <Text className='text-red-400 text-sm ml-2'>{passwordError}</Text>
+                  </View>
+                )}
+              </View>
             </View>
 
-            {/* Forgot password + Sign in row */}
-            <View className='flex-row justify-between items-center mt-2'>
-              <TouchableOpacity
-                onPress={openReset}
-                disabled={isResetting || isSubmitting}
-              >
-                <Text className='text-green-400 text-sm'>Forgot password?</Text>
-              </TouchableOpacity>
+            {/* Action Buttons */}
+            <View className='mt-8 space-y-4'>
+              {/* Forgot Password Link */}
+              <View className='items-end'>
+                <TouchableOpacity
+                  onPress={openReset}
+                  disabled={isResetting || isSubmitting}
+                  className='py-2 px-1'
+                >
+                  <Text className='text-green-400 text-sm font-medium'>
+                    Forgot your password?
+                  </Text>
+                </TouchableOpacity>
+              </View>
 
+              {/* Sign In Button */}
               <TouchableOpacity
                 onPress={onSignInPress}
                 disabled={isSubmitting}
-                className='ml-4'
+                className='w-full'
+                activeOpacity={0.8}
               >
                 <LinearGradient
                   colors={
@@ -420,16 +469,22 @@ export default function SignInScreen() {
                   }
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
-                  className='rounded-xl py-3 px-6 items-center'
+                  className='rounded-xl py-4 px-6 items-center'
                   style={{
                     shadowColor: cyberpunkTheme.colors.primary,
-                    shadowOffset: { width: 0, height: 0 },
-                    shadowOpacity: 0.5,
-                    shadowRadius: 15,
+                    shadowOffset: { width: 0, height: 4 },
+                    shadowOpacity: 0.6,
+                    shadowRadius: 20,
+                    elevation: 8,
                   }}
                 >
                   {isSubmitting ? (
-                    <ActivityIndicator color='#0A1115' size='small' />
+                    <View className='flex-row items-center'>
+                      <ActivityIndicator color='#0A1115' size='small' />
+                      <Text className='text-gray-900 font-bold text-lg ml-2'>
+                        Signing In...
+                      </Text>
+                    </View>
                   ) : (
                     <Text className='text-gray-900 font-bold text-lg tracking-wide'>
                       Sign In
@@ -440,34 +495,53 @@ export default function SignInScreen() {
             </View>
           </View>
 
-          <View className='flex-row justify-center mt-8 items-center'>
-            <Text className='text-gray-300'>New here? </Text>
-            <TouchableOpacity onPress={() => router.push("/(auth)/sign-up")}>
-              <Text
-                className='text-green-400 font-semibold'
-                style={{
-                  textShadowColor: cyberpunkTheme.colors.primary,
-                  textShadowOffset: { width: 0, height: 0 },
-                  textShadowRadius: 8,
-                }}
-              >
-                Create account
-              </Text>
-            </TouchableOpacity>
-          </View>
+          {/* Footer Section */}
+          <View style={{ paddingBottom: 24, paddingTop: 16 }}>
+            <View className='items-center space-y-4'>
+              {/* Divider */}
+              <View className='flex-row items-center w-full'>
+                <View className='flex-1 h-px bg-gray-700' />
+                <Text className='text-gray-500 text-sm px-4'>OR</Text>
+                <View className='flex-1 h-px bg-gray-700' />
+              </View>
 
-          <View className='absolute bottom-10 left-0 right-0 items-center'>
-            <View className='w-32 h-1 bg-green-400/20 rounded-full' />
+              {/* Sign Up Link */}
+              <View className='flex-row items-center'>
+                <Text className='text-gray-300 text-base'>New to Dtrue? </Text>
+                <TouchableOpacity 
+                  onPress={() => router.push("/(auth)/sign-up")}
+                  className='p-1'
+                  activeOpacity={0.7}
+                >
+                  <Text
+                    className='text-green-400 font-bold text-base'
+                    style={{
+                      textShadowColor: cyberpunkTheme.colors.primary,
+                      textShadowOffset: { width: 0, height: 0 },
+                      textShadowRadius: 6,
+                    }}
+                  >
+                    Create Account
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
           </View>
-        </View>
-      </KeyboardAvoidingView>
+      </View>
 
       {/* ---------- Reset Password Modal ---------- */}
-      <Modal visible={resetVisible} animationType='slide' transparent>
-        <View className='flex-1 justify-center items-center bg-black/60 px-6'>
+      <Modal visible={resetVisible} animationType='fade' transparent>
+        <View className='flex-1 justify-center items-center bg-black/70 px-6'>
           <View
-            style={{ width: Math.min(width - 40, 520) }}
-            className='bg-gray-900 rounded-2xl p-6 border border-green-400/20'
+            className='bg-gray-900/95 rounded-2xl p-6 border border-green-400/30'
+            style={{
+              width: Math.min(width - 40, 520),
+              shadowColor: cyberpunkTheme.colors.primary,
+              shadowOffset: { width: 0, height: 0 },
+              shadowOpacity: 0.3,
+              shadowRadius: 20,
+              elevation: 15,
+            }}
           >
             <View className='flex-row items-center justify-between mb-4'>
               <Text className='text-xl font-bold text-white'>

@@ -29,22 +29,28 @@ const ProfileCard: React.FC<ProfileCardProps> = ({ item, onPress }) => (
   <TouchableOpacity
     style={styles.profileCard}
     onPress={() => onPress(item)}
-    activeOpacity={0.7}
+    activeOpacity={0.8}
   >
     <LinearGradient
       colors={[THEME.colors.backgroundDarker, THEME.colors.background]}
       style={styles.profileCardGradient}
     >
-      <Image source={{ uri: item.image }} style={styles.profileImage} />
+      <View style={styles.profileImageContainer}>
+        <Image source={{ uri: item.image }} style={styles.profileImage} />
+      </View>
       <View style={styles.profileInfo}>
         <Text style={styles.profileUsername}>@{item.username}</Text>
-        <Text style={styles.profileId}> {item?.about?.slice(0, 8)}...</Text>
+        <Text style={styles.profileAbout} numberOfLines={2}>
+          {item?.about || "No bio available"}
+        </Text>
       </View>
-      <Ionicons
-        name='chevron-forward'
-        size={20}
-        color={THEME.colors.textMuted}
-      />
+      <View style={styles.chevronContainer}>
+        <Ionicons
+          name='chevron-forward'
+          size={18}
+          color={THEME.colors.textMuted}
+        />
+      </View>
     </LinearGradient>
   </TouchableOpacity>
 );
@@ -52,7 +58,7 @@ const ProfileCard: React.FC<ProfileCardProps> = ({ item, onPress }) => (
 const styles = StyleSheet.create({
   profileCard: {
     marginHorizontal: 4,
-    marginBottom: 12,
+    marginBottom: 8,
   },
   profileCardGradient: {
     flexDirection: "row",
@@ -60,26 +66,44 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#fff",
+    borderColor: "rgba(255, 255, 255, 0.1)",
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  profileImageContainer: {
+    marginRight: 12,
   },
   profileImage: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    marginRight: 12,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: THEME.colors.backgroundDarker,
   },
   profileInfo: {
     flex: 1,
+    justifyContent: "center",
   },
   profileUsername: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: "600",
     color: THEME.colors.text,
     marginBottom: 4,
   },
-  profileId: {
-    fontSize: 12,
+  profileAbout: {
+    fontSize: 13,
     color: THEME.colors.textMuted,
+    lineHeight: 18,
+  },
+  chevronContainer: {
+    padding: 4,
+    justifyContent: "center",
+    alignItems: "center",
   },
 });
 

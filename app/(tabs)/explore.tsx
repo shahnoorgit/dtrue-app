@@ -167,7 +167,7 @@ const ExploreDebatesPage = () => {
     fetchExploreDebates();
   }, [token, searchQuery]);
 
-  // Debounce searchQuery
+  // Debounce searchQuery - only trigger when there's actually a query
   useEffect(() => {
     clearTimeout(searchTimeout.current!);
     if (searchQuery.trim()) {
@@ -177,16 +177,19 @@ const ExploreDebatesPage = () => {
         500
       );
     } else {
-      // Reset to API debates on clear
-      setDebates([]);
-      setProfiles([]);
-      setCurrentPage(1);
-      setHasMorePages(true);
-      setIsSearching(false);
-      setSearchLoading(false);
+      // Only clear results if we were actually searching
+      if (isSearching || searchLoading) {
+        setDebates([]);
+        setProfiles([]);
+        setCurrentPage(1);
+        setHasMorePages(true);
+        setIsSearching(false);
+        setSearchLoading(false);
+      }
     }
     return () => clearTimeout(searchTimeout.current!);
-  }, [searchQuery, searchType]);
+  }, [searchQuery]); // Removed searchType dependency to prevent unnecessary triggers
+
 
   // Search for debates
   const performDebateSearch = useCallback(
@@ -358,6 +361,7 @@ const ExploreDebatesPage = () => {
     [searchType, performDebateSearch, performProfileSearch]
   );
 
+
   const handleRefresh = useCallback(() => {
     setRefreshing(true);
     retryCount.current = 0;
@@ -369,6 +373,7 @@ const ExploreDebatesPage = () => {
       setProfiles([]);
       setCurrentPage(1);
       setHasMorePages(true);
+      setFetchError(null);
       // The useEffect will trigger the API call
     }
   }, [searchQuery, performSearch]);
@@ -439,89 +444,119 @@ const ExploreDebatesPage = () => {
     });
   }, []);
 
-  const handleSearchTypeChange = useCallback((type: "debates" | "profiles") => {
-    setSearchType(type);
-    setDebates([]);
-    setProfiles([]);
-    setCurrentPage(1);
-    setHasMorePages(true);
-    setFetchError(null);
-  }, []);
 
   const renderSearchHeader = () => (
     <View style={styles.searchContainer}>
-      <View style={styles.searchInputContainer}>
-        <Ionicons name='search' size={20} color={THEME.colors.textMuted} />
-        <TextInput
-          style={styles.searchInput}
-          placeholder={`Search Profiles or Debates...`}
-          placeholderTextColor={THEME.colors.textMuted}
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-          returnKeyType='search'
-          onSubmitEditing={Keyboard.dismiss}
-        />
-        {searchLoading ? (
-          <ActivityIndicator
-            size='small'
-            color={THEME.colors.primary}
-            style={styles.searchLoadingIcon}
+      {/* Enhanced Search Input */}
+      <View style={styles.searchInputWrapper}>
+        <View style={styles.searchInputContainer}>
+          <View style={styles.searchIconContainer}>
+            <Ionicons name='search' size={20} color={THEME.colors.textMuted} />
+          </View>
+          <TextInput
+            style={styles.searchInput}
+            placeholder={`Search ${searchType === "debates" ? "debates" : "people"}...`}
+            placeholderTextColor={THEME.colors.textMuted}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            returnKeyType='search'
+            onSubmitEditing={Keyboard.dismiss}
+            autoCorrect={false}
+            autoCapitalize="none"
           />
-        ) : (
-          searchQuery.length > 0 && (
-            <TouchableOpacity
-              onPress={() => {
-                setSearchQuery("");
-                setDebates([]);
-                setProfiles([]);
-                setSearchType("debates");
-              }}
-              style={styles.clearButton}
-            >
-              <Ionicons
-                name='close-circle'
-                size={20}
-                color={THEME.colors.textMuted}
+          {searchLoading ? (
+            <View style={styles.searchLoadingContainer}>
+              <ActivityIndicator
+                size='small'
+                color={THEME.colors.primary}
               />
-            </TouchableOpacity>
-          )
-        )}
+            </View>
+          ) : (
+            searchQuery.length > 0 && (
+              <TouchableOpacity
+                onPress={() => {
+                  setSearchQuery("");
+                  setDebates([]);
+                  setProfiles([]);
+                  // Don't automatically change search type - keep current selection
+                }}
+                style={styles.clearButton}
+                activeOpacity={0.7}
+              >
+                <Ionicons
+                  name='close-circle'
+                  size={20}
+                  color={THEME.colors.textMuted}
+                />
+              </TouchableOpacity>
+            )
+          )}
+        </View>
       </View>
 
+      {/* Enhanced Search Type Selector */}
       {searchQuery.trim() && (
-        <View style={styles.searchTypeContainer}>
-          <TouchableOpacity
-            style={[
-              styles.searchTypeButton,
-              searchType === "debates" && styles.searchTypeButtonActive,
-            ]}
-            onPress={() => handleSearchTypeChange("debates")}
-          >
-            <Text
+        <View style={styles.searchTypeWrapper}>
+          <View style={styles.searchTypeContainer}>
+            <TouchableOpacity
               style={[
-                styles.searchTypeText,
-                searchType === "debates" && styles.searchTypeTextActive,
+                styles.searchTypeButton,
+                searchType === "debates" && styles.searchTypeButtonActive,
               ]}
+              onPress={() => {
+                setSearchType("debates");
+                // Only search if there's a query
+                if (searchQuery.trim()) {
+                  setSearchLoading(true);
+                  setTimeout(() => performSearch(searchQuery.trim(), 1), 100);
+                }
+              }}
+              activeOpacity={0.8}
             >
-              Debates
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[
-              styles.searchTypeButton,
-              searchType === "profiles" && styles.searchTypeButtonActive,
-            ]}
-            onPress={() => handleSearchTypeChange("profiles")}
-          >
-            <Text
+              <Ionicons 
+                name='chatbubbles' 
+                size={16} 
+                color={searchType === "debates" ? THEME.colors.background : THEME.colors.textMuted} 
+              />
+              <Text
+                style={[
+                  styles.searchTypeText,
+                  searchType === "debates" && styles.searchTypeTextActive,
+                ]}
+              >
+                Debates
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
               style={[
-                styles.searchTypeText,
-                searchType === "profiles" && styles.searchTypeTextActive,
+                styles.searchTypeButton,
+                searchType === "profiles" && styles.searchTypeButtonActive,
               ]}
+              onPress={() => {
+                setSearchType("profiles");
+                // Only search if there's a query
+                if (searchQuery.trim()) {
+                  setSearchLoading(true);
+                  setTimeout(() => performSearch(searchQuery.trim(), 1), 100);
+                }
+              }}
+              activeOpacity={0.8}
             >
-              Accounts
-            </Text>
-          </TouchableOpacity>
+              <Ionicons 
+                name='people' 
+                size={16} 
+                color={searchType === "profiles" ? THEME.colors.background : THEME.colors.textMuted} 
+              />
+              <Text
+                style={[
+                  styles.searchTypeText,
+                  searchType === "profiles" && styles.searchTypeTextActive,
+                ]}
+              >
+                People
+              </Text>
+            </TouchableOpacity>
+          </View>
         </View>
       )}
     </View>
@@ -643,19 +678,34 @@ const ExploreDebatesPage = () => {
 
   const renderEmptyState = () => (
     <View style={styles.emptyState}>
-      <Ionicons
-        name={searchQuery.trim() ? "search" : "compass"}
-        size={64}
-        color={THEME.colors.textMuted}
-      />
+      <View style={styles.emptyStateIconContainer}>
+        <Ionicons
+          name={searchQuery.trim() ? "search" : "compass"}
+          size={64}
+          color={THEME.colors.textMuted}
+        />
+      </View>
       <Text style={styles.emptyStateTitle}>
-        {searchQuery.trim() ? "No Results Found" : "Explore Debates"}
+        {searchQuery.trim() ? "No Results Found" : "Discover Amazing Content"}
       </Text>
       <Text style={styles.emptyStateText}>
         {searchQuery.trim()
-          ? `No ${searchType} found for "${searchQuery}".`
-          : "Search for debates or profiles you're interested in!"}
+          ? `No ${searchType === "debates" ? "debates" : "people"} found for "${searchQuery}". Try different keywords or check your spelling.`
+          : "Search for debates or connect with interesting people!"}
       </Text>
+      {searchQuery.trim() && (
+        <TouchableOpacity
+          style={styles.retrySearchButton}
+          onPress={() => {
+            setSearchQuery("");
+            setDebates([]);
+            setProfiles([]);
+            // Keep current search type selection
+          }}
+        >
+          <Text style={styles.retrySearchButtonText}>Clear Search</Text>
+        </TouchableOpacity>
+      )}
     </View>
   );
 
@@ -692,8 +742,15 @@ const ExploreDebatesPage = () => {
   if (loading && !refreshing) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size='large' color={THEME.colors.primary} />
-        <Text style={styles.loadingText}>Loading debates...</Text>
+        <View style={styles.loadingIconContainer}>
+          <ActivityIndicator size='large' color={THEME.colors.primary} />
+        </View>
+        <Text style={styles.loadingText}>
+          {searchQuery.trim() 
+            ? `Searching ${searchType === "debates" ? "debates" : "people"}...` 
+            : "Loading amazing content..."
+          }
+        </Text>
       </View>
     );
   }
@@ -763,57 +820,91 @@ const styles = StyleSheet.create({
   },
   searchContainer: {
     paddingHorizontal: 0,
+    marginBottom: 8,
+  },
+  searchInputWrapper: {
+    marginBottom: 12,
   },
   searchInputContainer: {
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: THEME.colors.searchBackground,
-    borderRadius: 12,
+    borderRadius: 16,
     paddingHorizontal: 16,
-    height: 48,
-    borderWidth: 1,
+    height: 52,
+    borderWidth: 2,
     borderColor: "rgba(255, 255, 255, 0.1)",
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
-  searchIcon: {
+  searchIconContainer: {
     marginRight: 12,
+    padding: 2,
   },
   searchInput: {
     flex: 1,
     color: THEME.colors.text,
     fontSize: 16,
     height: "100%",
+    fontWeight: "500",
   },
-  searchLoadingIcon: {
+  searchLoadingContainer: {
     marginLeft: 8,
+    padding: 4,
   },
   clearButton: {
     marginLeft: 8,
-    padding: 4,
+    padding: 6,
+    borderRadius: 12,
+    backgroundColor: "rgba(255, 255, 255, 0.1)",
+  },
+  searchTypeWrapper: {
+    marginTop: 4,
   },
   searchTypeContainer: {
     flexDirection: "row",
-    marginTop: 12,
     backgroundColor: THEME.colors.searchBackground,
-    borderRadius: 8,
+    borderRadius: 12,
     padding: 4,
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.1)",
   },
   searchTypeButton: {
     flex: 1,
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 6,
+    flexDirection: "row",
     alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    marginHorizontal: 2,
   },
   searchTypeButtonActive: {
     backgroundColor: THEME.colors.primary,
+    shadowColor: THEME.colors.primary,
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 3,
   },
   searchTypeText: {
     fontSize: 14,
     fontWeight: "600",
     color: THEME.colors.textMuted,
+    marginLeft: 6,
   },
   searchTypeTextActive: {
     color: THEME.colors.background,
+    fontWeight: "700",
   },
   listContent: {
     paddingHorizontal: 16,
@@ -930,30 +1021,66 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     backgroundColor: THEME.colors.background,
+    paddingVertical: 64,
+    paddingHorizontal: 32,
+  },
+  loadingIconContainer: {
+    marginBottom: 16,
+    padding: 20,
+    backgroundColor: "rgba(255, 255, 255, 0.05)",
+    borderRadius: 50,
   },
   loadingText: {
     color: THEME.colors.textMuted,
     fontSize: 16,
-    marginTop: 16,
+    textAlign: "center",
+    fontWeight: "500",
   },
   emptyState: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
     paddingVertical: 64,
+    paddingHorizontal: 32,
+  },
+  emptyStateIconContainer: {
+    marginBottom: 24,
+    padding: 20,
+    backgroundColor: "rgba(255, 255, 255, 0.05)",
+    borderRadius: 50,
   },
   emptyStateTitle: {
-    fontSize: 20,
+    fontSize: 24,
     fontWeight: "bold",
     color: THEME.colors.text,
-    marginTop: 16,
-    marginBottom: 8,
+    marginBottom: 12,
+    textAlign: "center",
   },
   emptyStateText: {
-    fontSize: 14,
+    fontSize: 16,
     color: THEME.colors.textMuted,
     textAlign: "center",
-    paddingHorizontal: 32,
+    lineHeight: 24,
+    marginBottom: 24,
+  },
+  retrySearchButton: {
+    backgroundColor: THEME.colors.primary,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 25,
+    shadowColor: THEME.colors.primary,
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  retrySearchButtonText: {
+    color: THEME.colors.background,
+    fontSize: 16,
+    fontWeight: "600",
   },
   errorState: {
     flex: 1,

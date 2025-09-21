@@ -18,6 +18,7 @@ import { useAuthToken } from "@/hook/clerk/useFetchjwtToken";
 import { useRouter } from "expo-router";
 import { useAuth } from "@clerk/clerk-expo";
 import { logError } from "@/utils/sentry/sentry";
+import { useError } from "@/contexts/ErrorContext";
 
 // Theme (keeps your palette)
 const THEME = {
@@ -53,7 +54,7 @@ interface Notification {
   actorUser?: {
     id: string;
     username?: string;
-    profileImageUrl?: string;
+    image?: string;
   } | null;
   debateRoom?: {
     title?: string;
@@ -122,6 +123,7 @@ const NotificationsPage: React.FC = () => {
   const [token, refreshToken] = useAuthToken();
   const router = useRouter();
   const { userId } = useAuth() as unknown as { userId?: string | null };
+  const { showError } = useError();
 
   const isMountedRef = useRef(true);
   const limit = 10;
@@ -251,7 +253,7 @@ const NotificationsPage: React.FC = () => {
           notificationId,
         });
         console.warn("Failed to mark notification as read:", error);
-        Alert.alert("Error", "Failed to mark notification as read");
+        showError("Error", "Failed to mark notification as read", { type: 'error' });
       } finally {
         setMarkingAsRead(null);
       }
@@ -308,15 +310,18 @@ const NotificationsPage: React.FC = () => {
         });
         return;
       } else {
-        Alert.alert("Notification", notification.body);
+        showError("Notification", notification.body, { type: 'info' });
       }
     },
     [router, userId, markAsRead]
   );
 
   const renderNotificationCard = ({ item }: { item: Notification }) => {
-    const displayImage =
-      item.debateRoom?.image || item.actorUser?.profileImageUrl || item.image;
+    // For debate notifications, show debate image first
+    // For non-debate notifications, show actor profile image first
+    const displayImage = item.debateRoom?.image 
+      ? item.debateRoom.image 
+      : item.actorUser?.image || item.image;
     const isUnread = !item.isSeen;
     const isMarkingThisAsRead = markingAsRead === item.id;
 
@@ -353,9 +358,6 @@ const NotificationsPage: React.FC = () => {
                 >
                   {item.body}
                 </Text>
-                <Text style={styles.notificationTime}>
-                  {formatShort(item.createdAt)}
-                </Text>
               </View>
 
               {isUnread && (
@@ -373,13 +375,17 @@ const NotificationsPage: React.FC = () => {
                   ) : (
                     <Ionicons
                       name='checkmark-circle-outline'
-                      size={24}
+                      size={16}
                       color={THEME.colors.primary}
                     />
                   )}
                 </TouchableOpacity>
               )}
             </View>
+            
+            <Text style={styles.notificationTime}>
+              {formatShort(item.createdAt)}
+            </Text>
           </View>
         </View>
       </Pressable>
@@ -510,33 +516,42 @@ const styles = StyleSheet.create({
     color: THEME.colors.text,
   },
   listContent: {
-    paddingHorizontal: 12, // Reduced padding for wider cards
+    paddingHorizontal: 16,
     paddingBottom: 100,
   },
   cardContainer: {
-    marginBottom: 10,
+    marginBottom: 8,
   },
   card: {
     backgroundColor: THEME.colors.cardBackground,
-    borderRadius: 16, // Slightly more rounded
+    borderRadius: 8,
     borderWidth: 1,
     borderColor: THEME.colors.cardBorder,
     flexDirection: "row",
     overflow: "hidden",
-    minHeight: 110, // Increased from 100 to accommodate more spacing
-    maxHeight: 130, // Increased from 120 to accommodate more spacing
+    minHeight: 70,
+    padding: 12,
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
   },
   unreadCard: {
     borderLeftWidth: 4,
     borderLeftColor: THEME.colors.primary,
   },
   imageContainer: {
-    width: 80, // Slightly wider image
-    height: 80,
-    margin: 16,
-    borderRadius: 10,
+    width: 48,
+    height: 48,
+    marginRight: 10,
+    borderRadius: 6,
     overflow: "hidden",
-    alignSelf: "center", // Center the image vertically
+    alignSelf: "flex-start",
+    marginTop: 1,
   },
   notificationImage: {
     width: "100%",
@@ -545,75 +560,76 @@ const styles = StyleSheet.create({
   },
   cardContent: {
     flex: 1,
-    paddingVertical: 16,
-    paddingRight: 16,
     justifyContent: "center",
+    paddingVertical: 2,
   },
   contentHeader: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start",
     flex: 1,
+    marginBottom: 4,
   },
   textContainer: {
     flex: 1,
-    justifyContent: "center",
+    marginRight: 6,
   },
   notificationTitle: {
-    fontSize: 16, // Slightly larger
+    fontSize: 14,
     fontWeight: "600",
     color: THEME.colors.text,
-    lineHeight: 22,
-    marginBottom: 4,
+    lineHeight: 18,
+    marginBottom: 2,
   },
   notificationBody: {
-    fontSize: 14, // Slightly larger
+    fontSize: 12,
     color: THEME.colors.textMuted,
-    lineHeight: 20,
-    marginBottom: 6,
+    lineHeight: 16,
+    marginBottom: 4,
   },
   notificationTime: {
-    fontSize: 12,
+    fontSize: 10,
     color: THEME.colors.textSecondary,
     fontWeight: "500",
   },
   markAsReadButton: {
-    padding: 8,
-    marginLeft: 8,
-    borderRadius: 20,
-    backgroundColor: "rgba(0, 255, 148, 0.1)", // Subtle background
+    padding: 4,
+    borderRadius: 12,
+    backgroundColor: "rgba(0, 255, 148, 0.1)",
     justifyContent: "center",
     alignItems: "center",
-    minWidth: 40,
-    minHeight: 40,
+    minWidth: 28,
+    minHeight: 28,
+    alignSelf: "flex-start",
   },
 
-  // Skeleton styles (updated for wider cards)
+  // Skeleton styles (updated for new layout)
   skeletonContainer: {
-    paddingHorizontal: 12,
+    paddingHorizontal: 16,
   },
   skeletonCard: {
     backgroundColor: THEME.colors.cardBackground,
-    borderRadius: 16,
+    borderRadius: 8,
     borderWidth: 1,
     borderColor: THEME.colors.cardBorder,
     flexDirection: "row",
-    marginBottom: 16,
+    marginBottom: 8,
     overflow: "hidden",
-    minHeight: 100,
+    minHeight: 70,
+    padding: 12,
   },
   skeletonImage: {
-    width: 80,
-    height: 80,
-    margin: 16,
-    borderRadius: 10,
+    width: 48,
+    height: 48,
+    marginRight: 10,
+    borderRadius: 6,
     backgroundColor: THEME.colors.backgroundDarker,
-    alignSelf: "center",
+    alignSelf: "flex-start",
+    marginTop: 1,
   },
   skeletonContent: {
     flex: 1,
-    paddingVertical: 16,
-    paddingRight: 16,
     justifyContent: "center",
+    paddingVertical: 2,
   },
   skeletonHeader: {
     flexDirection: "row",

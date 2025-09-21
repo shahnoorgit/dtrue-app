@@ -9,33 +9,33 @@ export default function AuthRoutesLayout() {
 
   return (
     <View className='flex-1'>
-      {/* Cyberpunk background with animated gradient */}
+      {/* Optimized cyberpunk background */}
       <LinearGradient
         colors={cyberpunkTheme.colors.gradients.background as [string, string]}
         className='absolute inset-0'
       />
 
-      {/* Decorative grid lines */}
-      <View className='absolute inset-0 opacity-20'>
-        {Array.from({ length: 20 }).map((_, i) => (
+      {/* Subtle decorative elements - reduced for better performance */}
+      <View className='absolute inset-0 opacity-10'>
+        {Array.from({ length: 12 }).map((_, i) => (
           <View
             key={`h-line-${i}`}
-            className='absolute h-px bg-green-400/30'
-            style={{ width: width, top: i * 40, left: 0 }}
+            className='absolute h-px bg-green-400/20'
+            style={{ width: width, top: i * 60, left: 0 }}
           />
         ))}
-        {Array.from({ length: 15 }).map((_, i) => (
+        {Array.from({ length: 8 }).map((_, i) => (
           <View
             key={`v-line-${i}`}
-            className='absolute w-px bg-green-400/30'
-            style={{ height: "100%", left: i * 40, top: 0 }}
+            className='absolute w-px bg-green-400/20'
+            style={{ height: "100%", left: i * 60, top: 0 }}
           />
         ))}
       </View>
 
-      {/* Decorative cyberpunk elements */}
-      <View className='absolute top-10 right-10 w-40 h-40 rounded-full bg-primary/5 blur-xl' />
-      <View className='absolute bottom-20 left-5 w-32 h-32 rounded-full bg-primary/5 blur-xl' />
+      {/* Subtle accent elements */}
+      <View className='absolute top-20 right-8 w-24 h-24 rounded-full bg-primary/3 blur-2xl' />
+      <View className='absolute bottom-32 left-6 w-20 h-20 rounded-full bg-primary/3 blur-2xl' />
 
       <Stack
         screenOptions={{
@@ -43,9 +43,8 @@ export default function AuthRoutesLayout() {
           contentStyle: {
             backgroundColor: "transparent",
           },
-          headerLeft: () => (
-            <View className='ml-2 p-2 rounded-full bg-gray-800/50 border border-green-400/20' />
-          ),
+          animation: "slide_from_right",
+          animationDuration: 300,
         }}
       />
     </View>
