@@ -28,6 +28,8 @@ import { PostHogProvider } from "posthog-react-native";
 import { posthog } from "@/lib/posthog/posthog";
 import { AppOpenTracker } from "@/lib/posthog/PosthogWrapper";
 import { ErrorProvider } from "@/contexts/ErrorContext";
+import { OfflineProvider } from "@/contexts/OfflineContext";
+import OfflineWrapper from "@/components/ui/OfflineWrapper";
 
 // Prevent the splash screen from auto-hiding. We will control this manually.
 SplashScreen.preventAutoHideAsync();
@@ -538,7 +540,7 @@ function InitialStateNavigator() {
     const delay = 1000 * Math.pow(2, retryCount - 1);
     const timer = setTimeout(() => checkUserStatus(userId, true), delay);
     return () => clearTimeout(timer);
-  }, [appState.retryCount, userId, checkUserStatus]);
+  }, [appState.retryCount, userId]);
 
   useEffect(() => {
     if (!isLoaded) return;
@@ -698,28 +700,33 @@ export default Sentry.wrap(function RootLayout() {
     <ClerkProvider tokenCache={tokenCache} publishableKey={publishableKey}>
       <ErrorBoundary>
         <ErrorProvider>
-          <View className='flex-1 bg-gray-900'>
-            <StatusBar
-              barStyle='light-content'
-              backgroundColor={cyberpunkTheme.colors.background.dark}
-            />
-            <PostHogProvider autocapture={false} client={posthog}>
-              <LinearGradient
-                colors={
-                  cyberpunkTheme.colors.gradients.background as [string, string]
-                }
-                className='absolute inset-0'
+          <OfflineProvider>
+            <View className='flex-1 bg-gray-900'>
+              <StatusBar
+                barStyle='light-content'
+                backgroundColor={cyberpunkTheme.colors.background.dark}
               />
+              <PostHogProvider autocapture={false} client={posthog}>
+                <LinearGradient
+                  colors={
+                    cyberpunkTheme.colors.gradients.background as [string, string]
+                  }
+                  className='absolute inset-0'
+                />
 
-              <SentryUserWrapper />
-              <AppOpenTracker />
-              <InitialStateNavigator />
-              <RuntimeDeepLinkHandlerWrapper />
+                <SentryUserWrapper />
+                <AppOpenTracker />
+                <InitialStateNavigator />
+                <RuntimeDeepLinkHandlerWrapper />
 
-              {/* Slot renders the current page determined by the navigator */}
-              <Slot />
-            </PostHogProvider>
-          </View>
+                {/* Offline wrapper handles network status and offline functionality */}
+                <OfflineWrapper>
+                  {/* Slot renders the current page determined by the navigator */}
+                  <Slot />
+                </OfflineWrapper>
+              </PostHogProvider>
+            </View>
+          </OfflineProvider>
         </ErrorProvider>
       </ErrorBoundary>
     </ClerkProvider>

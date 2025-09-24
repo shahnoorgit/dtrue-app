@@ -250,7 +250,6 @@ const Rooms = () => {
         if (!response.ok) {
           if (response.status === 401) {
             refreshToken();
-            fetchDebateRooms();
             return;
           }
 
@@ -293,7 +292,7 @@ const Rooms = () => {
         setRefreshing(false);
       }
     },
-    [token, refreshToken, activeTab, tabDataCache]
+    [token, refreshToken, activeTab]
   );
 
   const onRefresh = useCallback(() => {
@@ -323,12 +322,6 @@ const Rooms = () => {
     [activeTab, tabDataCache]
   );
 
-  useEffect(() => {
-    if (!token) return;
-    if (rooms.length === 0 && !tabDataCache[activeTab]) {
-      fetchDebateRooms();
-    }
-  }, [token]);
 
   const calculateTimeRemaining = (createdAt, durationHours) => {
     const creationDate = new Date(createdAt);

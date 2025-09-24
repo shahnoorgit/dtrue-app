@@ -24,6 +24,8 @@ import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { logError } from "@/utils/sentry/sentry";
 import { trackDebateJoined, trackContentShared } from "@/lib/posthog/events";
+import { useOffline } from "@/contexts/OfflineContext";
+import OfflineIndicator from "@/components/ui/OfflineIndicator";
 
 const DEBATES_STORAGE_KEY = "cached_debates";
 const DEBATES_TIMESTAMP_KEY = "cached_debates_timestamp";
@@ -35,21 +37,24 @@ const screenHeight = Dimensions.get("window").height;
 const HEADER_HEIGHT = 110;
 
 export default function DebateFeed() {
-  const [debates, setDebates] = useState([]);
-  const [cursor, setCursor] = useState(null);
+  const [debates, setDebates] = useState<any[]>([]);
+  const [cursor, setCursor] = useState<string | null>(null);
   const [hasNextPage, setHasNextPage] = useState(true);
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
   const [unseenCount, setUnseenCount] = useState(0); // 🔹 new state
+  const [refreshTimeout, setRefreshTimeout] = useState<NodeJS.Timeout | null>(null);
+  const [lastRefreshTime, setLastRefreshTime] = useState(0);
 
   const { getToken } = useAuth();
+  const { networkStatus, saveUserAction } = useOffline();
   const router = useRouter();
-  const tokenRef = useRef(null);
+  const tokenRef = useRef<string | null>(null);
   const momentumRef = useRef(false);
   const scrollY = useRef(new Animated.Value(0)).current;
-  const flatListRef = useRef(null);
+  const flatListRef = useRef<FlatList>(null);
   const scrollOffsetRef = useRef(0);
   const isInitialMount = useRef(true);
   const insets = useSafeAreaInsets();
@@ -77,23 +82,28 @@ export default function DebateFeed() {
           scrollOffsetRef.current.toString()
         );
       } catch (e) {}
+      
+      // Clear any pending refresh timeout
+      if (refreshTimeout) {
+        clearTimeout(refreshTimeout);
+      }
     };
   }, []);
 
   useEffect(() => {
-    if (isInitialMount.current && debates.length > 0 && flatListRef.current) {
-      const restoreScroll = async () => {
-        const savedOffset = await AsyncStorage.getItem(SCROLL_POSITION_KEY);
-        if (savedOffset) {
-          flatListRef.current.scrollToOffset({
-            offset: parseFloat(savedOffset),
-            animated: false,
-          });
+        if (isInitialMount.current && debates.length > 0 && flatListRef.current) {
+          const restoreScroll = async () => {
+            const savedOffset = await AsyncStorage.getItem(SCROLL_POSITION_KEY);
+            if (savedOffset && flatListRef.current) {
+              flatListRef.current.scrollToOffset({
+                offset: parseFloat(savedOffset),
+                animated: false,
+              });
+            }
+          };
+          restoreScroll();
+          isInitialMount.current = false;
         }
-      };
-      restoreScroll();
-      isInitialMount.current = false;
-    }
   }, [debates]);
 
   useEffect(() => {
@@ -107,6 +117,22 @@ export default function DebateFeed() {
       AsyncStorage.setItem(CURSOR_STORAGE_KEY, cursor).catch(() => {});
     }
   }, [cursor]);
+
+  // Handle network status changes
+  useEffect(() => {
+    if (networkStatus.isOffline) {
+      // If going offline, stop any ongoing refresh
+      setRefreshing(false);
+      setLoading(false);
+      setLoadingMore(false);
+      
+      // Clear any pending timeout
+      if (refreshTimeout) {
+        clearTimeout(refreshTimeout);
+        setRefreshTimeout(null);
+      }
+    }
+  }, [networkStatus.isOffline, refreshTimeout]);
 
   const loadCachedDebates = async () => {
     try {
@@ -124,7 +150,7 @@ export default function DebateFeed() {
     }
   };
 
-  const cacheDebates = async (data) => {
+  const cacheDebates = async (data: any[]) => {
     try {
       await AsyncStorage.multiSet([
         [DEBATES_STORAGE_KEY, JSON.stringify(data)],
@@ -156,8 +182,18 @@ export default function DebateFeed() {
   }, []);
 
   const fetchDebates = useCallback(
-    async (fetchCursor = null, shouldRefresh = false) => {
+    async (fetchCursor: string | null = null, shouldRefresh = false) => {
       if (!tokenRef.current) return;
+      
+      // If offline, don't attempt to fetch but reset loading states
+      if (networkStatus.isOffline) {
+        console.log("Offline: Skipping fetch request");
+        setLoading(false);
+        setRefreshing(false);
+        setLoadingMore(false);
+        return;
+      }
+      
       fetchCursor === null ? setLoading(true) : setLoadingMore(true);
 
       try {
@@ -187,6 +223,15 @@ export default function DebateFeed() {
           }
         }
       } catch (error: any) {
+        // Track offline actions if network error
+        if (error.code === 'NETWORK_ERROR' || error.message?.includes('Network Error')) {
+          saveUserAction({
+            type: 'interaction',
+            data: { action: 'fetch_attempt', cursor: fetchCursor },
+            screen: '/(tabs)',
+          });
+        }
+
         logError(error, {
           context: "DebateFeed.fetchDebates",
           cursor: fetchCursor ? "[REDACTED_CURSOR]" : "null",
@@ -211,18 +256,51 @@ export default function DebateFeed() {
         setLoading(false);
         setRefreshing(false);
         setLoadingMore(false);
+        
+        // Clear the refresh timeout
+        if (refreshTimeout) {
+          clearTimeout(refreshTimeout);
+          setRefreshTimeout(null);
+        }
       }
     },
-    [getToken]
+    [getToken, networkStatus.isOffline, saveUserAction, refreshTimeout]
   );
 
   const handleRefresh = useCallback(() => {
-    if (!loading && !refreshing) {
-      setRefreshing(true);
-      fetchDebates(null, true);
-      fetchUnseenCount(); // refresh unseen count too
+    const now = Date.now();
+    const timeSinceLastRefresh = now - lastRefreshTime;
+    
+    // Prevent multiple simultaneous refresh attempts
+    if (loading || refreshing || networkStatus.isOffline) {
+      if (networkStatus.isOffline) {
+        setRefreshing(false);
+      }
+      return;
     }
-  }, [fetchDebates, loading, refreshing, fetchUnseenCount]);
+    
+    // Debounce: prevent refresh if called within 2 seconds of last refresh
+    if (timeSinceLastRefresh < 2000) {
+      console.log('Refresh debounced, too soon since last refresh');
+      return;
+    }
+    
+    setLastRefreshTime(now);
+    setRefreshing(true);
+    
+    // Set a timeout to prevent infinite refresh
+    const timeout = setTimeout(() => {
+      console.log('Refresh timeout reached, stopping refresh');
+      setRefreshing(false);
+      setLoading(false);
+      setLoadingMore(false);
+    }, 10000); // 10 second timeout
+    
+    setRefreshTimeout(timeout);
+    
+    fetchDebates(null, true);
+    fetchUnseenCount(); // refresh unseen count too
+  }, [fetchDebates, loading, refreshing, fetchUnseenCount, networkStatus.isOffline, lastRefreshTime]);
 
   const onEndReachedCallback = useCallback(() => {
     if (
@@ -242,7 +320,7 @@ export default function DebateFeed() {
   }, [router]);
 
   const renderItem = useCallback(
-    ({ item }) => (
+    ({ item }: { item: any }) => (
       <DebateCard
         debate={item}
         onJoinPress={() => console.log("Join:", item.id)}
@@ -347,7 +425,7 @@ export default function DebateFeed() {
   }, [loading, handleExplorePress, insets.bottom]);
 
   const keyExtractor = useCallback(
-    (item, idx) => item?.id ?? idx.toString(),
+    (item: any, idx: number) => item?.id ?? idx.toString(),
     []
   );
 
@@ -364,6 +442,7 @@ export default function DebateFeed() {
         backgroundColor: "#080F12",
       }}
     >
+      <OfflineIndicator position="top" />
       <Animated.View
         style={{
           transform: [{ translateY: headerTranslate }],
@@ -561,9 +640,10 @@ export default function DebateFeed() {
           onEndReachedThreshold={0.5}
           refreshControl={
             <RefreshControl
-              refreshing={refreshing}
+              refreshing={refreshing && !networkStatus.isOffline}
               onRefresh={handleRefresh}
               tintColor={cyberpunkTheme.colors.primary}
+              enabled={!networkStatus.isOffline}
             />
           }
           removeClippedSubviews={Platform.OS === "android"}

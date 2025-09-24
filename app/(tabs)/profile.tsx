@@ -1,11 +1,10 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   View,
   Text,
   StyleSheet,
   Image,
   TouchableOpacity,
-  FlatList,
   ActivityIndicator,
   RefreshControl,
   Alert,
@@ -28,6 +27,7 @@ import * as ImageManipulator from "expo-image-manipulator";
 import ProfileSkeleton from "@/components/profile/ProfileSkeliton";
 import DebateGrid from "@/components/debate/DebateGrid";
 import TabScreenWrapper from "./components/TabScreenWrapper";
+import SearchModal from "@/components/search/SearchModal";
 import { logError } from "@/utils/sentry/sentry"; // Added Sentry import
 import { invalidateUserCache } from "../_layout";
 import {
@@ -40,6 +40,7 @@ import { useError } from "@/contexts/ErrorContext";
 const THEME = {
   colors: {
     primary: "#00FF94",
+    secondary: "#FF00E5",
     background: "#080F12",
     backgroundSecondary: "#1a1a1a",
     cardBackground: "#262626",
@@ -287,6 +288,9 @@ const ProfilePage: React.FC = () => {
   // Image modal states
   const [imageModalVisible, setImageModalVisible] = useState(false);
   const [modalImageUri, setModalImageUri] = useState("");
+
+  // Profile search states
+  // Removed inline search state - now using separate search screen
 
   const pathname = usePathname();
 
@@ -765,13 +769,13 @@ const ProfilePage: React.FC = () => {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [fetchWithAuthRetry, token, dataFetched]);
+  }, [token, dataFetched]);
 
   useEffect(() => {
     if (token && !dataFetched) {
       fetchProfileData();
     }
-  }, [token, dataFetched, fetchProfileData]);
+  }, [token, dataFetched]);
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -847,6 +851,13 @@ const ProfilePage: React.FC = () => {
     setShowLogoutModal(false);
   };
 
+  // Show search modal
+  const [showSearchModal, setShowSearchModal] = useState(false);
+  
+  const handleSearchPress = () => {
+    setShowSearchModal(true);
+  };
+
   if (loading) {
     return <ProfileSkeleton />;
   }
@@ -891,7 +902,22 @@ const ProfilePage: React.FC = () => {
 
         <View style={styles.headerActions}>
           <TouchableOpacity
-            style={styles.shareButton}
+            style={styles.headerActionButton}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              handleSearchPress();
+            }}
+            accessibilityLabel='Search People'
+          >
+            <Ionicons
+              name='search'
+              size={24}
+              color={THEME.colors.text}
+            />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.headerActionButton}
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
               handleShareProfile();
@@ -906,7 +932,7 @@ const ProfilePage: React.FC = () => {
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={styles.logoutButton}
+            style={styles.headerActionButton}
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
               handleLogoutPress();
@@ -1008,6 +1034,7 @@ const ProfilePage: React.FC = () => {
           </Text>
         </View>
       </View>
+
       <View style={styles.debatesHeader}>
         <Text style={styles.debatesTitle}>Debates ({debates.length})</Text>
       </View>
@@ -1041,6 +1068,12 @@ const ProfilePage: React.FC = () => {
         onClose={handleLogoutCancel}
         onConfirm={handleLogoutConfirm}
         isLoggingOut={isLoggingOut}
+      />
+
+      {/* Search Modal */}
+      <SearchModal
+        visible={showSearchModal}
+        onClose={() => setShowSearchModal(false)}
       />
 
       {/* Image Options Modal */}
@@ -1205,6 +1238,16 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: THEME.spacing.sm,
     zIndex: 1,
+  },
+  headerActionButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: THEME.colors.cardBackground,
+    borderWidth: 1,
+    borderColor: THEME.colors.border,
+    justifyContent: "center",
+    alignItems: "center",
   },
   shareButton: {
     width: 40,

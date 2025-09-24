@@ -8,8 +8,6 @@ import {
   RefreshControl,
   ActivityIndicator,
   Alert,
-  InteractionManager,
-  Dimensions,
   StyleSheet,
   TextInput,
   Keyboard,
@@ -21,12 +19,10 @@ import { Ionicons } from "@expo/vector-icons";
 import { useAuthToken } from "@/hook/clerk/useFetchjwtToken";
 import { useRouter } from "expo-router";
 import { useAuth } from "@clerk/clerk-expo";
-import ProfileCard from "@/components/explore/profiles/profile-cards";
-import { logError } from "@/utils/sentry/sentry"; // Added Sentry import
+import { logError } from "@/utils/sentry/sentry";
 import {
   trackSearchPerformed,
   trackDebateJoined,
-  trackProfileViewed,
   trackContentShared,
 } from "@/lib/posthog/events";
 
@@ -44,8 +40,7 @@ const THEME = {
 
 const ExploreDebatesPage = () => {
   // Core state
-  const [debates, setDebates] = useState([]);
-  const [profiles, setProfiles] = useState([]);
+  const [debates, setDebates] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [searchLoading, setSearchLoading] = useState(false);
@@ -53,10 +48,6 @@ const ExploreDebatesPage = () => {
   const [joiningDebateId, setJoiningDebateId] = useState<string | null>(null);
 
   const [searchQuery, setSearchQuery] = useState<string>("");
-  const [searchType, setSearchType] = useState<"debates" | "profiles">(
-    "debates"
-  );
-
   const [currentPage, setCurrentPage] = useState(1);
   const [hasMorePages, setHasMorePages] = useState(true);
   const [isSearching, setIsSearching] = useState(false);
@@ -112,6 +103,7 @@ const ExploreDebatesPage = () => {
     }
   };
 
+  // Fetch explore debates (default feed)
   useEffect(() => {
     const fetchExploreDebates = async () => {
       if (!token || searchQuery.trim()) return;
@@ -139,7 +131,6 @@ const ExploreDebatesPage = () => {
         if (!isMountedRef.current) return;
 
         if (json.success && json.data?.data) {
-          // Normalize API format debates
           const normalizedDebates = json.data.data.map((debate: any) =>
             normalizeDebateData(debate, true)
           );
@@ -153,7 +144,6 @@ const ExploreDebatesPage = () => {
       } catch (err: any) {
         if (!isMountedRef.current) return;
         setFetchError(err.message || "Failed to load explore feed");
-        // Log error to Sentry
         logError(err, {
           context: "ExploreDebatesPage.fetchExploreDebates",
         });
@@ -167,29 +157,25 @@ const ExploreDebatesPage = () => {
     fetchExploreDebates();
   }, [token, searchQuery]);
 
-  // Debounce searchQuery - only trigger when there's actually a query
+  // Handle search query changes
   useEffect(() => {
     clearTimeout(searchTimeout.current!);
     if (searchQuery.trim()) {
       setSearchLoading(true);
       searchTimeout.current = setTimeout(
-        () => performSearch(searchQuery.trim(), 1),
+        () => performDebateSearch(searchQuery.trim(), 1),
         500
       );
     } else {
-      // Only clear results if we were actually searching
-      if (isSearching || searchLoading) {
-        setDebates([]);
-        setProfiles([]);
-        setCurrentPage(1);
-        setHasMorePages(true);
-        setIsSearching(false);
-        setSearchLoading(false);
-      }
+      // Reset to API debates on clear
+      setDebates([]);
+      setCurrentPage(1);
+      setHasMorePages(true);
+      setIsSearching(false);
+      setSearchLoading(false);
     }
     return () => clearTimeout(searchTimeout.current!);
-  }, [searchQuery]); // Removed searchType dependency to prevent unnecessary triggers
-
+  }, [searchQuery]);
 
   // Search for debates
   const performDebateSearch = useCallback(
@@ -199,7 +185,7 @@ const ExploreDebatesPage = () => {
       trackSearchPerformed({
         query: query,
         type: "debates",
-        resultsCount: 0, // Will be updated when results come back
+        resultsCount: 0,
       });
 
       setFetchError(null);
@@ -226,13 +212,22 @@ const ExploreDebatesPage = () => {
           refreshToken();
           return;
         }
+        
+        // Handle 500 errors gracefully - treat as no results
+        if (res.status === 500) {
+          console.warn("Search API returned 500, treating as no results");
+          if (page === 1) setDebates([]);
+          setHasMorePages(false);
+          retryCount.current = 0;
+          return;
+        }
+        
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
         const json = await res.json();
         if (!isMountedRef.current) return;
 
         if (json.success && json.data) {
-          // Normalize search format debates
           const normalizedDebates = json.data.map((debate: any) =>
             normalizeDebateData(debate, false)
           );
@@ -241,7 +236,7 @@ const ExploreDebatesPage = () => {
             setDebates(normalizedDebates);
             setCurrentPage(1);
           } else {
-            setDebates((prev) => [...prev, ...normalizedDebates]);
+            setDebates((prev: any[]) => [...prev, ...normalizedDebates]);
           }
           setHasMorePages(json.data.length === limit);
           setCurrentPage(page);
@@ -253,7 +248,6 @@ const ExploreDebatesPage = () => {
       } catch (err: any) {
         if (!isMountedRef.current) return;
         setFetchError(err.message || "Search failed");
-        // Log error to Sentry
         logError(err, {
           context: "ExploreDebatesPage.performDebateSearch",
           query: query ? "[REDACTED_QUERY]" : "undefined",
@@ -276,125 +270,36 @@ const ExploreDebatesPage = () => {
     [token, refreshToken]
   );
 
-  // Search for profiles
-  const performProfileSearch = useCallback(
-    async (query: string) => {
-      if (!token || !query) {
-        setProfiles([]);
-        setDebates([]);
-
-        return;
-      }
-
-      setFetchError(null);
-      setIsSearching(true);
-      setSearchLoading(true);
-
-      try {
-        trackSearchPerformed({
-          query: query,
-          type: "profiles",
-          resultsCount: 0, // Will be updated when results come back
-        });
-        const res = await fetch(
-          `${
-            process.env.EXPO_PUBLIC_BASE_URL
-          }/user/account/${encodeURIComponent(query)}`,
-          {
-            method: "GET",
-            headers: {
-              Authorization: `Bearer ${token}`,
-              "Content-Type": "application/json",
-            },
-          }
-        );
-
-        if (res.status === 401) {
-          refreshToken();
-          return;
-        }
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-
-        const json = await res.json();
-        if (!isMountedRef.current) return;
-
-        if (json.success && json.data) {
-          setProfiles(json.data);
-          retryCount.current = 0;
-        } else {
-          setProfiles([]);
-        }
-      } catch (err: any) {
-        if (!isMountedRef.current) return;
-        setFetchError(err.message || "Profile search failed");
-        // Log error to Sentry
-        logError(err, {
-          context: "ExploreDebatesPage.performProfileSearch",
-          query: query ? "[REDACTED_QUERY]" : "undefined",
-        });
-        if (retryCount.current < maxRetries) {
-          retryCount.current++;
-          setTimeout(
-            () => performProfileSearch(query),
-            2000 * retryCount.current
-          );
-        }
-      } finally {
-        if (!isMountedRef.current) return;
-        setSearchLoading(false);
-        setRefreshing(false);
-        setIsSearching(false);
-      }
-    },
-    [token, refreshToken]
-  );
-
-  // Main search function
-  const performSearch = useCallback(
-    async (query: string, page = 1) => {
-      if (searchType === "debates") {
-        await performDebateSearch(query, page);
-      } else {
-        await performProfileSearch(query);
-      }
-    },
-    [searchType, performDebateSearch, performProfileSearch]
-  );
-
 
   const handleRefresh = useCallback(() => {
     setRefreshing(true);
     retryCount.current = 0;
     if (searchQuery.trim()) {
-      performSearch(searchQuery.trim(), 1);
+      performDebateSearch(searchQuery.trim(), 1);
     } else {
       // Refresh API debates
       setDebates([]);
-      setProfiles([]);
       setCurrentPage(1);
       setHasMorePages(true);
-      setFetchError(null);
       // The useEffect will trigger the API call
     }
-  }, [searchQuery, performSearch]);
+  }, [searchQuery, performDebateSearch]);
 
   const handleLoadMore = useCallback(() => {
     if (
       hasMorePages &&
       !searchLoading &&
       searchQuery.trim() &&
-      searchType === "debates" &&
       currentPage < Infinity
     ) {
-      performSearch(searchQuery.trim(), currentPage + 1);
+      performDebateSearch(searchQuery.trim(), currentPage + 1);
     }
   }, [
     hasMorePages,
     searchLoading,
     searchQuery,
-    searchType,
     currentPage,
-    performSearch,
+    performDebateSearch,
   ]);
 
   const handleJoinDebate = useCallback(
@@ -431,134 +336,41 @@ const ExploreDebatesPage = () => {
     [token, router, userId, refreshToken]
   );
 
-  const handleProfilePress = useCallback((profile: any) => {
-    if (!profile?.id) return;
-    trackProfileViewed({
-      profileId: profile.id,
-      source: "explore",
-      isOwnProfile: profile.id === userId,
-    });
-    router.push({
-      pathname: "/(tabs)/[id]/page",
-      params: { id: profile.id },
-    });
-  }, []);
-
 
   const renderSearchHeader = () => (
     <View style={styles.searchContainer}>
-      {/* Enhanced Search Input */}
-      <View style={styles.searchInputWrapper}>
-        <View style={styles.searchInputContainer}>
-          <View style={styles.searchIconContainer}>
-            <Ionicons name='search' size={20} color={THEME.colors.textMuted} />
-          </View>
-          <TextInput
-            style={styles.searchInput}
-            placeholder={`Search ${searchType === "debates" ? "debates" : "people"}...`}
-            placeholderTextColor={THEME.colors.textMuted}
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            returnKeyType='search'
-            onSubmitEditing={Keyboard.dismiss}
-            autoCorrect={false}
-            autoCapitalize="none"
+      <View style={styles.searchInputContainer}>
+        <Ionicons name='search' size={20} color={THEME.colors.textMuted} />
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Search debates..."
+          placeholderTextColor={THEME.colors.textMuted}
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          returnKeyType='search'
+          onSubmitEditing={Keyboard.dismiss}
+        />
+        {searchLoading ? (
+          <ActivityIndicator
+            size='small'
+            color={THEME.colors.primary}
+            style={styles.searchLoadingIcon}
           />
-          {searchLoading ? (
-            <View style={styles.searchLoadingContainer}>
-              <ActivityIndicator
-                size='small'
-                color={THEME.colors.primary}
+        ) : (
+          searchQuery.length > 0 && (
+            <TouchableOpacity
+              onPress={() => setSearchQuery("")}
+              style={styles.clearButton}
+            >
+              <Ionicons
+                name='close-circle'
+                size={20}
+                color={THEME.colors.textMuted}
               />
-            </View>
-          ) : (
-            searchQuery.length > 0 && (
-              <TouchableOpacity
-                onPress={() => {
-                  setSearchQuery("");
-                  setDebates([]);
-                  setProfiles([]);
-                  // Don't automatically change search type - keep current selection
-                }}
-                style={styles.clearButton}
-                activeOpacity={0.7}
-              >
-                <Ionicons
-                  name='close-circle'
-                  size={20}
-                  color={THEME.colors.textMuted}
-                />
-              </TouchableOpacity>
-            )
-          )}
-        </View>
+            </TouchableOpacity>
+          )
+        )}
       </View>
-
-      {/* Enhanced Search Type Selector */}
-      {searchQuery.trim() && (
-        <View style={styles.searchTypeWrapper}>
-          <View style={styles.searchTypeContainer}>
-            <TouchableOpacity
-              style={[
-                styles.searchTypeButton,
-                searchType === "debates" && styles.searchTypeButtonActive,
-              ]}
-              onPress={() => {
-                setSearchType("debates");
-                // Only search if there's a query
-                if (searchQuery.trim()) {
-                  setSearchLoading(true);
-                  setTimeout(() => performSearch(searchQuery.trim(), 1), 100);
-                }
-              }}
-              activeOpacity={0.8}
-            >
-              <Ionicons 
-                name='chatbubbles' 
-                size={16} 
-                color={searchType === "debates" ? THEME.colors.background : THEME.colors.textMuted} 
-              />
-              <Text
-                style={[
-                  styles.searchTypeText,
-                  searchType === "debates" && styles.searchTypeTextActive,
-                ]}
-              >
-                Debates
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[
-                styles.searchTypeButton,
-                searchType === "profiles" && styles.searchTypeButtonActive,
-              ]}
-              onPress={() => {
-                setSearchType("profiles");
-                // Only search if there's a query
-                if (searchQuery.trim()) {
-                  setSearchLoading(true);
-                  setTimeout(() => performSearch(searchQuery.trim(), 1), 100);
-                }
-              }}
-              activeOpacity={0.8}
-            >
-              <Ionicons 
-                name='people' 
-                size={16} 
-                color={searchType === "profiles" ? THEME.colors.background : THEME.colors.textMuted} 
-              />
-              <Text
-                style={[
-                  styles.searchTypeText,
-                  searchType === "profiles" && styles.searchTypeTextActive,
-                ]}
-              >
-                People
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      )}
     </View>
   );
 
@@ -678,34 +490,19 @@ const ExploreDebatesPage = () => {
 
   const renderEmptyState = () => (
     <View style={styles.emptyState}>
-      <View style={styles.emptyStateIconContainer}>
-        <Ionicons
-          name={searchQuery.trim() ? "search" : "compass"}
-          size={64}
-          color={THEME.colors.textMuted}
-        />
-      </View>
+      <Ionicons
+        name={searchQuery.trim() ? "search" : "compass"}
+        size={64}
+        color={THEME.colors.textMuted}
+      />
       <Text style={styles.emptyStateTitle}>
-        {searchQuery.trim() ? "No Results Found" : "Discover Amazing Content"}
+        {searchQuery.trim() ? "No Results Found" : "Explore Debates"}
       </Text>
       <Text style={styles.emptyStateText}>
         {searchQuery.trim()
-          ? `No ${searchType === "debates" ? "debates" : "people"} found for "${searchQuery}". Try different keywords or check your spelling.`
-          : "Search for debates or connect with interesting people!"}
+          ? `No debates found for "${searchQuery}". Try a different search term.`
+          : "Discover trending debates and join the conversation!"}
       </Text>
-      {searchQuery.trim() && (
-        <TouchableOpacity
-          style={styles.retrySearchButton}
-          onPress={() => {
-            setSearchQuery("");
-            setDebates([]);
-            setProfiles([]);
-            // Keep current search type selection
-          }}
-        >
-          <Text style={styles.retrySearchButtonText}>Clear Search</Text>
-        </TouchableOpacity>
-      )}
     </View>
   );
 
@@ -721,36 +518,18 @@ const ExploreDebatesPage = () => {
   );
 
   const renderFooter = () =>
-    hasMorePages && searchQuery.trim() && searchType === "debates" ? (
+    hasMorePages && searchQuery.trim() ? (
       <View style={styles.footerLoader}>
         <ActivityIndicator size='small' color={THEME.colors.primary} />
         <Text style={styles.footerText}>Loading more debates...</Text>
       </View>
     ) : null;
 
-  const getCurrentData = () => {
-    if (!searchQuery.trim()) return debates;
-    return searchType === "debates" ? debates : profiles;
-  };
-
-  const getCurrentRenderItem = () => {
-    return searchType === "debates"
-      ? renderDebateCard
-      : ({ item }) => <ProfileCard item={item} onPress={handleProfilePress} />;
-  };
-
   if (loading && !refreshing) {
     return (
       <View style={styles.loadingContainer}>
-        <View style={styles.loadingIconContainer}>
-          <ActivityIndicator size='large' color={THEME.colors.primary} />
-        </View>
-        <Text style={styles.loadingText}>
-          {searchQuery.trim() 
-            ? `Searching ${searchType === "debates" ? "debates" : "people"}...` 
-            : "Loading amazing content..."
-          }
-        </Text>
+        <ActivityIndicator size='large' color={THEME.colors.primary} />
+        <Text style={styles.loadingText}>Loading debates...</Text>
       </View>
     );
   }
@@ -769,8 +548,8 @@ const ExploreDebatesPage = () => {
         renderError()
       ) : (
         <FlatList
-          data={getCurrentData()}
-          renderItem={getCurrentRenderItem()}
+          data={debates}
+          renderItem={renderDebateCard}
           keyExtractor={(item) => item.id}
           showsVerticalScrollIndicator={false}
           refreshControl={
@@ -781,13 +560,13 @@ const ExploreDebatesPage = () => {
               tintColor={THEME.colors.primary}
             />
           }
-          ListEmptyComponent={!loading && !searchLoading && renderEmptyState}
+          ListEmptyComponent={!loading && !searchLoading ? renderEmptyState : null}
           ListFooterComponent={renderFooter}
           onEndReached={handleLoadMore}
           onEndReachedThreshold={0.1}
           contentContainerStyle={[
             styles.listContent,
-            getCurrentData().length === 0 && { flex: 1 },
+            debates.length === 0 && { flex: 1 },
           ]}
         />
       )}
@@ -820,91 +599,32 @@ const styles = StyleSheet.create({
   },
   searchContainer: {
     paddingHorizontal: 0,
-    marginBottom: 8,
-  },
-  searchInputWrapper: {
-    marginBottom: 12,
   },
   searchInputContainer: {
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: THEME.colors.searchBackground,
-    borderRadius: 16,
+    borderRadius: 12,
     paddingHorizontal: 16,
-    height: 52,
-    borderWidth: 2,
+    height: 48,
+    borderWidth: 1,
     borderColor: "rgba(255, 255, 255, 0.1)",
-    shadowColor: "#000",
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
   },
-  searchIconContainer: {
+  searchIcon: {
     marginRight: 12,
-    padding: 2,
   },
   searchInput: {
     flex: 1,
     color: THEME.colors.text,
     fontSize: 16,
     height: "100%",
-    fontWeight: "500",
   },
-  searchLoadingContainer: {
+  searchLoadingIcon: {
     marginLeft: 8,
-    padding: 4,
   },
   clearButton: {
     marginLeft: 8,
-    padding: 6,
-    borderRadius: 12,
-    backgroundColor: "rgba(255, 255, 255, 0.1)",
-  },
-  searchTypeWrapper: {
-    marginTop: 4,
-  },
-  searchTypeContainer: {
-    flexDirection: "row",
-    backgroundColor: THEME.colors.searchBackground,
-    borderRadius: 12,
     padding: 4,
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.1)",
-  },
-  searchTypeButton: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    marginHorizontal: 2,
-  },
-  searchTypeButtonActive: {
-    backgroundColor: THEME.colors.primary,
-    shadowColor: THEME.colors.primary,
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  searchTypeText: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: THEME.colors.textMuted,
-    marginLeft: 6,
-  },
-  searchTypeTextActive: {
-    color: THEME.colors.background,
-    fontWeight: "700",
   },
   listContent: {
     paddingHorizontal: 16,
@@ -1021,66 +741,30 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     backgroundColor: THEME.colors.background,
-    paddingVertical: 64,
-    paddingHorizontal: 32,
-  },
-  loadingIconContainer: {
-    marginBottom: 16,
-    padding: 20,
-    backgroundColor: "rgba(255, 255, 255, 0.05)",
-    borderRadius: 50,
   },
   loadingText: {
     color: THEME.colors.textMuted,
     fontSize: 16,
-    textAlign: "center",
-    fontWeight: "500",
+    marginTop: 16,
   },
   emptyState: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
     paddingVertical: 64,
-    paddingHorizontal: 32,
-  },
-  emptyStateIconContainer: {
-    marginBottom: 24,
-    padding: 20,
-    backgroundColor: "rgba(255, 255, 255, 0.05)",
-    borderRadius: 50,
   },
   emptyStateTitle: {
-    fontSize: 24,
+    fontSize: 20,
     fontWeight: "bold",
     color: THEME.colors.text,
-    marginBottom: 12,
-    textAlign: "center",
+    marginTop: 16,
+    marginBottom: 8,
   },
   emptyStateText: {
-    fontSize: 16,
+    fontSize: 14,
     color: THEME.colors.textMuted,
     textAlign: "center",
-    lineHeight: 24,
-    marginBottom: 24,
-  },
-  retrySearchButton: {
-    backgroundColor: THEME.colors.primary,
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 25,
-    shadowColor: THEME.colors.primary,
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  retrySearchButtonText: {
-    color: THEME.colors.background,
-    fontSize: 16,
-    fontWeight: "600",
+    paddingHorizontal: 32,
   },
   errorState: {
     flex: 1,
