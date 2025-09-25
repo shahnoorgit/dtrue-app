@@ -28,8 +28,7 @@ import { PostHogProvider } from "posthog-react-native";
 import { posthog } from "@/lib/posthog/posthog";
 import { AppOpenTracker } from "@/lib/posthog/PosthogWrapper";
 import { ErrorProvider } from "@/contexts/ErrorContext";
-import { OfflineProvider } from "@/contexts/OfflineContext";
-import OfflineWrapper from "@/components/ui/OfflineWrapper";
+import SimpleOfflineWrapper from "@/components/ui/SimpleOfflineWrapper";
 
 // Prevent the splash screen from auto-hiding. We will control this manually.
 SplashScreen.preventAutoHideAsync();
@@ -700,33 +699,31 @@ export default Sentry.wrap(function RootLayout() {
     <ClerkProvider tokenCache={tokenCache} publishableKey={publishableKey}>
       <ErrorBoundary>
         <ErrorProvider>
-          <OfflineProvider>
-            <View className='flex-1 bg-gray-900'>
-              <StatusBar
-                barStyle='light-content'
-                backgroundColor={cyberpunkTheme.colors.background.dark}
+          <View className='flex-1 bg-gray-900'>
+            <StatusBar
+              barStyle='light-content'
+              backgroundColor={cyberpunkTheme.colors.background.dark}
+            />
+            <PostHogProvider autocapture={false} client={posthog}>
+              <LinearGradient
+                colors={
+                  cyberpunkTheme.colors.gradients.background as [string, string]
+                }
+                className='absolute inset-0'
               />
-              <PostHogProvider autocapture={false} client={posthog}>
-                <LinearGradient
-                  colors={
-                    cyberpunkTheme.colors.gradients.background as [string, string]
-                  }
-                  className='absolute inset-0'
-                />
 
-                <SentryUserWrapper />
-                <AppOpenTracker />
-                <InitialStateNavigator />
-                <RuntimeDeepLinkHandlerWrapper />
+              <SentryUserWrapper />
+              <AppOpenTracker />
+              <InitialStateNavigator />
+              <RuntimeDeepLinkHandlerWrapper />
 
-                {/* Offline wrapper handles network status and offline functionality */}
-                <OfflineWrapper>
-                  {/* Slot renders the current page determined by the navigator */}
-                  <Slot />
-                </OfflineWrapper>
-              </PostHogProvider>
-            </View>
-          </OfflineProvider>
+              {/* Simple offline wrapper shows popup when offline */}
+              <SimpleOfflineWrapper>
+                {/* Slot renders the current page determined by the navigator */}
+                <Slot />
+              </SimpleOfflineWrapper>
+            </PostHogProvider>
+          </View>
         </ErrorProvider>
       </ErrorBoundary>
     </ClerkProvider>

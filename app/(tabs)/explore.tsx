@@ -25,6 +25,7 @@ import {
   trackDebateJoined,
   trackContentShared,
 } from "@/lib/posthog/events";
+import ExploreSkeleton from "@/components/explore/ExploreSkeleton";
 
 const THEME = {
   colors: {
@@ -167,7 +168,8 @@ const ExploreDebatesPage = () => {
         500
       );
     } else {
-      // Reset to API debates on clear
+      // Reset to API debates on clear - show skeleton while loading
+      setLoading(true);
       setDebates([]);
       setCurrentPage(1);
       setHasMorePages(true);
@@ -277,7 +279,8 @@ const ExploreDebatesPage = () => {
     if (searchQuery.trim()) {
       performDebateSearch(searchQuery.trim(), 1);
     } else {
-      // Refresh API debates
+      // Refresh API debates - show skeleton while loading
+      setLoading(true);
       setDebates([]);
       setCurrentPage(1);
       setHasMorePages(true);
@@ -527,9 +530,15 @@ const ExploreDebatesPage = () => {
 
   if (loading && !refreshing) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size='large' color={THEME.colors.primary} />
-        <Text style={styles.loadingText}>Loading debates...</Text>
+      <View style={styles.container}>
+        <LinearGradient
+          colors={[THEME.colors.backgroundDarker, THEME.colors.background]}
+          style={styles.header}
+        >
+          <Text style={styles.headerTitle}>Explore</Text>
+          {renderSearchHeader()}
+        </LinearGradient>
+        <ExploreSkeleton />
       </View>
     );
   }
@@ -546,6 +555,8 @@ const ExploreDebatesPage = () => {
 
       {fetchError && !loading ? (
         renderError()
+      ) : searchLoading && debates.length === 0 ? (
+        <ExploreSkeleton />
       ) : (
         <FlatList
           data={debates}

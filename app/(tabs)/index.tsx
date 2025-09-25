@@ -24,8 +24,7 @@ import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { logError } from "@/utils/sentry/sentry";
 import { trackDebateJoined, trackContentShared } from "@/lib/posthog/events";
-import { useOffline } from "@/contexts/OfflineContext";
-import OfflineIndicator from "@/components/ui/OfflineIndicator";
+import { useSimpleNetworkStatus } from "@/hook/useSimpleNetworkStatus";
 
 const DEBATES_STORAGE_KEY = "cached_debates";
 const DEBATES_TIMESTAMP_KEY = "cached_debates_timestamp";
@@ -49,7 +48,7 @@ export default function DebateFeed() {
   const [lastRefreshTime, setLastRefreshTime] = useState(0);
 
   const { getToken } = useAuth();
-  const { networkStatus, saveUserAction } = useOffline();
+  const { networkStatus } = useSimpleNetworkStatus();
   const router = useRouter();
   const tokenRef = useRef<string | null>(null);
   const momentumRef = useRef(false);
@@ -223,13 +222,9 @@ export default function DebateFeed() {
           }
         }
       } catch (error: any) {
-        // Track offline actions if network error
+        // Log network error for debugging
         if (error.code === 'NETWORK_ERROR' || error.message?.includes('Network Error')) {
-          saveUserAction({
-            type: 'interaction',
-            data: { action: 'fetch_attempt', cursor: fetchCursor },
-            screen: '/(tabs)',
-          });
+          console.log('Network error during fetch:', error.message);
         }
 
         logError(error, {
@@ -264,7 +259,7 @@ export default function DebateFeed() {
         }
       }
     },
-    [getToken, networkStatus.isOffline, saveUserAction, refreshTimeout]
+    [getToken, networkStatus.isOffline, refreshTimeout]
   );
 
   const handleRefresh = useCallback(() => {
@@ -442,7 +437,6 @@ export default function DebateFeed() {
         backgroundColor: "#080F12",
       }}
     >
-      <OfflineIndicator position="top" />
       <Animated.View
         style={{
           transform: [{ translateY: headerTranslate }],
