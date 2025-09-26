@@ -21,6 +21,7 @@ import { useRouter } from "expo-router";
 import { useAuth } from "@clerk/clerk-expo";
 import { logError } from "@/utils/sentry/sentry"; // Added Sentry import
 import { trackDebateJoined, trackContentShared } from "@/lib/posthog/events";
+import TrendingSkeleton from "@/components/explore/TrendingSkeleton";
 
 // Define theme as a constant outside the component to avoid recreation on re-render
 const THEME = {
@@ -341,9 +342,16 @@ const TrendingDebatesPage = () => {
 
   if (loading && !refreshing) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size='large' color={THEME.colors.primary} />
-        <Text style={styles.loadingText}>Loading trending debates...</Text>
+      <View style={styles.container}>
+        <LinearGradient
+          colors={[THEME.colors.backgroundDarker, THEME.colors.background]}
+          style={styles.header}
+        >
+          <View style={styles.headerContent}>
+            <Text style={styles.headerTitle}>Trending</Text>
+          </View>
+        </LinearGradient>
+        <TrendingSkeleton />
       </View>
     );
   }

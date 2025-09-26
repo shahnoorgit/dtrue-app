@@ -105,58 +105,61 @@ const ExploreDebatesPage = () => {
   };
 
   // Fetch explore debates (default feed)
-  useEffect(() => {
-    const fetchExploreDebates = async () => {
-      if (!token || searchQuery.trim()) return;
+  const fetchExploreDebates = useCallback(async () => {
+    if (!token || searchQuery.trim()) return;
 
-      setLoading(true);
-      setFetchError(null);
+    setLoading(true);
+    setFetchError(null);
 
-      try {
-        const res = await fetch(`${process.env.EXPO_PUBLIC_BASE_URL}/explore`, {
-          method: "GET",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-        });
+    try {
+      const res = await fetch(`${process.env.EXPO_PUBLIC_BASE_URL}/explore`, {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      });
 
-        if (res.status === 401) {
-          refreshToken();
-          return;
-        }
-
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-
-        const json = await res.json();
-        if (!isMountedRef.current) return;
-
-        if (json.success && json.data?.data) {
-          const normalizedDebates = json.data.data.map((debate: any) =>
-            normalizeDebateData(debate, true)
-          );
-          setDebates(normalizedDebates);
-          setCurrentPage(1);
-          setHasMorePages(json.data.next === true);
-        } else {
-          setDebates([]);
-          setHasMorePages(false);
-        }
-      } catch (err: any) {
-        if (!isMountedRef.current) return;
-        setFetchError(err.message || "Failed to load explore feed");
-        logError(err, {
-          context: "ExploreDebatesPage.fetchExploreDebates",
-        });
-      } finally {
-        if (!isMountedRef.current) return;
-        setLoading(false);
-        setRefreshing(false);
+      if (res.status === 401) {
+        refreshToken();
+        return;
       }
-    };
 
-    fetchExploreDebates();
-  }, [token, searchQuery]);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+      const json = await res.json();
+      if (!isMountedRef.current) return;
+
+      if (json.success && json.data?.data) {
+        const normalizedDebates = json.data.data.map((debate: any) =>
+          normalizeDebateData(debate, true)
+        );
+        setDebates(normalizedDebates);
+        setCurrentPage(1);
+        setHasMorePages(json.data.next === true);
+      } else {
+        setDebates([]);
+        setHasMorePages(false);
+      }
+    } catch (err: any) {
+      if (!isMountedRef.current) return;
+      setFetchError(err.message || "Failed to load explore feed");
+      logError(err, {
+        context: "ExploreDebatesPage.fetchExploreDebates",
+      });
+    } finally {
+      if (!isMountedRef.current) return;
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [token, refreshToken]);
+
+  // Initial load effect - only run when token changes and no search query
+  useEffect(() => {
+    if (token && !searchQuery.trim()) {
+      fetchExploreDebates();
+    }
+  }, [token]); // Remove fetchExploreDebates from dependencies to prevent infinite loop
 
   // Handle search query changes
   useEffect(() => {
@@ -168,16 +171,15 @@ const ExploreDebatesPage = () => {
         500
       );
     } else {
-      // Reset to API debates on clear - show skeleton while loading
-      setLoading(true);
-      setDebates([]);
-      setCurrentPage(1);
-      setHasMorePages(true);
+      // Reset to API debates on clear - fetch fresh data
       setIsSearching(false);
       setSearchLoading(false);
+      if (token) {
+        fetchExploreDebates();
+      }
     }
     return () => clearTimeout(searchTimeout.current!);
-  }, [searchQuery]);
+  }, [searchQuery, token]); // Remove fetchExploreDebates from dependencies
 
   // Search for debates
   const performDebateSearch = useCallback(
@@ -279,14 +281,10 @@ const ExploreDebatesPage = () => {
     if (searchQuery.trim()) {
       performDebateSearch(searchQuery.trim(), 1);
     } else {
-      // Refresh API debates - show skeleton while loading
-      setLoading(true);
-      setDebates([]);
-      setCurrentPage(1);
-      setHasMorePages(true);
-      // The useEffect will trigger the API call
+      // Refresh API debates - call the fetch function directly
+      fetchExploreDebates();
     }
-  }, [searchQuery, performDebateSearch]);
+  }, [searchQuery, performDebateSearch, fetchExploreDebates]);
 
   const handleLoadMore = useCallback(() => {
     if (
