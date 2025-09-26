@@ -346,7 +346,7 @@ const ProfileCreationStep = ({
             placeholder='Tell us about yourself (optional)'
             placeholderTextColor={cyberpunkTheme.colors.text.muted}
             value={bio}
-            onChangeText={onBioChange}
+            onChangeText={(text) => onBioChange(text.trim())}
             multiline
           />
         </View>
@@ -468,12 +468,13 @@ const useUsernameValidator = () => {
 
   const handleUsernameChange = useCallback(
     (text) => {
-      setUsername(text);
+      const trimmedText = text.trim();
+      setUsername(trimmedText);
       if (usernameError) setUsernameError("");
       if (debounceTimeout) clearTimeout(debounceTimeout);
       const timeout = setTimeout(() => {
-        if (text && text.length >= 3) {
-          checkUsernameAvailability(text);
+        if (trimmedText && trimmedText.length >= 3) {
+          checkUsernameAvailability(trimmedText);
         } else {
           setIsUsernameAvailable(null);
           setSuggestedUsernames([]);
@@ -486,8 +487,9 @@ const useUsernameValidator = () => {
 
   const selectSuggestedUsername = useCallback(
     (suggestion) => {
-      setUsername(suggestion);
-      checkUsernameAvailability(suggestion);
+      const trimmedSuggestion = suggestion.trim();
+      setUsername(trimmedSuggestion);
+      checkUsernameAvailability(trimmedSuggestion);
     },
     [checkUsernameAvailability]
   );
@@ -797,8 +799,8 @@ export default function OnboardingScreen() {
       const submissionData = {
         categories: selectedCategories,
         profile: {
-          username,
-          bio,
+          username: username.trim(),
+          bio: bio.trim(),
           profileImage: profileImageUrl,
         },
       };

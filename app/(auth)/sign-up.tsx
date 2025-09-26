@@ -87,7 +87,7 @@ export default function SignUpScreen() {
 
     try {
       await signUp.create({
-        emailAddress,
+        emailAddress: emailAddress.trim(),
         password,
       });
 

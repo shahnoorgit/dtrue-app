@@ -35,11 +35,11 @@ export function useCreateUser() {
         },
         body: JSON.stringify({
           categories: data.categories,
-          name: data.profile.username,
-          email: user.emailAddresses[0]?.emailAddress,
-          username: data.profile.username,
+          name: data.profile.username.trim(),
+          email: user.emailAddresses[0]?.emailAddress?.trim(),
+          username: data.profile.username.trim(),
           clerkId: user.id,
-          about: data.profile.bio,
+          about: data.profile.bio.trim(),
           image: data.profile.profileImage,
         }),
       });

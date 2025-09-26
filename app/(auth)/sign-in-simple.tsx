@@ -49,7 +49,7 @@ export default function SignInScreenSimple() {
     setIsSubmitting(true);
     try {
       const signInAttempt = await signIn.create({
-        identifier: emailAddress,
+        identifier: emailAddress.trim(),
         password,
       });
 

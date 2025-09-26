@@ -90,7 +90,7 @@ export default function SignInScreen() {
     setIsSubmitting(true);
     try {
       const signInAttempt = await signIn.create({
-        identifier: emailAddress,
+        identifier: emailAddress.trim(),
         password,
       });
 
@@ -177,7 +177,7 @@ export default function SignInScreen() {
       if (signIn) {
         await signIn.create({
           strategy: "reset_password_email_code",
-          identifier: resetEmail,
+          identifier: resetEmail.trim(),
         });
       }
       setResetStep("confirm");
@@ -228,7 +228,7 @@ export default function SignInScreen() {
       
       const result = await signIn.attemptFirstFactor({
         strategy: "reset_password_email_code",
-        code: resetCode,
+        code: resetCode.trim(),
         password: resetPassword,
       });
 
@@ -577,7 +577,7 @@ export default function SignInScreen() {
                       value={resetEmail}
                       placeholder='Email'
                       onChangeText={(t) => {
-                        setResetEmail(t);
+                        setResetEmail(t.trim());
                         if (resetError) setResetError("");
                       }}
                     />
@@ -647,7 +647,7 @@ export default function SignInScreen() {
                       placeholder='Reset code'
                       keyboardType='number-pad'
                       onChangeText={(t) => {
-                        setResetCode(t);
+                        setResetCode(t.trim());
                         if (resetError) setResetError("");
                       }}
                     />
