@@ -13,6 +13,7 @@ import { StatusBar } from "expo-status-bar";
 import { LinearGradient } from "expo-linear-gradient";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import { cyberpunkTheme } from "@/constants/theme";
+import { logError } from "@/utils/sentry/sentry";
 
 export default function SignInScreenSimple() {
   const { signIn, setActive, isLoaded } = useSignIn();
@@ -58,6 +59,14 @@ export default function SignInScreenSimple() {
       }
     } catch (err: any) {
       console.error("sign in error", err);
+      
+      // Log error to Sentry
+      logError(err, {
+        context: "SignInScreenSimple.onSignInPress",
+        emailAddress: emailAddress ? "[REDACTED_EMAIL]" : "undefined",
+        clerkErrorCode: err?.errors?.[0]?.code,
+      });
+      
       setEmailError("Invalid credentials");
     } finally {
       setIsSubmitting(false);

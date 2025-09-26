@@ -36,6 +36,7 @@ import {
   trackOnboardingAbandoned,
 } from "@/lib/posthog/events";
 import { ImageManipulator } from "expo-image-manipulator";
+import { logError } from "@/utils/sentry/sentry";
 
 // Interest Modal Component using NativeWind classes
 const InterestModal = ({
@@ -448,8 +449,15 @@ const useUsernameValidator = () => {
           console.error("Username check failed:", response);
           setIsUsernameAvailable(null);
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error("Error checking username:", error);
+        
+        // Log error to Sentry
+        logError(error, {
+          context: "useUsernameValidator.checkUsernameAvailability",
+          username: usernameToCheck,
+        });
+        
         setIsUsernameAvailable(null);
       } finally {
         setIsCheckingUsername(false);
@@ -611,8 +619,16 @@ const useImageHandler = (showError: any) => {
       setProfileImageUrl(publicUrl);
       setProfileImage(imageUri);
       console.log("Image uploaded to R2:", publicUrl);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error uploading to R2:", error);
+      
+      // Log error to Sentry
+      logError(error, {
+        context: "useImageHandler.uploadToR2",
+        imageUri: imageUri ? "present" : "missing",
+        compressed: true,
+      });
+      
       showError("Upload Error", "Error uploading image. Please check your connection and try again.", {
         type: 'error',
         showRetry: true,
@@ -811,8 +827,19 @@ export default function OnboardingScreen() {
               onRetry: () => goToNextStep()
             });
           }
-        } catch (error) {
+        } catch (error: any) {
           console.error("Error creating user:", error);
+          
+          // Log error to Sentry
+          logError(error, {
+            context: "OnboardingScreen.goToNextStep",
+            username: username,
+            hasProfileImage: !!profileImageUrl,
+            categoriesCount: Object.keys(selectedCategories).length,
+            bioLength: bio.length,
+            step: currentStep,
+          });
+          
           setIsSubmitting(false);
           showError("Creation Error", "An error occurred while creating your profile. Please try again.", {
             type: 'error',

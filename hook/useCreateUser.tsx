@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useUser } from "@clerk/clerk-expo";
 import { CategoryEnum } from "@/enums/boarding";
+import { logError } from "@/utils/sentry/sentry";
 
 export interface Profile {
   username: string;
@@ -50,8 +51,19 @@ export function useCreateUser() {
       }
 
       return result.data;
-    } catch (err) {
+    } catch (err: any) {
       console.error("Error creating user:", err);
+      
+      // Log error to Sentry
+      logError(err, {
+        context: "useCreateUser.addUser",
+        clerkId: user?.id,
+        username: data.profile.username,
+        email: user?.emailAddresses[0]?.emailAddress ? "[REDACTED_EMAIL]" : "undefined",
+        hasProfileImage: !!data.profile.profileImage,
+        categoriesCount: Object.keys(data.categories).length,
+      });
+      
       setError(err.message);
       return null;
     } finally {

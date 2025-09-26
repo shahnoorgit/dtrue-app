@@ -441,6 +441,7 @@ function InitialStateNavigator() {
       if (!forceRefresh) {
         const cachedStatus = await getCachedUserStatus(clerkId);
         if (cachedStatus) {
+          console.log("[CACHE] Using cached user status:", cachedStatus);
           setAppState((s) => ({
             ...s,
             userStatus: cachedStatus,
@@ -478,11 +479,13 @@ function InitialStateNavigator() {
         );
         if (res.status === 404) {
           finalStatus = UserStatus.SIGNED_IN_NOT_IN_DB;
+          console.log("[API] User not found in database, status: SIGNED_IN_NOT_IN_DB");
         } else if (res.ok) {
           finalStatus = UserStatus.SIGNED_IN_IN_DB;
+          console.log("[API] User found in database, status: SIGNED_IN_IN_DB");
           await registerPushTokenIfNeeded(clerkId);
         } else {
-          throw new Error(`API Error: ${res.status}`);
+          throw new Error(`API Error: ${res.status} - ${res.statusText}`);
         }
 
         await setCachedUserStatus(finalStatus, clerkId);
@@ -494,14 +497,27 @@ function InitialStateNavigator() {
           retryCount: 0,
         }));
       } catch (err: any) {
-        // *** CORRECTED: Explicitly typed 'err' ***
         console.error("[API] checkUserStatus error", err);
         trackApiError({
           endpoint: "user-status",
           error: err?.message,
         });
         logError(err, { clerkId });
-        setAppState((s) => ({ ...s, retryCount: s.retryCount + 1 }));
+        
+        // Only retry if it's a network error, not a 404
+        if (err?.name !== "AbortError" && !err?.message?.includes("404")) {
+          setAppState((s) => ({ ...s, retryCount: s.retryCount + 1 }));
+        } else {
+          // If it's a 404 or abort, assume user doesn't exist in DB
+          console.log("[API] Assuming user not in database due to error");
+          setAppState((s) => ({
+            ...s,
+            userStatus: UserStatus.SIGNED_IN_NOT_IN_DB,
+            isUserStatusChecked: true,
+            apiError: null,
+            retryCount: 0,
+          }));
+        }
       }
     },
     [isSignedIn]
@@ -745,6 +761,16 @@ const invalidateUserCache = async (): Promise<void> => {
   } catch (error) {
     console.error("[CACHE] Error invalidating user caches:", error);
     logError(error, { context: "invalidateUserCache" });
+  }
+};
+
+// Helper function to clear cache when user signs out
+const clearUserCacheOnSignOut = async (): Promise<void> => {
+  try {
+    await clearUserStatusCache();
+    console.log("[CACHE] Cleared user status cache on sign out");
+  } catch (error) {
+    console.error("[CACHE] Error clearing user cache on sign out:", error);
   }
 };
 
