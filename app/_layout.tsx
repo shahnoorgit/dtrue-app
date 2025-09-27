@@ -423,6 +423,13 @@ function InitialStateNavigator() {
 
   const checkUserStatusTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Clear cache when user signs out
+  useEffect(() => {
+    if (!isSignedIn && isLoaded) {
+      clearUserCacheOnSignOut();
+    }
+  }, [isSignedIn, isLoaded]);
+
   const checkUserStatus = useCallback(
     async (clerkId: string, forceRefresh = false) => {
       if (checkUserStatusTimeoutRef.current) {
@@ -481,9 +488,16 @@ function InitialStateNavigator() {
           finalStatus = UserStatus.SIGNED_IN_NOT_IN_DB;
           console.log("[API] User not found in database, status: SIGNED_IN_NOT_IN_DB");
         } else if (res.ok) {
-          finalStatus = UserStatus.SIGNED_IN_IN_DB;
-          console.log("[API] User found in database, status: SIGNED_IN_IN_DB");
-          await registerPushTokenIfNeeded(clerkId);
+          const userData = await res.json();
+          // Check if user has completed onboarding
+          if (userData.data?.onboardingCompleted === false) {
+            finalStatus = UserStatus.SIGNED_IN_NOT_IN_DB;
+            console.log("[API] User exists but onboarding incomplete, status: SIGNED_IN_NOT_IN_DB");
+          } else {
+            finalStatus = UserStatus.SIGNED_IN_IN_DB;
+            console.log("[API] User found and onboarding complete, status: SIGNED_IN_IN_DB");
+            await registerPushTokenIfNeeded(clerkId);
+          }
         } else {
           throw new Error(`API Error: ${res.status} - ${res.statusText}`);
         }
@@ -506,7 +520,34 @@ function InitialStateNavigator() {
         
         // Only retry if it's a network error, not a 404
         if (err?.name !== "AbortError" && !err?.message?.includes("404")) {
-          setAppState((s) => ({ ...s, retryCount: s.retryCount + 1 }));
+          const retryCount = appState.retryCount;
+          const maxRetries = 3;
+          
+          if (retryCount < maxRetries) {
+            console.log(`[API] Retrying authentication check (${retryCount + 1}/${maxRetries})`);
+            setAppState((s) => ({ 
+              ...s, 
+              retryCount: retryCount + 1,
+              apiError: {
+                message: `Connection failed. Retrying... (${retryCount + 1}/${maxRetries})`,
+                isRetrying: true,
+              }
+            }));
+            
+            // Retry after a delay
+            setTimeout(() => {
+              checkUserStatus(clerkId, true);
+            }, 1000 * Math.pow(2, retryCount)); // Exponential backoff
+          } else {
+            console.log("[API] Max retries reached, assuming user needs onboarding");
+            setAppState((s) => ({
+              ...s,
+              userStatus: UserStatus.SIGNED_IN_NOT_IN_DB,
+              isUserStatusChecked: true,
+              apiError: null,
+              retryCount: 0,
+            }));
+          }
         } else {
           // If it's a 404 or abort, assume user doesn't exist in DB
           console.log("[API] Assuming user not in database due to error");
@@ -645,17 +686,21 @@ function InitialStateNavigator() {
     hasNavigatedRef.current = true;
     const parsedUrl = parseIncomingUrl(initialUrl);
 
-    if (parsedUrl && isSignedIn) {
-      handleDeepLinkNavigation(parsedUrl.path, parsedUrl.query, router, userId);
-    } else if (userStatus === UserStatus.SIGNED_IN_IN_DB) {
-      router.replace("/(tabs)");
-    } else if (userStatus === UserStatus.SIGNED_IN_NOT_IN_DB) {
-      router.replace("/(auth)/(boarding)/boarding");
-    } else {
-      router.replace("/onboarding");
-    }
+    // Small delay to ensure smooth transition from splash screen
+    setTimeout(() => {
+      if (parsedUrl && isSignedIn) {
+        handleDeepLinkNavigation(parsedUrl.path, parsedUrl.query, router, userId);
+      } else if (userStatus === UserStatus.SIGNED_IN_IN_DB) {
+        router.replace("/(tabs)");
+      } else if (userStatus === UserStatus.SIGNED_IN_NOT_IN_DB) {
+        router.replace("/(auth)/(boarding)/boarding");
+      } else {
+        router.replace("/onboarding");
+      }
 
-    SplashScreen.hideAsync().catch(console.error);
+      // Hide splash screen after navigation
+      SplashScreen.hideAsync().catch(console.error);
+    }, 100); // Small delay for smooth transition
   }, [appState, isLoaded, navigationState?.key, isSignedIn, userId, router]);
 
   if (appState.apiError && !appState.apiError.isRetrying) {

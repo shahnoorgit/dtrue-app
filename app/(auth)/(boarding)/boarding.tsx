@@ -35,7 +35,7 @@ import {
   trackOnboardingCompleted,
   trackOnboardingAbandoned,
 } from "@/lib/posthog/events";
-import { ImageManipulator } from "expo-image-manipulator";
+import * as ImageManipulator from "expo-image-manipulator";
 import { logError } from "@/utils/sentry/sentry";
 
 // Interest Modal Component using NativeWind classes

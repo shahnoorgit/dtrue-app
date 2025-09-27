@@ -1113,11 +1113,23 @@ const ProfilePage: React.FC = () => {
                 onPress={() => {
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                   setShowImageOptions(false);
-                  showImagePickerOptions();
+                  pickImage();
+                }}
+              >
+                <Ionicons name="folder-open" size={24} color={THEME.colors.primary} />
+                <Text style={styles.imageOptionText}>Choose from Gallery</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={styles.imageOptionButton}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  setShowImageOptions(false);
+                  takePhoto();
                 }}
               >
                 <Ionicons name="camera" size={24} color={THEME.colors.primary} />
-                <Text style={styles.imageOptionText}>Upload Image</Text>
+                <Text style={styles.imageOptionText}>Take Photo</Text>
               </TouchableOpacity>
             </View>
           </View>
