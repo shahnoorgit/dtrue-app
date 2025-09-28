@@ -5,9 +5,9 @@
     "scheme": "dtrue",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/logo.png",
+    "icon": "./assets/images/logo_App.png",
     "splash": {
-      "image": "./assets/images/splash.png",
+      "image": "./assets/images/logo.png",
       "resizeMode": "cover",
       "backgroundColor": "#0A0E13"
     },
@@ -70,7 +70,7 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/splash.png",
+          "image": "./assets/images/logo.png",
           "resizeMode": "cover",
           "backgroundColor": "#0A0E13"
         }

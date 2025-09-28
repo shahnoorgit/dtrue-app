@@ -20,6 +20,7 @@ import { useLocalSearchParams } from "expo-router";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import axios from "axios";
 import { LinearGradient } from "expo-linear-gradient";
+import * as Haptics from "expo-haptics";
 import { useAuthToken } from "../../../hook/clerk/useFetchjwtToken";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { theme } from "../theme";
@@ -53,12 +54,16 @@ export default function DebateRoom() {
   const [endTime, setEndTime] = useState<Date | null>(null);
   const [timeRemaining, setTimeRemaining] = useState<number>(0);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
-  const [isNextPage, setNextPage] = useState(null);
+  const [isNextPage, setNextPage] = useState<boolean | null>(null);
   const [likedUserIds, setLikedUserIds] = useState<string[]>([]);
   const [userOpinionId, setUserOpinionId] = useState<string | null>(null);
   const [isDebateActive, setIsDebateActive] = useState<boolean | null>(null);
   const [endedRoomResults, setEndedRoomResults] = useState<any>(null);
   const [loadingInitial, setLoadingInitial] = useState(true);
+  
+  // Optimistic like state
+  const [optimisticLikes, setOptimisticLikes] = useState<{[key: string]: {count: number, isLiked: boolean}}>({});
+  const [pendingLikes, setPendingLikes] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     // Track debate joined when user enters the room
@@ -137,8 +142,8 @@ export default function DebateRoom() {
     // Only trigger once when debate description is first loaded
     if (debateDescription && !initialDataLoaded) {
       setInitialDataLoaded(true);
-      if (!global.hasSeenDebateModal) {
-        global.hasSeenDebateModal = true;
+      if (!(global as any).hasSeenDebateModal) {
+        (global as any).hasSeenDebateModal = true;
         setShowModal(true);
       }
     }
@@ -287,7 +292,9 @@ export default function DebateRoom() {
       debateId: debateId as string,
       stance: stance as 'for' | 'against',
       opinionLength: userOpinion.length,
-      hasEvidence: userOpinion.length > 50 // Simple heuristic for evidence
+      hasEvidence: userOpinion.length > 50, // Simple heuristic for evidence
+      likedUserId: '',
+      opinionAuthorId: ''
     });
     try {
       const { data } = await axios.put(
@@ -325,9 +332,35 @@ export default function DebateRoom() {
     }
   }, [debateId, token, userOpinion, stance, isDebateActive]);
 
-  // Handle like/unlike
-  const handleLike = async (userId: string) => {
-    if (!token || !isDebateActive) return;
+  // Handle like/unlike with optimistic updates
+  const handleLike = async (userId: string, opinion: any) => {
+    if (!token || !isDebateActive || pendingLikes.has(userId)) return;
+
+    const isCurrentlyLiked = likedUserIds.includes(userId);
+    const currentCount = opinion.upvotes || 0;
+    
+    // Optimistic update
+    const newCount = isCurrentlyLiked ? currentCount - 1 : currentCount + 1;
+    const newIsLiked = !isCurrentlyLiked;
+    
+    // Update optimistic state immediately
+    setOptimisticLikes(prev => ({
+      ...prev,
+      [userId]: { count: newCount, isLiked: newIsLiked }
+    }));
+    
+    // Add to pending set
+    setPendingLikes(prev => new Set([...prev, userId]));
+    
+    // Update liked user IDs immediately
+    if (newIsLiked) {
+      setLikedUserIds(prev => [...prev, userId]);
+    } else {
+      setLikedUserIds(prev => prev.filter(id => id !== userId));
+    }
+    
+    // Haptic feedback
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
     try {
       const { data } = await axios.put(
@@ -335,17 +368,30 @@ export default function DebateRoom() {
         {},
         { headers: { Authorization: `Bearer ${token}` } }
       );
+      
       if (data.success) {
         trackOpinionLiked({
           debateId: debateId as string,
           likedUserId: userId as string,
-          opinionAuthorId: opinion.userId
+          opinionAuthorId: opinion.userId,
+          stance: opinion.agreed ? 'for' : 'against',
+          opinionLength: opinion.opinion?.length || 0,
+          hasEvidence: (opinion.opinion?.length || 0) > 50
         });
+        
+        // Update with actual server response
         setOpinions((prevOpinions) =>
           prevOpinions.map((op) =>
             op.userId === userId ? { ...op, upvotes: data.data.likes } : op
           )
         );
+        
+        // Update optimistic state with server data
+        setOptimisticLikes(prev => ({
+          ...prev,
+          [userId]: { count: data.data.likes, isLiked: data.data.action === "liked" }
+        }));
+        
         if (data.data.action === "liked") {
           setLikedUserIds((prev) => [...prev, userId]);
         } else if (data.data.action === "unliked") {
@@ -359,10 +405,30 @@ export default function DebateRoom() {
         userId: userId ? `[REDACTED_USER_ID]` : "undefined",
       });
 
+      // Rollback optimistic update on error
+      setOptimisticLikes(prev => ({
+        ...prev,
+        [userId]: { count: currentCount, isLiked: isCurrentlyLiked }
+      }));
+      
+      // Rollback liked user IDs
+      if (isCurrentlyLiked) {
+        setLikedUserIds(prev => [...prev, userId]);
+      } else {
+        setLikedUserIds(prev => prev.filter(id => id !== userId));
+      }
+
       if (err.response?.status === 401) {
         await refreshToken();
-        handleLike(userId);
+        handleLike(userId, opinion);
       }
+    } finally {
+      // Remove from pending set
+      setPendingLikes(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(userId);
+        return newSet;
+      });
     }
   };
 
@@ -374,13 +440,34 @@ export default function DebateRoom() {
   const totalVotes = Math.max(1, opinions.length);
   const agreePct = agreedCount / totalVotes;
 
-  // Opinion renderer
+  // Opinion renderer with improved UX
   const renderOpinion = useCallback(
     ({ item }: { item: any }) => {
       const isAgreed = item.agreed;
-      const isLiked = likedUserIds.includes(item.userId);
+      const optimisticData = optimisticLikes[item.userId];
+      const isLiked = optimisticData ? optimisticData.isLiked : likedUserIds.includes(item.userId);
+      const upvotes = optimisticData ? optimisticData.count : item.upvotes;
+      const isPending = pendingLikes.has(item.userId);
+      
       return (
-        <TouchableOpacity activeOpacity={0.8} disabled={!isDebateActive}>
+        <TouchableOpacity 
+          activeOpacity={0.8} 
+          disabled={!isDebateActive}
+          onPress={() => {
+            // Single tap - navigate to profile
+            router.push({
+              pathname: "/(tabs)/[id]/page",
+              params: { id: item.userId },
+            });
+          }}
+          onLongPress={() => {
+            // Long press - like the opinion
+            if (isDebateActive && !isPending) {
+              handleLike(item.userId, item);
+            }
+          }}
+          delayLongPress={500}
+        >
           <View
             style={{
               marginHorizontal: 8,
@@ -396,6 +483,7 @@ export default function DebateRoom() {
                 ? theme.colors.primary
                 : theme.colors.secondary,
               padding: 10,
+              opacity: isPending ? 0.7 : 1,
             }}
           >
             <Pressable
@@ -459,9 +547,15 @@ export default function DebateRoom() {
             >
               <Pressable
                 onPress={() => {
-                  handleLike(item.userId);
+                  if (isDebateActive && !isPending) {
+                    handleLike(item.userId, item);
+                  }
                 }}
-                style={{ flexDirection: "row", alignItems: "center" }}
+                style={{ 
+                  flexDirection: "row", 
+                  alignItems: "center",
+                  opacity: isPending ? 0.6 : 1,
+                }}
               >
                 <Ionicons
                   name={isLiked ? "thumbs-up" : "thumbs-up-outline"}
@@ -473,10 +567,18 @@ export default function DebateRoom() {
                   style={{
                     color: isLiked ? "#FF0055" : theme.colors.textMuted,
                     fontSize: 12,
+                    fontWeight: isLiked ? "600" : "400",
                   }}
                 >
-                  {item.upvotes}
+                  {upvotes}
                 </Text>
+                {isPending && (
+                  <ActivityIndicator 
+                    size="small" 
+                    color="#FF0055" 
+                    style={{ marginLeft: 4 }} 
+                  />
+                )}
               </Pressable>
 
               {item.aiFlagged ? (
@@ -537,7 +639,7 @@ export default function DebateRoom() {
         </TouchableOpacity>
       );
     },
-    [handleLike, likedUserIds, isDebateActive]
+    [handleLike, likedUserIds, isDebateActive, optimisticLikes, pendingLikes, userOpinionId]
   );
 
   if (loadingInitial || isDebateActive === null) {
@@ -595,9 +697,6 @@ export default function DebateRoom() {
           opinions={[]}
           debateTitle={debateTitle}
           debateImage={finalDebateImage}
-          insets={insets}
-          isDebateEnded={true}
-          loadingImage={loadingImage}
         />
 
         <DebateEndedResults
@@ -625,8 +724,6 @@ export default function DebateRoom() {
         opinions={opinions}
         debateTitle={debateTitle}
         debateImage={finalDebateImage}
-        insets={insets}
-        loadingImage={loadingImage}
       />
 
       {!loadingOpinions ? (
@@ -637,7 +734,7 @@ export default function DebateRoom() {
             opinions={opinions}
             renderOpinion={renderOpinion}
             submitted={submitted}
-            isNextPage={isNextPage}
+            isNextPage={isNextPage || false}
             setPage={setPage}
             isLoadingMore={isLoadingMore}
           />
@@ -663,6 +760,7 @@ export default function DebateRoom() {
 
       {showModal && (
         <ModalSheet
+          showModal={showModal}
           agreePct={agreePct}
           setShowModal={setShowModal}
           debateDescription={debateDescription}
@@ -671,8 +769,6 @@ export default function DebateRoom() {
           timeRemaining={timeRemaining}
           opinions={opinions}
           insets={insets}
-          debateId={debateId}
-          loadingImage={loadingImage}
         />
       )}
     </SafeAreaView>

@@ -23,6 +23,7 @@ import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuthToken } from "@/hook/clerk/useFetchjwtToken";
 import { Modal } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
 import TabScreenWrapper from "./components/TabScreenWrapper";
 import { logError } from "@/utils/sentry/sentry"; // Added Sentry import
 import { trackDebateJoined } from "@/lib/posthog/events";
@@ -585,12 +586,23 @@ const Rooms = () => {
       <View style={styles.container}>
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Rooms</Text>
-          <View style={styles.newDebateButton}>
-            <Ionicons
-              name='add-circle'
-              size={24}
-              color={THEME.colors.primary}
-            />
+          <View style={styles.createButtonContainer}>
+            <LinearGradient
+              colors={[THEME.colors.primary, "#00CC77"]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.createButtonGradient}
+            >
+              <View style={styles.createButtonContent}>
+                <Ionicons
+                  name='add'
+                  size={20}
+                  color='#000000'
+                  style={styles.createButtonIcon}
+                />
+                <Text style={styles.createButtonText}>Create</Text>
+              </View>
+            </LinearGradient>
           </View>
         </View>
         <TabBar />
@@ -614,14 +626,26 @@ const Rooms = () => {
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Rooms</Text>
         <TouchableOpacity
-          style={styles.newDebateButton}
           onPress={handleCreateDebate}
+          activeOpacity={0.8}
+          style={styles.createButtonContainer}
         >
-          <Ionicons
-            name='add-circle'
-            size={24}
-            color={THEME.colors.primary}
-          />
+          <LinearGradient
+            colors={[THEME.colors.primary, "#00CC77"]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.createButtonGradient}
+          >
+            <View style={styles.createButtonContent}>
+              <Ionicons
+                name='add'
+                size={20}
+                color='#000000'
+                style={styles.createButtonIcon}
+              />
+              <Text style={styles.createButtonText}>Create</Text>
+            </View>
+          </LinearGradient>
         </TouchableOpacity>
       </View>
 
@@ -716,8 +740,32 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     color: THEME.colors.text,
   },
-  newDebateButton: {
-    padding: 4,
+  createButtonContainer: {
+    borderRadius: 20,
+    overflow: 'hidden',
+    shadowColor: THEME.colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  createButtonGradient: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
+  },
+  createButtonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  createButtonIcon: {
+    marginRight: 6,
+  },
+  createButtonText: {
+    color: '#000000',
+    fontSize: 14,
+    fontWeight: '600',
   },
   tabBar: {
     flexDirection: "row",

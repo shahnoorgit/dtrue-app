@@ -11,6 +11,8 @@ import {
   Platform,
   Animated,
   Image,
+  Modal,
+  TouchableOpacity,
 } from "react-native";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import axios from "axios";
@@ -46,6 +48,7 @@ export default function DebateFeed() {
   const [unseenCount, setUnseenCount] = useState(0); // 🔹 new state
   const [refreshTimeout, setRefreshTimeout] = useState<NodeJS.Timeout | null>(null);
   const [lastRefreshTime, setLastRefreshTime] = useState(0);
+  const [showActionModal, setShowActionModal] = useState(false);
 
   const { getToken } = useAuth();
   const { networkStatus } = useSimpleNetworkStatus();
@@ -311,7 +314,17 @@ export default function DebateFeed() {
   }, [fetchDebates, cursor, hasNextPage, loading, loadingMore, refreshing]);
 
   const handleExplorePress = useCallback(() => {
+    setShowActionModal(true);
+  }, []);
+
+  const handleExploreDebates = useCallback(() => {
+    setShowActionModal(false);
     router.push("/explore");
+  }, [router]);
+
+  const handleCreateDebate = useCallback(() => {
+    setShowActionModal(false);
+    router.push("/(create)/screen/screen");
   }, [router]);
 
   const renderItem = useCallback(
@@ -380,41 +393,39 @@ export default function DebateFeed() {
           Explore more or create your own!
         </Text>
 
-        <View style={{ width: "auto" }}>
-          <Pressable onPress={handleExplorePress}>
-            {({ pressed }) => (
-              <LinearGradient
-                colors={["#2c2c2c", "#000"]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
+        <Pressable onPress={handleExplorePress}>
+          {({ pressed }) => (
+            <LinearGradient
+              colors={["#2c2c2c", "#000"]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={{
+                paddingHorizontal: 24,
+                paddingVertical: 12,
+                borderRadius: 25,
+                flexDirection: "row",
+                alignItems: "center",
+                opacity: pressed ? 0.8 : 1,
+              }}
+            >
+              <Icon
+                name='compass-outline'
+                size={20}
+                color='#FFF'
+                style={{ marginRight: 8 }}
+              />
+              <Text
                 style={{
-                  paddingHorizontal: 24,
-                  paddingVertical: 12,
-                  borderRadius: 25,
-                  flexDirection: "row",
-                  alignItems: "center",
-                  opacity: pressed ? 0.8 : 1,
+                  color: "#FFF",
+                  fontSize: 16,
+                  fontWeight: "600",
                 }}
               >
-                <Icon
-                  name='compass-outline'
-                  size={20}
-                  color='#FFF'
-                  style={{ marginRight: 8 }}
-                />
-                <Text
-                  style={{
-                    color: "#FFF",
-                    fontSize: 16,
-                    fontWeight: "600",
-                  }}
-                >
-                  Explore More Debates
-                </Text>
-              </LinearGradient>
-            )}
-          </Pressable>
-        </View>
+                Explore More Debates
+              </Text>
+            </LinearGradient>
+          )}
+        </Pressable>
       </View>
     );
   }, [loading, handleExplorePress, insets.bottom]);
@@ -670,6 +681,141 @@ export default function DebateFeed() {
           }}
         />
       )}
+
+      {/* Action Modal */}
+      <Modal
+        visible={showActionModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowActionModal(false)}
+      >
+        <View style={{
+          flex: 1,
+          backgroundColor: 'rgba(0, 0, 0, 0.8)',
+          justifyContent: 'center',
+          alignItems: 'center',
+          paddingHorizontal: 20,
+        }}>
+          <View style={{
+            backgroundColor: '#1A1A1A',
+            borderRadius: 20,
+            padding: 24,
+            width: '100%',
+            maxWidth: 320,
+            borderWidth: 1,
+            borderColor: 'rgba(255, 255, 255, 0.1)',
+          }}>
+            <Text style={{
+              color: '#FFFFFF',
+              fontSize: 20,
+              fontWeight: '700',
+              textAlign: 'center',
+              marginBottom: 8,
+            }}>
+              What would you like to do?
+            </Text>
+            
+            <Text style={{
+              color: '#8F9BB3',
+              fontSize: 14,
+              textAlign: 'center',
+              marginBottom: 24,
+            }}>
+              Choose an action to continue
+            </Text>
+
+            <TouchableOpacity
+              onPress={handleExploreDebates}
+              style={{
+                backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                borderRadius: 12,
+                padding: 16,
+                marginBottom: 12,
+                borderWidth: 1,
+                borderColor: 'rgba(255, 255, 255, 0.1)',
+                flexDirection: 'row',
+                alignItems: 'center',
+              }}
+            >
+              <Icon
+                name='compass-outline'
+                size={24}
+                color={cyberpunkTheme.colors.primary}
+                style={{ marginRight: 12 }}
+              />
+              <View style={{ flex: 1 }}>
+                <Text style={{
+                  color: '#FFFFFF',
+                  fontSize: 16,
+                  fontWeight: '600',
+                  marginBottom: 2,
+                }}>
+                  Explore Debates
+                </Text>
+                <Text style={{
+                  color: '#8F9BB3',
+                  fontSize: 12,
+                }}>
+                  Discover and join existing debates
+                </Text>
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={handleCreateDebate}
+              style={{
+                backgroundColor: 'rgba(0, 255, 148, 0.1)',
+                borderRadius: 12,
+                padding: 16,
+                borderWidth: 1,
+                borderColor: cyberpunkTheme.colors.primary,
+                flexDirection: 'row',
+                alignItems: 'center',
+              }}
+            >
+              <Icon
+                name='plus'
+                size={24}
+                color={cyberpunkTheme.colors.primary}
+                style={{ marginRight: 12 }}
+              />
+              <View style={{ flex: 1 }}>
+                <Text style={{
+                  color: '#FFFFFF',
+                  fontSize: 16,
+                  fontWeight: '600',
+                  marginBottom: 2,
+                }}>
+                  Create Debate
+                </Text>
+                <Text style={{
+                  color: '#8F9BB3',
+                  fontSize: 12,
+                }}>
+                  Start your own debate topic
+                </Text>
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() => setShowActionModal(false)}
+              style={{
+                marginTop: 16,
+                paddingVertical: 12,
+                alignItems: 'center',
+              }}
+            >
+              <Text style={{
+                color: '#8F9BB3',
+                fontSize: 14,
+                fontWeight: '500',
+              }}>
+                Cancel
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
