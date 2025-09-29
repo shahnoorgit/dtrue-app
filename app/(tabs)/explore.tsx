@@ -81,6 +81,7 @@ const ExploreDebatesPage = () => {
         description: debate.title, // Use title as description if no description field
         debate: {
           image: debate.image,
+          participantCount: debate.participantCount || 0, // Include participant count
         },
         creatorName: debate.creatorName,
         creatorImage: debate.creatorImage,
@@ -95,6 +96,7 @@ const ExploreDebatesPage = () => {
         description: debate.debate.content, // Use content as description
         debate: {
           image: debate.debate.image,
+          participantCount: debate.debate.participantCount || 0, // Include participant count
         },
         creatorName: debate.debate.creator_name || "Unknown Creator", // Handle missing creator_name
         creatorImage: debate.debate.creator_image || "", // Handle missing creator_image

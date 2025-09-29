@@ -13,6 +13,7 @@ import {
   Pressable,
   Modal,
   Animated,
+  TextInput,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
@@ -277,6 +278,17 @@ const ProfilePage: React.FC = () => {
   const [isEditingAbout, setIsEditingAbout] = useState(false);
   const [newAboutText, setNewAboutText] = useState("");
   const [updatingAbout, setUpdatingAbout] = useState(false);
+
+  // Name update states
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [newNameText, setNewNameText] = useState("");
+  const [updatingName, setUpdatingName] = useState(false);
+  
+  // Username availability states
+  const [isCheckingUsername, setIsCheckingUsername] = useState(false);
+  const [isUsernameAvailable, setIsUsernameAvailable] = useState<boolean | null>(null);
+  const [usernameError, setUsernameError] = useState("");
+  const [debounceTimeout, setDebounceTimeout] = useState<NodeJS.Timeout | null>(null);
 
   // Logout confirmation modal states
   const [showLogoutModal, setShowLogoutModal] = useState(false);
@@ -623,6 +635,75 @@ const ProfilePage: React.FC = () => {
     await handleSaveImageWithUrl(newCloudUrl);
   };
 
+  // Unified function to update user profile (name, about, image)
+  const updateUserProfile = async (updates: { name?: string; about?: string; image?: string }) => {
+    try {
+      // Get current token for the PATCH request
+      let currentToken = token;
+      if (!currentToken) {
+        currentToken = await AsyncStorage.getItem("authToken");
+        if (!currentToken) {
+          await fetchToken();
+          currentToken = await AsyncStorage.getItem("authToken");
+        }
+      }
+      if (!currentToken) throw new Error("No authentication token available");
+
+      // Make PATCH request to update profile
+      let response = await fetch(`${process.env.EXPO_PUBLIC_BASE_URL}/user`, {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${currentToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(updates),
+      });
+
+      // Handle token refresh if needed
+      if (response.status === 401) {
+        await fetchToken();
+        currentToken = await AsyncStorage.getItem("authToken");
+        if (!currentToken) throw new Error("Token refresh failed");
+
+        response = await fetch(
+          `${process.env.EXPO_PUBLIC_BASE_URL}/user`,
+          {
+            method: "PATCH",
+            headers: {
+              Authorization: `Bearer ${currentToken}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(updates),
+          }
+        );
+      }
+
+      if (!response.ok) {
+        throw new Error(`Update failed: ${response.status}`);
+      }
+
+      const result = await response.json();
+
+      if (result.success) {
+        // Update local user state
+        setUser((prev) =>
+          prev ? { ...prev, ...updates } : null
+        );
+        return result;
+      } else {
+        throw new Error(result.message || "Update failed");
+      }
+    } catch (error: any) {
+      console.error("Error updating profile:", error);
+      // Log error to Sentry
+      logError(error, {
+        context: "ProfilePage.updateUserProfile",
+        updates: Object.keys(updates),
+      });
+      throw error;
+    }
+  };
+
   // Cancel image editing
   const handleCancelImageEdit = () => {
     setIsEditingImage(false);
@@ -655,79 +736,18 @@ const ProfilePage: React.FC = () => {
       return;
     }
 
+    if (newAboutText.trim().length > 500) {
+      showError("Validation Error", "Bio must be 500 characters or less.", { type: 'warning' });
+      return;
+    }
+
     setUpdatingAbout(true);
     try {
-      // Get current token for the PATCH request
-      let currentToken = token;
-      if (!currentToken) {
-        currentToken = await AsyncStorage.getItem("authToken");
-        if (!currentToken) {
-          await fetchToken();
-          currentToken = await AsyncStorage.getItem("authToken");
-        }
-      }
-      if (!currentToken) throw new Error("No authentication token available");
-
-      // Make PATCH request to update about text
-      let response = await fetch(
-        `${process.env.EXPO_PUBLIC_BASE_URL}/user/about-update`,
-        {
-          method: "PATCH",
-          headers: {
-            Authorization: `Bearer ${currentToken}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            about: newAboutText.trim(),
-          }),
-        }
-      );
-
-      // Handle token refresh if needed
-      if (response.status === 401) {
-        await fetchToken();
-        currentToken = await AsyncStorage.getItem("authToken");
-        if (!currentToken) throw new Error("Token refresh failed");
-
-        response = await fetch(
-          `${process.env.EXPO_PUBLIC_BASE_URL}/user/about-update`,
-          {
-            method: "PATCH",
-            headers: {
-              Authorization: `Bearer ${currentToken}`,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              about: newAboutText.trim(),
-            }),
-          }
-        );
-      }
-
-      if (!response.ok) {
-        throw new Error(`Update failed: ${response.status}`);
-      }
-
-      const result = await response.json();
-
-      if (result.success) {
-        // Update local user state
-        setUser((prev) =>
-          prev ? { ...prev, about: newAboutText.trim() } : null
-        );
-        setIsEditingAbout(false);
-        setNewAboutText("");
-        showError("Success", "Bio updated successfully!", { type: 'success' });
-      } else {
-        throw new Error(result.message || "Update failed");
-      }
+      await updateUserProfile({ about: newAboutText.trim() });
+      setIsEditingAbout(false);
+      setNewAboutText("");
+      showError("Success", "Bio updated successfully!", { type: 'success' });
     } catch (error: any) {
-      console.error("Error updating about text:", error);
-      // Log error to Sentry
-      logError(error, {
-        context: "ProfilePage.handleSaveAbout",
-        newAboutTextLength: newAboutText.length,
-      });
       showError("Update Error", "Failed to update bio. Please try again.", {
         type: 'error',
         showRetry: true,
@@ -742,6 +762,144 @@ const ProfilePage: React.FC = () => {
   const handleCancelAboutEdit = () => {
     setIsEditingAbout(false);
     setNewAboutText("");
+  };
+
+  // Start editing name
+  const handleStartEditName = () => {
+    setNewNameText(user?.name || "");
+    setIsEditingName(true);
+  };
+
+  // Save updated name
+  const handleSaveName = async () => {
+    if (!newNameText.trim()) {
+      showError("Validation Error", "Please enter a name.", { type: 'warning' });
+      return;
+    }
+
+    if (newNameText.trim().length < 1 || newNameText.trim().length > 100) {
+      showError("Validation Error", "Name must be between 1 and 100 characters.", { type: 'warning' });
+      return;
+    }
+
+    // Check if username is available (only if it's different from current)
+    if (newNameText.trim() !== user?.name) {
+      if (isCheckingUsername) {
+        showError("Validation Error", "Please wait while we check username availability.", { type: 'warning' });
+        return;
+      }
+
+      if (isUsernameAvailable === false) {
+        showError("Validation Error", "This username is already taken. Please choose a different one.", { type: 'warning' });
+        return;
+      }
+
+      if (isUsernameAvailable === null) {
+        showError("Validation Error", "Please wait for username availability check to complete.", { type: 'warning' });
+        return;
+      }
+    }
+
+    setUpdatingName(true);
+    try {
+      await updateUserProfile({ name: newNameText.trim() });
+      setIsEditingName(false);
+      setNewNameText("");
+      setIsUsernameAvailable(null);
+      setUsernameError("");
+      showError("Success", "Name updated successfully!", { type: 'success' });
+    } catch (error: any) {
+      showError("Update Error", "Failed to update name. Please try again.", {
+        type: 'error',
+        showRetry: true,
+        onRetry: () => handleSaveName()
+      });
+    } finally {
+      setUpdatingName(false);
+    }
+  };
+
+  // Cancel name editing
+  const handleCancelNameEdit = () => {
+    setIsEditingName(false);
+    setNewNameText("");
+    setIsUsernameAvailable(null);
+    setUsernameError("");
+    if (debounceTimeout) {
+      clearTimeout(debounceTimeout);
+      setDebounceTimeout(null);
+    }
+  };
+
+  // Check username availability
+  const checkUsernameAvailability = async (usernameToCheck: string) => {
+    if (!usernameToCheck || usernameToCheck.length < 3) {
+      setIsUsernameAvailable(null);
+      setUsernameError("");
+      return;
+    }
+
+    // Don't check if it's the same as current username
+    if (usernameToCheck === user?.name) {
+      setIsUsernameAvailable(true);
+      setUsernameError("");
+      return;
+    }
+
+    setIsCheckingUsername(true);
+    try {
+      const response = await fetchWithAuthRetry(
+        `${process.env.EXPO_PUBLIC_BASE_URL}/user/username/available?username=${encodeURIComponent(usernameToCheck)}`
+      );
+      const data = await response.json();
+      
+      if (data.success && data.statusCode === 200) {
+        setIsUsernameAvailable(data.data.available);
+        if (!data.data.available) {
+          setUsernameError("This username is already taken");
+        } else {
+          setUsernameError("");
+        }
+      } else {
+        console.error("Username check failed:", data);
+        setIsUsernameAvailable(null);
+        setUsernameError("Unable to check username availability");
+      }
+    } catch (error: any) {
+      console.error("Error checking username:", error);
+      setIsUsernameAvailable(null);
+      setUsernameError("Error checking username availability");
+    } finally {
+      setIsCheckingUsername(false);
+    }
+  };
+
+  // Handle name text change with debounced username check
+  const handleNameTextChange = (text: string) => {
+    const trimmedText = text.trim();
+    setNewNameText(trimmedText);
+    
+    // Clear previous timeout
+    if (debounceTimeout) {
+      clearTimeout(debounceTimeout);
+    }
+    
+    // Clear previous error
+    if (usernameError) {
+      setUsernameError("");
+    }
+    
+    // Set new timeout for debounced check
+    const timeout = setTimeout(() => {
+      if (trimmedText && trimmedText.length >= 3) {
+        checkUsernameAvailability(trimmedText);
+      } else {
+        setIsUsernameAvailable(null);
+        setUsernameError("");
+      }
+    }, 500);
+    
+    setDebounceTimeout(timeout);
   };
 
   const fetchProfileData = useCallback(async () => {
@@ -776,6 +934,15 @@ const ProfilePage: React.FC = () => {
       fetchProfileData();
     }
   }, [token, dataFetched]);
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (debounceTimeout) {
+        clearTimeout(debounceTimeout);
+      }
+    };
+  }, [debounceTimeout]);
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -1025,8 +1192,132 @@ const ProfilePage: React.FC = () => {
         </View>
       </LinearGradient>
       <View style={styles.bioSection}>
-        <Text style={styles.name}>@{user.name}</Text>
-        {user.about && <Text style={styles.bio}>{user.about}</Text>}
+        {/* Name Section */}
+        <View style={styles.nameSection}>
+          {isEditingName ? (
+            <View style={styles.editContainer}>
+              <TextInput
+                style={styles.nameInput}
+                value={newNameText}
+                onChangeText={handleNameTextChange}
+                placeholder="Enter your name"
+                placeholderTextColor={THEME.colors.textMuted}
+                maxLength={100}
+                autoFocus
+              />
+              {/* Username availability feedback */}
+              {newNameText.trim() && newNameText.trim() !== user?.name && (
+                <View style={styles.usernameFeedback}>
+                  {isCheckingUsername ? (
+                    <View style={styles.usernameStatus}>
+                      <ActivityIndicator size="small" color={THEME.colors.primary} />
+                      <Text style={styles.usernameStatusText}>Checking...</Text>
+                    </View>
+                  ) : isUsernameAvailable === true ? (
+                    <View style={styles.usernameStatus}>
+                      <Ionicons name="checkmark-circle" size={14} color="#00FF94" />
+                      <Text style={[styles.usernameStatusText, { color: "#00FF94" }]}>Available</Text>
+                    </View>
+                  ) : isUsernameAvailable === false ? (
+                    <View style={styles.usernameStatus}>
+                      <Ionicons name="close-circle" size={14} color="#FF6B6B" />
+                      <Text style={[styles.usernameStatusText, { color: "#FF6B6B" }]}>Taken</Text>
+                    </View>
+                  ) : null}
+                  {usernameError && (
+                    <Text style={styles.usernameErrorText}>{usernameError}</Text>
+                  )}
+                </View>
+              )}
+              <View style={styles.editButtons}>
+                <TouchableOpacity
+                  style={styles.cancelButton}
+                  onPress={handleCancelNameEdit}
+                  disabled={updatingName}
+                >
+                  <Text style={styles.cancelButtonText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.saveButton, 
+                    (updatingName || isCheckingUsername || (newNameText.trim() !== user?.name && isUsernameAvailable === false)) && styles.disabledButton
+                  ]}
+                  onPress={handleSaveName}
+                  disabled={updatingName || isCheckingUsername || (newNameText.trim() !== user?.name && isUsernameAvailable === false)}
+                >
+                  {updatingName ? (
+                    <ActivityIndicator size="small" color={THEME.colors.primary} />
+                  ) : (
+                    <Text style={styles.saveButtonText}>Save</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </View>
+          ) : (
+            <View style={styles.nameDisplayContainer}>
+              <Text style={styles.name}>@{user.name}</Text>
+              <TouchableOpacity
+                style={styles.editIconButton}
+                onPress={handleStartEditName}
+              >
+                <Ionicons name="create-outline" size={18} color={THEME.colors.primary} />
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
+
+        {/* Bio Section */}
+        <View style={styles.bioContainer}>
+          {isEditingAbout ? (
+            <View style={styles.editContainer}>
+              <TextInput
+                style={styles.bioInput}
+                value={newAboutText}
+                onChangeText={setNewAboutText}
+                placeholder="Tell us about yourself..."
+                placeholderTextColor={THEME.colors.textMuted}
+                multiline
+                maxLength={500}
+                autoFocus
+              />
+              <View style={styles.editButtons}>
+                <TouchableOpacity
+                  style={styles.cancelButton}
+                  onPress={handleCancelAboutEdit}
+                  disabled={updatingAbout}
+                >
+                  <Text style={styles.cancelButtonText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.saveButton, updatingAbout && styles.disabledButton]}
+                  onPress={handleSaveAbout}
+                  disabled={updatingAbout}
+                >
+                  {updatingAbout ? (
+                    <ActivityIndicator size="small" color={THEME.colors.primary} />
+                  ) : (
+                    <Text style={styles.saveButtonText}>Save</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </View>
+          ) : (
+            <View style={styles.bioDisplayContainer}>
+              {user.about ? (
+                <Text style={styles.bio}>{user.about}</Text>
+              ) : (
+                <Text style={styles.bioPlaceholder}>No bio yet. Tap to add one.</Text>
+              )}
+              <TouchableOpacity
+                style={styles.editIconButton}
+                onPress={handleStartEditAbout}
+              >
+                <Ionicons name="create-outline" size={18} color={THEME.colors.primary} />
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
+
         <View style={styles.additionalStatItem}>
           <Ionicons name='calendar' size={16} color={THEME.colors.textMuted} />
           <Text style={styles.additionalStatText}>
@@ -1371,6 +1662,110 @@ const styles = StyleSheet.create({
     lineHeight: 24,
     marginBottom: THEME.spacing.md,
   },
+  // New styles for name and bio editing
+  nameSection: {
+    marginBottom: THEME.spacing.md,
+  },
+  nameDisplayContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  bioContainer: {
+    marginBottom: THEME.spacing.md,
+  },
+  bioDisplayContainer: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+  },
+  editIconButton: {
+    padding: THEME.spacing.xs,
+    marginLeft: THEME.spacing.xs,
+  },
+  editContainer: {
+    marginBottom: THEME.spacing.sm,
+  },
+  nameInput: {
+    fontSize: 28,
+    fontWeight: "bold",
+    color: THEME.colors.text,
+    backgroundColor: THEME.colors.surface,
+    borderWidth: 1,
+    borderColor: THEME.colors.border,
+    borderRadius: 8,
+    padding: THEME.spacing.sm,
+    marginBottom: THEME.spacing.xs,
+  },
+  bioInput: {
+    fontSize: 16,
+    color: THEME.colors.text,
+    backgroundColor: THEME.colors.surface,
+    borderWidth: 1,
+    borderColor: THEME.colors.border,
+    borderRadius: 8,
+    padding: THEME.spacing.sm,
+    marginBottom: THEME.spacing.xs,
+    minHeight: 60,
+    textAlignVertical: "top",
+  },
+  editButtons: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    gap: THEME.spacing.sm,
+    marginTop: THEME.spacing.xs,
+  },
+  cancelButton: {
+    paddingHorizontal: THEME.spacing.sm,
+    paddingVertical: THEME.spacing.xs,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: THEME.colors.border,
+  },
+  cancelButtonText: {
+    color: THEME.colors.textSecondary,
+    fontSize: 13,
+    fontWeight: "500",
+  },
+  saveButton: {
+    paddingHorizontal: THEME.spacing.sm,
+    paddingVertical: THEME.spacing.xs,
+    borderRadius: 6,
+    backgroundColor: THEME.colors.primary,
+  },
+  saveButtonText: {
+    color: "#FFFFFF",
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  disabledButton: {
+    opacity: 0.6,
+  },
+  bioPlaceholder: {
+    fontSize: 16,
+    color: THEME.colors.textMuted,
+    fontStyle: "italic",
+    lineHeight: 24,
+  },
+  // Username availability feedback styles
+  usernameFeedback: {
+    marginBottom: THEME.spacing.xs,
+    marginTop: THEME.spacing.xs,
+  },
+  usernameStatus: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  usernameStatusText: {
+    fontSize: 12,
+    fontWeight: "500",
+  },
+  usernameErrorText: {
+    fontSize: 12,
+    color: "#FF6B6B",
+    marginTop: 2,
+  },
   additionalStatItem: {
     flexDirection: "row",
     alignItems: "center",
@@ -1550,35 +1945,6 @@ const styles = StyleSheet.create({
     height: 30,
     justifyContent: "center",
     alignItems: "center",
-  },
-  editButtons: {
-    flexDirection: "row",
-    marginTop: 10,
-    gap: 10,
-    justifyContent: "center",
-  },
-  editButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 6,
-    minWidth: 70,
-    alignItems: "center",
-  },
-  cancelButton: {
-    backgroundColor: THEME.colors.textMuted,
-  },
-  saveButton: {
-    backgroundColor: THEME.colors.primary,
-  },
-  cancelButtonText: {
-    color: "white",
-    fontWeight: "600",
-    fontSize: 14,
-  },
-  saveButtonText: {
-    color: "white",
-    fontWeight: "600",
-    fontSize: 14,
   },
   // Modal styles
   modalOverlay: {
