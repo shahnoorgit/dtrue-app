@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useCallback } from "react";
 import {
   View,
   Text,
@@ -16,7 +16,7 @@ interface OpinionsListProps {
   renderOpinion: ({ item }: { item: any }) => JSX.Element;
   submitted: boolean;
   isNextPage: boolean;
-  setPage: React.Dispatch<React.SetStateAction<number>>;
+  onLoadMore: () => void;
   isLoadingMore: boolean;
 }
 
@@ -27,10 +27,10 @@ const OpinionsList: React.FC<OpinionsListProps> = ({
   renderOpinion,
   submitted,
   isNextPage,
-  setPage,
+  onLoadMore,
   isLoadingMore,
 }) => {
-  const renderEmptyComponent = () => (
+  const renderEmptyComponent = useCallback(() => (
     <View style={styles.emptyContainer}>
       <Ionicons
         name='chatbubble-ellipses-outline'
@@ -39,14 +39,14 @@ const OpinionsList: React.FC<OpinionsListProps> = ({
       />
       <Text style={styles.emptyText}>Be the first to share your opinion</Text>
     </View>
-  );
+  ), []);
 
-  const renderFooter = () =>
+  const renderFooter = useCallback(() =>
     isLoadingMore ? (
       <View style={styles.footerLoading}>
         <ActivityIndicator size='small' color='#FFF' />
       </View>
-    ) : null;
+    ) : null, [isLoadingMore]);
 
   if (loadingOpinions) {
     return (
@@ -60,10 +60,10 @@ const OpinionsList: React.FC<OpinionsListProps> = ({
     <FlatList
       ref={flatRef}
       data={opinions}
-      keyExtractor={(_, idx) => idx.toString()}
-      renderItem={({ item }) => (
+      keyExtractor={(item, idx) => item.userId || item.id || idx.toString()}
+      renderItem={useCallback(({ item }) => (
         <View style={styles.itemContainer}>{renderOpinion({ item })}</View>
-      )}
+      ), [renderOpinion])}
       inverted
       initialNumToRender={10}
       maxToRenderPerBatch={10}
@@ -74,7 +74,11 @@ const OpinionsList: React.FC<OpinionsListProps> = ({
         paddingBottom: 16,
         paddingHorizontal: 12,
       }}
-      onEndReached={() => isNextPage && setPage((prev) => prev + 1)}
+      onEndReached={useCallback(() => {
+        if (isNextPage && !isLoadingMore) {
+          onLoadMore();
+        }
+      }, [isNextPage, isLoadingMore, onLoadMore])}
       onEndReachedThreshold={0.5}
       ListFooterComponent={renderFooter}
       ListEmptyComponent={renderEmptyComponent}

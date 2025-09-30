@@ -89,7 +89,12 @@ const formatShort = (iso?: string) =>
       })
     : "";
 
-const Header: React.FC<{ onBack: () => void }> = ({ onBack }) => {
+const Header: React.FC<{ 
+  onBack: () => void; 
+  onReadAll: () => void;
+  hasUnread: boolean;
+  isMarkingAllAsRead: boolean;
+}> = ({ onBack, onReadAll, hasUnread, isMarkingAllAsRead }) => {
   return (
     <SafeAreaView style={styles.headerSafe}>
       <View style={styles.header}>
@@ -104,6 +109,21 @@ const Header: React.FC<{ onBack: () => void }> = ({ onBack }) => {
         </Pressable>
 
         <Text style={styles.headerTitle}>Notifications</Text>
+
+        {hasUnread && (
+          <Pressable
+            onPress={onReadAll}
+            style={[styles.readAllButton, isMarkingAllAsRead && styles.readAllButtonDisabled]}
+            disabled={isMarkingAllAsRead}
+            android_ripple={{ color: "rgba(255,255,255,0.1)", borderless: true }}
+          >
+            {isMarkingAllAsRead ? (
+              <ActivityIndicator size="small" color={THEME.colors.text} />
+            ) : (
+              <Text style={styles.readAllText}>Read All</Text>
+            )}
+          </Pressable>
+        )}
       </View>
     </SafeAreaView>
   );
@@ -115,6 +135,7 @@ const NotificationsPage: React.FC = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [markingAsRead, setMarkingAsRead] = useState<string | null>(null);
+  const [markingAllAsRead, setMarkingAllAsRead] = useState(false);
 
   const [currentPage, setCurrentPage] = useState(1);
   const [hasMorePages, setHasMorePages] = useState(true);
@@ -260,6 +281,65 @@ const NotificationsPage: React.FC = () => {
     },
     [token]
   );
+
+  const markAllAsRead = useCallback(async () => {
+    if (!token || markingAllAsRead) return;
+
+    // Get all unread notification IDs
+    const unreadNotificationIds = notifications
+      .filter(notification => !notification.isSeen)
+      .map(notification => notification.id);
+
+    if (unreadNotificationIds.length === 0) return;
+
+    setMarkingAllAsRead(true);
+
+    try {
+      const res = await fetch(
+        `${process.env.EXPO_PUBLIC_BASE_URL}/notifications/mark-all-read`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            notificationIds: unreadNotificationIds,
+          }),
+        }
+      );
+
+      if (res.status === 401) {
+        refreshToken();
+        return;
+      }
+
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}`);
+      }
+
+      const json = await res.json();
+      if (json.success) {
+        // Update all notifications to be marked as read
+        setNotifications(prev =>
+          prev.map(notification => ({
+            ...notification,
+            isSeen: true,
+            readAt: new Date().toISOString(),
+          }))
+        );
+      }
+    } catch (error) {
+      logError(error, {
+        context: "NotificationsPage.markAllAsRead",
+        notificationIds: unreadNotificationIds,
+      });
+      console.warn("Failed to mark all notifications as read:", error);
+      showError("Error", "Failed to mark all notifications as read", { type: 'error' });
+    } finally {
+      setMarkingAllAsRead(false);
+    }
+  }, [token, notifications, markingAllAsRead, refreshToken, showError]);
 
   const handleNotificationPress = useCallback(
     async (notification: Notification) => {
@@ -436,10 +516,18 @@ const NotificationsPage: React.FC = () => {
       </View>
     ) : null;
 
+  // Check if there are any unread notifications
+  const hasUnreadNotifications = notifications.some(notification => !notification.isSeen);
+
   if (loading && notifications.length === 0 && !refreshing) {
     return (
       <View style={styles.container}>
-        <Header onBack={() => router.push("/")} />
+        <Header 
+          onBack={() => router.push("/")} 
+          onReadAll={markAllAsRead}
+          hasUnread={false}
+          isMarkingAllAsRead={false}
+        />
         {renderSkeletonLoader()}
       </View>
     );
@@ -447,7 +535,12 @@ const NotificationsPage: React.FC = () => {
 
   return (
     <View style={styles.container}>
-      <Header onBack={() => router.push("/")} />
+      <Header 
+        onBack={() => router.push("/")} 
+        onReadAll={markAllAsRead}
+        hasUnread={hasUnreadNotifications}
+        isMarkingAllAsRead={markingAllAsRead}
+      />
 
       {fetchError && notifications.length === 0 && !loading ? (
         renderError()
@@ -514,6 +607,24 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: "bold",
     color: THEME.colors.text,
+    flex: 1,
+  },
+  readAllButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+    backgroundColor: THEME.colors.primary,
+    justifyContent: "center",
+    alignItems: "center",
+    minWidth: 70,
+  },
+  readAllButtonDisabled: {
+    opacity: 0.6,
+  },
+  readAllText: {
+    color: THEME.colors.background,
+    fontSize: 12,
+    fontWeight: "600",
   },
   listContent: {
     paddingHorizontal: 16,

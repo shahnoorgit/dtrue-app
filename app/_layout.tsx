@@ -23,7 +23,7 @@ import * as Notifications from "expo-notifications";
 import Constants from "expo-constants";
 import "./globals.css";
 import * as Sentry from "@sentry/react-native";
-import { setSentryUser, logError } from "@/utils/sentry/sentry";
+import { setSentryUser, logError, clearSentryUser, testSentryIntegration } from "@/utils/sentry/sentry";
 import { PostHogProvider } from "posthog-react-native";
 import { posthog } from "@/lib/posthog/posthog";
 import { AppOpenTracker } from "@/lib/posthog/PosthogWrapper";
@@ -69,10 +69,22 @@ function SentryUserWrapper() {
       setSentryUser(userId);
       // User is signed in - identification handled in AppOpenTracker
     } else if (isLoaded && !isSignedIn) {
-      setSentryUser("");
+      clearSentryUser();
       resetUser();
     }
   }, [isLoaded, isSignedIn, userId]);
+
+  // Test Sentry integration on app start (development only)
+  useEffect(() => {
+    if (__DEV__) {
+      // Delay the test to ensure Sentry is fully initialized
+      const timer = setTimeout(() => {
+        testSentryIntegration();
+      }, 2000);
+      
+      return () => clearTimeout(timer);
+    }
+  }, []);
 
   return null;
 }
@@ -101,7 +113,19 @@ class ErrorBoundary extends React.Component<
   componentDidCatch(error: Error, info: React.ErrorInfo) {
     console.error("ErrorBoundary caught:", error, info);
     this.setState({ errorInfo: error.message });
-    // send to Sentry (already wired) and PostHog
+    
+    // Send to Sentry with enhanced context
+    logError(error, {
+      context: "ErrorBoundary",
+      componentStack: info.componentStack,
+      errorBoundary: true,
+      tags: {
+        errorType: 'unhandled',
+        component: 'ErrorBoundary',
+      }
+    });
+    
+    // Send to PostHog
     trackAppError({
       error: error.message,
       component: "ErrorBoundary",

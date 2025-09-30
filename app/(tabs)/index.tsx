@@ -601,7 +601,7 @@ export default function DebateFeed() {
                       lineHeight: 8,
                     }}
                   >
-                    {unseenCount}
+                    {unseenCount > 10 ? "10+" : unseenCount}
                   </Text>
                 </View>
               )}

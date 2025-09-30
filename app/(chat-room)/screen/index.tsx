@@ -39,6 +39,7 @@ export default function DebateRoom() {
   const flatRef = useRef<FlatList>(null);
   const insets = useSafeAreaInsets();
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const hasFetchedInitialData = useRef(false);
 
   // UI state
   const [debateTitle, setDebateTitle] = useState(`Debate ${debateId}`);
@@ -234,17 +235,22 @@ export default function DebateRoom() {
   }, [debateId, token]);
 
   // Fetch opinions
-  const fetchOpinions = useCallback(async () => {
-    if (!debateId || !token || !isDebateActive) return;
+  const fetchOpinions = useCallback(async (pageNum = 1, isLoadMore = false) => {
+    if (!debateId || !token) return;
 
-    setLoadingOpinions(true);
+    if (isLoadMore) {
+      setIsLoadingMore(true);
+    } else {
+      setLoadingOpinions(true);
+    }
+    
     try {
       const { data } = await axios.get(
-        `${process.env.EXPO_PUBLIC_BASE_URL}/debate-participant/opinion/${debateId}?page=${page}&orderBy=${sort}`,
+        `${process.env.EXPO_PUBLIC_BASE_URL}/debate-participant/opinion/${debateId}?page=${pageNum}&orderBy=${sort}`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
-      if (data.data.currentUserOpinion) {
+      if (data.data.currentUserOpinion && pageNum === 1) {
         setSubmitted(true);
         setUserOpinion(data.data.currentUserOpinion.opinion);
         setStance(data.data.currentUserOpinion.agreed ? "agree" : "disagree");
@@ -252,37 +258,48 @@ export default function DebateRoom() {
       }
 
       if (data.success) {
-        setOpinions(data.data.data);
-        setSubmitted(data.data.some((o: any) => o.user.clerkId === clerkId));
+        if (isLoadMore) {
+          setOpinions(prev => [...prev, ...data.data.data]);
+        } else {
+          setOpinions(data.data.data);
+          setSubmitted(data.data.some((o: any) => o.user.clerkId === clerkId));
+        }
         setNextPage(data.data.nextPage);
       }
     } catch (err: any) {
       logError(err, {
         context: "DebateRoom.fetchOpinions",
         debateId: debateId ? `[REDACTED_DEBATE_ID]` : "undefined",
-        page,
+        page: pageNum,
         sort,
       });
 
       if (err.response?.status === 401) {
         await refreshToken();
-        fetchOpinions();
+        fetchOpinions(pageNum, isLoadMore);
       }
     } finally {
       setLoadingOpinions(false);
+      setIsLoadingMore(false);
       setLoadingInitial(false);
     }
-  }, [debateId, token, page, sort, isDebateActive]);
+  }, [debateId, token, sort]);
 
   // Initialize data on token ready
   useEffect(() => {
     if (token) {
       fetchDebateRoomAndLikedUserIds();
-      if (isDebateActive) {
-        fetchOpinions();
-      }
     }
-  }, [token, isDebateActive]);
+  }, [token]);
+
+  // Fetch opinions only when debate is confirmed active
+  useEffect(() => {
+    if (isDebateActive === true && token && !hasFetchedInitialData.current) {
+      hasFetchedInitialData.current = true;
+      fetchOpinions();
+    }
+  }, [isDebateActive, token]);
+
 
   // Submit opinion
   const onSubmit = useCallback(async () => {
@@ -440,6 +457,39 @@ export default function DebateRoom() {
   const totalVotes = Math.max(1, opinions.length);
   const agreePct = agreedCount / totalVotes;
 
+  // Helper function to format date and time
+  const formatDateTime = useCallback((dateString: string) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffInHours = (now.getTime() - date.getTime()) / (1000 * 60 * 60);
+    
+    if (diffInHours < 24) {
+      // Show time if within 24 hours
+      return date.toLocaleTimeString("en-US", {
+        hour: "numeric",
+        minute: "2-digit",
+        hour12: true,
+      });
+    } else if (diffInHours < 24 * 7) {
+      // Show day of week if within a week
+      return date.toLocaleDateString("en-US", {
+        weekday: "short",
+        hour: "numeric",
+        minute: "2-digit",
+        hour12: true,
+      });
+    } else {
+      // Show full date for older posts
+      return date.toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+        hour12: true,
+      });
+    }
+  }, []);
+
   // Opinion renderer with improved UX
   const renderOpinion = useCallback(
     ({ item }: { item: any }) => {
@@ -525,11 +575,7 @@ export default function DebateRoom() {
                   marginLeft: "auto",
                 }}
               >
-                {new Date(item.createdAt).toLocaleTimeString("en-US", {
-                  hour: "numeric",
-                  minute: "2-digit",
-                  hour12: true,
-                })}
+                {formatDateTime(item.createdAt)}
               </Text>
             </Pressable>
 
@@ -639,7 +685,7 @@ export default function DebateRoom() {
         </TouchableOpacity>
       );
     },
-    [handleLike, likedUserIds, isDebateActive, optimisticLikes, pendingLikes, userOpinionId]
+    [handleLike, likedUserIds, isDebateActive, optimisticLikes, pendingLikes, userOpinionId, formatDateTime]
   );
 
   if (loadingInitial || isDebateActive === null) {
@@ -735,7 +781,10 @@ export default function DebateRoom() {
             renderOpinion={renderOpinion}
             submitted={submitted}
             isNextPage={isNextPage || false}
-            setPage={setPage}
+            onLoadMore={() => {
+              setPage(prev => prev + 1);
+              fetchOpinions(page + 1, true);
+            }}
             isLoadingMore={isLoadingMore}
           />
           <InputBar
