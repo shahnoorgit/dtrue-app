@@ -579,8 +579,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: THEME.colors.background,
-    paddingBottom: 72,
-    padding: 4,
   },
   headerSafe: {
     backgroundColor: THEME.colors.background,
@@ -628,7 +626,7 @@ const styles = StyleSheet.create({
   },
   listContent: {
     paddingHorizontal: 16,
-    paddingBottom: 100,
+    paddingBottom: 20,
   },
   cardContainer: {
     marginBottom: 8,
@@ -716,6 +714,7 @@ const styles = StyleSheet.create({
   // Skeleton styles (updated for new layout)
   skeletonContainer: {
     paddingHorizontal: 16,
+    paddingBottom: 20,
   },
   skeletonCard: {
     backgroundColor: THEME.colors.cardBackground,

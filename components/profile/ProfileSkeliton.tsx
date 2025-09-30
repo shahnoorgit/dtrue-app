@@ -1,7 +1,8 @@
 // components/profile/ProfileSkeleton.tsx
 import React from "react";
 import { View, StyleSheet } from "react-native";
-import { LinearGradient } from "expo-linear-gradient"; // Make sure this is installed
+import { LinearGradient } from "expo-linear-gradient";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 const THEME = {
   colors: {
@@ -38,9 +39,11 @@ const SkeletonElement = ({ style }: { style: any }) => (
 );
 
 const ProfileSkeleton = () => {
+  const insets = useSafeAreaInsets();
+  
   return (
     <View style={styles.container}>
-      <View style={styles.headerSection}>
+      <View style={[styles.headerSection, { paddingTop: insets.top }]}>
         <View style={styles.topButtonRow}>
           <SkeletonElement style={styles.navButtonSkeleton} />
           <View style={{ flex: 1 }} />
@@ -120,7 +123,7 @@ const styles = StyleSheet.create({
   },
   // --- Header Section ---
   headerSection: {
-    paddingTop: 50 + THEME.spacing.md, // Account for buttons
+    paddingTop: 0,
     paddingBottom: THEME.spacing.md,
     backgroundColor: THEME.colors.background,
     borderBottomWidth: 1,
@@ -131,7 +134,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     position: "absolute",
-    top: 50,
+    top: 8,
     left: THEME.spacing.md,
     right: THEME.spacing.md,
     zIndex: 1,

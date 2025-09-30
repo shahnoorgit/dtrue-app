@@ -12,6 +12,7 @@ import {
   StyleSheet,
   StatusBar,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   RelativePathString,
   useLocalSearchParams,
@@ -75,6 +76,7 @@ export default function FollowersScreen() {
   }>();
 
   const [token, refreshToken] = useAuthToken();
+  const insets = useSafeAreaInsets();
   const [followers, setFollowers] = useState<Follower[]>([]);
   const [cursor, setCursor] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -244,7 +246,7 @@ export default function FollowersScreen() {
       />
 
       {/* Header */}
-      <LinearGradient colors={THEME.gradients.card} style={styles.header}>
+      <LinearGradient colors={THEME.gradients.card} style={[styles.header, { paddingTop: insets.top }]}>
         <TouchableOpacity
           onPress={() => router.replace(backTo as RelativePathString)}
           style={styles.backButton}
@@ -317,7 +319,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingHorizontal: 16,
     paddingVertical: 12,
-    paddingTop: 50,
+    paddingTop: 0,
     borderBottomWidth: 1,
     borderBottomColor: THEME.colors.border,
   },

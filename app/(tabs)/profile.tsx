@@ -15,6 +15,7 @@ import {
   Animated,
   TextInput,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { useRoute, useNavigation } from "@react-navigation/native";
@@ -266,6 +267,7 @@ const ProfilePage: React.FC = () => {
   const [joiningDebateId, setJoiningDebateId] = useState<string | null>(null);
   
   const { showError } = useError();
+  const insets = useSafeAreaInsets();
 
   // Image update states
   const [isEditingImage, setIsEditingImage] = useState(false);
@@ -1055,10 +1057,10 @@ const ProfilePage: React.FC = () => {
     <View>
       <LinearGradient
         colors={['#080F12', '#0A1A1F', '#080F12']}
-        style={styles.headerSection}
+        style={[styles.headerSection, { paddingTop: insets.top }]}
       >
         <TouchableOpacity
-          style={styles.backButton}
+          style={[styles.backButton, { top: insets.top + 8 }]}
           onPress={() => {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
             navigation.goBack();
@@ -1067,7 +1069,7 @@ const ProfilePage: React.FC = () => {
           <Ionicons name='chevron-back' size={24} color={THEME.colors.text} />
         </TouchableOpacity>
 
-        <View style={styles.headerActions}>
+        <View style={[styles.headerActions, { top: insets.top + 8 }]}>
           <TouchableOpacity
             style={styles.headerActionButton}
             onPress={() => {
@@ -1515,14 +1517,13 @@ const styles = StyleSheet.create({
     paddingBottom: 100,
   },
   headerSection: {
-    paddingTop: 50,
+    paddingTop: 0,
     paddingBottom: THEME.spacing.md,
     borderBottomWidth: 1,
     borderBottomColor: THEME.colors.border,
   },
   backButton: {
     position: "absolute",
-    top: 50,
     left: THEME.spacing.md,
     zIndex: 1,
     width: 40,
@@ -1536,7 +1537,6 @@ const styles = StyleSheet.create({
   },
   headerActions: {
     position: "absolute",
-    top: 50,
     right: THEME.spacing.md,
     flexDirection: "row",
     gap: THEME.spacing.sm,
