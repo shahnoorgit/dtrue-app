@@ -3,26 +3,26 @@ import * as Updates from 'expo-updates';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const UPDATE_DOWNLOADED_KEY = 'update_downloaded';
+const UPDATE_CHECKED_KEY = 'update_checked_this_session';
 
 export const useSimpleUpdates = () => {
   const [isChecking, setIsChecking] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
 
-  // Apply downloaded update on app start (if available) - ZERO DELAY
+  // Apply downloaded update on app start (if available) - ONLY if user explicitly wants it
   const applyPendingUpdate = async () => {
     try {
       const hasDownloadedUpdate = await AsyncStorage.getItem(UPDATE_DOWNLOADED_KEY);
       
       if (hasDownloadedUpdate === 'true') {
-        console.log('Applying downloaded update...');
-        await AsyncStorage.removeItem(UPDATE_DOWNLOADED_KEY);
-        // Apply the update immediately
-        Updates.reloadAsync();
-        return true; // Update was applied
+        console.log('Update is ready, will apply on next app restart');
+        // DON'T apply immediately - let user continue with current session
+        // Update will be applied when they close and reopen the app
+        return false; // No immediate reload
       }
       return false; // No update to apply
     } catch (error) {
-      console.error('Error applying update:', error);
+      console.error('Error checking for updates:', error);
       return false;
     }
   };
@@ -58,8 +58,9 @@ export const useSimpleUpdates = () => {
       
       if (update.isNew) {
         console.log('Update downloaded successfully, will apply on next app open');
-        // Store that update is ready
+        // Store that update is ready - but DON'T apply it now
         await AsyncStorage.setItem(UPDATE_DOWNLOADED_KEY, 'true');
+        // The update will be applied when the app is completely restarted
       }
     } catch (error) {
       console.error('Error downloading update:', error);
@@ -69,14 +70,15 @@ export const useSimpleUpdates = () => {
     }
   };
 
-  // Initialize update system - ONLY on app open, NO timers
+  // Initialize update system - ONLY check once per session, NO immediate updates
   useEffect(() => {
     if (!__DEV__) {
-      // First, apply any pending updates (if any)
-      applyPendingUpdate().then((updateWasApplied) => {
-        // Only check for new updates if no update was just applied
-        if (!updateWasApplied) {
-          // Check for updates immediately after app opens (no delay)
+      // Check if we've already checked for updates this session
+      AsyncStorage.getItem(UPDATE_CHECKED_KEY).then((hasChecked) => {
+        if (!hasChecked) {
+          // Mark that we've checked this session
+          AsyncStorage.setItem(UPDATE_CHECKED_KEY, 'true');
+          // Check for updates only once per session - completely in background
           checkForUpdates();
         }
       });
