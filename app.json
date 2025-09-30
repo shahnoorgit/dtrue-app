@@ -15,6 +15,10 @@
     "userInterfaceStyle": "automatic",
     "jsEngine": "hermes",
     "newArchEnabled": true,
+    "updates": {
+      "url": "https://u.expo.dev/161ac660-74b1-4723-b57c-ba70d81bc91e"
+    },
+    "runtimeVersion": "1.0.0",
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
@@ -91,7 +95,8 @@
           "project": "react-native",
           "organization": "dtrue"
         }
-      ]
+      ],
+      "expo-updates"
     ],
     "experiments": {
       "typedRoutes": true

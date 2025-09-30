@@ -29,6 +29,7 @@ import { posthog } from "@/lib/posthog/posthog";
 import { AppOpenTracker } from "@/lib/posthog/PosthogWrapper";
 import { ErrorProvider } from "@/contexts/ErrorContext";
 import SimpleOfflineWrapper from "@/components/ui/SimpleOfflineWrapper";
+import { useSimpleUpdates } from "@/hook/useSimpleUpdates";
 
 // Prevent the splash screen from auto-hiding. We will control this manually.
 SplashScreen.preventAutoHideAsync();
@@ -779,6 +780,9 @@ export default Sentry.wrap(function RootLayout() {
   if (!publishableKey) {
     throw new Error("Missing EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY");
   }
+
+  // Initialize automatic updates (silent, no UI needed)
+  useSimpleUpdates();
 
   return (
     <ClerkProvider tokenCache={tokenCache} publishableKey={publishableKey}>
