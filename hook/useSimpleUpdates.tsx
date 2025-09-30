@@ -1,22 +1,42 @@
 import { useState, useEffect } from 'react';
 import * as Updates from 'expo-updates';
-import { Alert } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+const UPDATE_DOWNLOADED_KEY = 'update_downloaded';
 
 export const useSimpleUpdates = () => {
   const [isChecking, setIsChecking] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
 
-  // Check for updates (silent, automatic)
+  // Apply downloaded update on app start (if available) - ZERO DELAY
+  const applyPendingUpdate = async () => {
+    try {
+      const hasDownloadedUpdate = await AsyncStorage.getItem(UPDATE_DOWNLOADED_KEY);
+      
+      if (hasDownloadedUpdate === 'true') {
+        console.log('Applying downloaded update...');
+        await AsyncStorage.removeItem(UPDATE_DOWNLOADED_KEY);
+        // Apply the update immediately
+        Updates.reloadAsync();
+        return true; // Update was applied
+      }
+      return false; // No update to apply
+    } catch (error) {
+      console.error('Error applying update:', error);
+      return false;
+    }
+  };
+
+  // Check for updates in background (completely silent, no UI blocking)
   const checkForUpdates = async () => {
     try {
-      
-
       setIsChecking(true);
       const update = await Updates.checkForUpdateAsync();
       
-      // Automatically download if update is available
       if (update.isAvailable) {
-        await downloadUpdate();
+        console.log('Update available, downloading silently...');
+        // Download immediately in background
+        await downloadUpdateInBackground();
       }
 
       return update;
@@ -28,52 +48,45 @@ export const useSimpleUpdates = () => {
     }
   };
 
-  // Download and install update (silent, automatic)
-  const downloadUpdate = async () => {
+  // Download update in background (completely silent, no restart)
+  const downloadUpdateInBackground = async () => {
     try {
-
       setIsDownloading(true);
+      console.log('Downloading update in background...');
+      
       const update = await Updates.fetchUpdateAsync();
       
-      // Automatically restart app if update is new
       if (update.isNew) {
-        console.log('Update downloaded, restarting app automatically...');
-        // Small delay to ensure download is complete
-        setTimeout(() => {
-          Updates.reloadAsync();
-        }, 1000);
+        console.log('Update downloaded successfully, will apply on next app open');
+        // Store that update is ready
+        await AsyncStorage.setItem(UPDATE_DOWNLOADED_KEY, 'true');
       }
     } catch (error) {
       console.error('Error downloading update:', error);
-      // Silent failure - don't show alerts to users
+      // Silent failure - don't interrupt user
     } finally {
       setIsDownloading(false);
     }
   };
 
-  // Auto-check for updates on app start and periodically
+  // Initialize update system - ONLY on app open, NO timers
   useEffect(() => {
     if (!__DEV__) {
-      // Check for updates 5 seconds after app starts
-      const initialTimer = setTimeout(() => {
-        checkForUpdates();
-      }, 5000);
-
-      // Check for updates every 10 minutes
-      const periodicTimer = setInterval(() => {
-        checkForUpdates();
-      }, 10 * 60 * 1000);
-
-      return () => {
-        clearTimeout(initialTimer);
-        clearInterval(periodicTimer);
-      };
+      // First, apply any pending updates (if any)
+      applyPendingUpdate().then((updateWasApplied) => {
+        // Only check for new updates if no update was just applied
+        if (!updateWasApplied) {
+          // Check for updates immediately after app opens (no delay)
+          checkForUpdates();
+        }
+      });
     }
   }, []);
 
   return {
     checkForUpdates,
-    downloadUpdate,
+    downloadUpdateInBackground,
+    applyPendingUpdate,
     isChecking,
     isDownloading,
   };
