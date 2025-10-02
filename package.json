@@ -10,7 +10,9 @@
     "web": "expo start --web",
     "test": "jest --watchAll",
     "lint": "expo lint",
-    "update:production": "eas update --branch production --message"
+    "update:production": "eas update --branch production --message",
+    "analyze": "expo export --platform android --output-dir ./dist && echo 'Bundle analysis complete. Check ./dist folder for bundle size.'",
+    "build:production": "eas build --platform android --profile production"
   },
   "jest": {
     "preset": "jest-expo"
