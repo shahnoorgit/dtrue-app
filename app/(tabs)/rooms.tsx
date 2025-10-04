@@ -37,6 +37,8 @@ const THEME = {
     backgroundDarker: "#03120F",
     text: "#FFFFFF",
     textMuted: "#8F9BB3",
+    success: "#10B981",
+    warning: "#F59E0B",
   },
 };
 
@@ -97,12 +99,15 @@ const SkeletonLoader = () => {
 };
 
 const Rooms = () => {
-  const [rooms, setRooms] = useState([]);
+  const [rooms, setRooms] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [fetchError, setFetchError] = useState(null);
   const [activeTab, setActiveTab] = useState("active");
   const [joiningRoomId, setJoiningRoomId] = useState(null);
+  const [showMenuModal, setShowMenuModal] = useState(false);
+  const [selectedDebate, setSelectedDebate] = useState<any>(null);
+  const [deletingDebateId, setDeletingDebateId] = useState(null);
   const router = useRouter();
   const [token, refreshToken] = useAuthToken();
   const retryCount = useRef(0);
@@ -148,10 +153,95 @@ const Rooms = () => {
     router.push("/(create)/screen/screen");
   }, [router]);
 
+  const handleMenuPress = useCallback((debate: any) => {
+    setSelectedDebate(debate);
+    setShowMenuModal(true);
+  }, []);
+
+  const handleEditDebate = useCallback(() => {
+    if (selectedDebate) {
+      setShowMenuModal(false);
+      router.push({
+        pathname: "/(create)/screen/screen" as any,
+        params: {
+          editMode: "true",
+          debateId: selectedDebate.id,
+          title: selectedDebate.title,
+          description: selectedDebate.description,
+          duration: selectedDebate.duration,
+          image: selectedDebate.image,
+          createdAt: selectedDebate.createdAt,
+        },
+      });
+    }
+  }, [selectedDebate, router]);
+
+  const handleDeleteDebate = useCallback(async () => {
+    if (!selectedDebate || !token) return;
+
+    setDeletingDebateId(selectedDebate.id);
+    setShowMenuModal(false);
+
+    try {
+      const response = await fetch(
+        `${process.env.EXPO_PUBLIC_BASE_URL}/debate-room/${selectedDebate.id}`,
+        {
+          method: "DELETE",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      if (!response.ok) {
+        if (response.status === 401) {
+          refreshToken();
+          return;
+        }
+        throw new Error(`API error ${response.status}`);
+      }
+
+      // Remove the deleted debate from the local state
+      setRooms((prevRooms: any[]) => 
+        prevRooms.filter((room: any) => room.id !== selectedDebate.id)
+      );
+
+      // Clear cache for 'mine' tab to refresh data
+      setTabDataCache((prev) => ({ ...prev, mine: null }));
+
+      Alert.alert("Success", "Debate deleted successfully");
+    } catch (error) {
+      console.error("Failed to delete debate:", error);
+      Alert.alert("Error", "Failed to delete debate. Please try again.");
+    } finally {
+      setDeletingDebateId(null);
+      setSelectedDebate(null);
+    }
+  }, [selectedDebate, token, refreshToken]);
+
+  const showDeleteConfirmation = useCallback(() => {
+    Alert.alert(
+      "Delete Debate",
+      "Are you sure you want to delete this debate? This action cannot be undone.",
+      [
+        {
+          text: "Cancel",
+          style: "cancel",
+        },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: handleDeleteDebate,
+        },
+      ]
+    );
+  }, [handleDeleteDebate]);
+
   const joinDebateRoom = useCallback(
-    async (roomId) => {
+    async (roomId: string) => {
       if (!token || !roomId) return;
-      setJoiningRoomId(roomId);
+      setJoiningRoomId(roomId as any);
       try {
         const response = await fetch(
           `${process.env.EXPO_PUBLIC_BASE_URL}/debate-participant`,
@@ -183,16 +273,16 @@ const Rooms = () => {
         }
 
         // Find the debate room data to navigate
-        const debateToJoin = rooms.find((room) => room.id === roomId);
+        const debateToJoin = rooms.find((room: any) => room.id === roomId);
 
         if (debateToJoin) {
           // Navigate to the chat room instead of showing alert
           router.push({
             pathname: "/(chat-room)/screen",
             params: {
-              clerkId: debateToJoin?.userId || debateToJoin?.creator_id,
-              debateId: debateToJoin.id,
-              debateImage: debateToJoin.image || "",
+              clerkId: (debateToJoin as any)?.userId || (debateToJoin as any)?.creator_id,
+              debateId: (debateToJoin as any).id,
+              debateImage: (debateToJoin as any).image || "",
             },
           });
         }
@@ -275,7 +365,7 @@ const Rooms = () => {
         retryCount.current = 0;
         const data = await response.json();
         const roomsData =
-          activeTab === "mine" ? data?.data || [] : data?.data || [];
+          activeTab === "mine" ? (data?.data || []) : (data?.data || []);
 
         setTabDataCache((prev) => ({ ...prev, [activeTab]: roomsData }));
         setRooms(roomsData);
@@ -287,7 +377,7 @@ const Rooms = () => {
           activeTab,
           route,
         });
-        setFetchError("Failed to load rooms. Pull down to retry.");
+        setFetchError("Failed to load rooms. Pull down to retry." as any);
       } finally {
         setLoading(false);
         setRefreshing(false);
@@ -309,7 +399,7 @@ const Rooms = () => {
   }, [token, activeTab, fetchDebateRooms]);
 
   const handleTabChange = useCallback(
-    (tab) => {
+    (tab: string) => {
       if (tab === activeTab) return;
 
       setRooms([]);
@@ -324,16 +414,16 @@ const Rooms = () => {
   );
 
 
-  const calculateTimeRemaining = (createdAt, durationHours) => {
+  const calculateTimeRemaining = (createdAt: string, durationHours: number) => {
     const creationDate = new Date(createdAt);
     const endDate = new Date(
-      creationDate.getTime() + durationHours * 60 * 60 * 1000
+      creationDate.getTime() + (durationHours as number) * 60 * 60 * 1000
     );
     const now = new Date();
 
     if (now > endDate) return "Ended";
 
-    const remainingMs = endDate - now;
+    const remainingMs = endDate.getTime() - now.getTime();
     const remainingHours = Math.floor(remainingMs / (1000 * 60 * 60));
     const remainingMinutes = Math.floor(
       (remainingMs % (1000 * 60 * 60)) / (1000 * 60)
@@ -344,7 +434,7 @@ const Rooms = () => {
       : `${remainingMinutes}m left`;
   };
 
-  const navigateToDebate = (debate, time, isJoined) => {
+  const navigateToDebate = (debate: any, time: string, isJoined: boolean) => {
     if (!debate || !debate.id) {
       Alert.alert("Error", "Cannot open this debate room");
       return;
@@ -376,8 +466,8 @@ const Rooms = () => {
 
     if (activeTab === "mine") {
       const processedData = [];
-      const joinedRooms = rooms.filter((room) => room.joined === true);
-      const notJoinedRooms = rooms.filter((room) => room.joined === false);
+      const joinedRooms = rooms.filter((room: any) => room.joined === true);
+      const notJoinedRooms = rooms.filter((room: any) => room.joined === false);
 
       if (joinedRooms.length > 0) {
         processedData.push({
@@ -390,7 +480,7 @@ const Rooms = () => {
           icon: "checkmark-circle",
         });
 
-        joinedRooms.forEach((room) => {
+        joinedRooms.forEach((room: any) => {
           processedData.push({
             ...room,
             type: "room",
@@ -411,7 +501,7 @@ const Rooms = () => {
           icon: "time-outline",
         });
 
-        notJoinedRooms.forEach((room) => {
+        notJoinedRooms.forEach((room: any) => {
           processedData.push({
             ...room,
             type: "room",
@@ -424,10 +514,10 @@ const Rooms = () => {
       return processedData;
     }
 
-    return rooms.map((item) => ({ ...item, type: "room" }));
+    return rooms.map((item: any) => ({ ...item, type: "room" }));
   }, [rooms, activeTab]);
 
-  const renderSectionHeader = ({ item }) => (
+  const renderSectionHeader = ({ item }: { item: any }) => (
     <View style={styles.sectionHeader}>
       <View style={styles.sectionHeaderContent}>
         <View style={styles.sectionIconContainer}>
@@ -450,7 +540,7 @@ const Rooms = () => {
     </View>
   );
 
-  const renderDebateRoom = ({ item }) => {
+  const renderDebateRoom = ({ item }: { item: any }) => {
     if (item.type === "section-header") {
       return renderSectionHeader({ item });
     }
@@ -468,97 +558,121 @@ const Rooms = () => {
     const isJoiningThis = joiningRoomId === debate.id;
 
     return (
-      <TouchableOpacity
-        style={[
-          styles.debateCard,
-          isJoined && styles.joinedCard,
-          isNotJoined && styles.notJoinedCard,
-        ]}
-        onPress={() => navigateToDebate(debate, timeRemaining, isJoined)}
-        activeOpacity={0.7}
-        disabled={isJoiningThis}
-      >
-        {isJoined && <View style={styles.glowEffect} />}
+      <View style={[
+        styles.debateCard,
+        activeTab === "mine" && styles.mineCard,
+        isJoined && styles.joinedCard,
+        isNotJoined && styles.notJoinedCard,
+      ]}>
+        <TouchableOpacity
+          style={styles.debateCardContent}
+          onPress={() => navigateToDebate(debate, timeRemaining, isJoined)}
+          activeOpacity={0.7}
+          disabled={isJoiningThis}
+        >
+          {isJoined && activeTab !== "mine" && <View style={styles.glowEffect} />}
 
-        <Image
-          source={{ uri: debate?.image || "https://placekitten.com/120/120  " }}
-          style={[
-            styles.debateImage,
-            isJoined && styles.joinedImage,
-            isNotJoined && styles.notJoinedImage,
-          ]}
-        />
+          <Image
+            source={{ uri: debate?.image || "https://placekitten.com/120/120  " }}
+            style={[
+              styles.debateImage,
+              isJoined && styles.joinedImage,
+              isNotJoined && styles.notJoinedImage,
+            ]}
+          />
 
-        <View style={styles.debateInfo}>
-          <View style={styles.titleRow}>
-            <Text
-              style={[styles.debateTitle, isJoined && { color: "#FFFFFF" }]}
-              numberOfLines={1}
-            >
-              {debate.title || "Untitled Debate"}
-            </Text>
-
-            {activeTab === "mine" && (
-              <View
-                style={[
-                  styles.statusBadge,
-                  item.isJoined ? styles.joinedBadge : styles.notJoinedBadge,
-                ]}
-              >
-                {isJoiningThis ? (
-                  <ActivityIndicator
-                    size='small'
-                    color={THEME.colors.primary}
-                  />
-                ) : (
-                  <Text
-                    style={[
-                      styles.statusText,
-                      item.isJoined ? styles.joinedText : styles.notJoinedText,
-                    ]}
-                  >
-                    {item.isJoined ? "Joined" : "Join Now"}
-                  </Text>
-                )}
-              </View>
-            )}
-          </View>
-
-          <Text
-            style={[styles.debateDescription, isNotJoined && { opacity: 0.7 }]}
-            numberOfLines={2}
-          >
-            {debate.description || "No description available"}
-          </Text>
-
-          <View style={styles.debateStats}>
-            <Text
-              style={[styles.timeRemaining, isJoined && { fontWeight: "700" }]}
-            >
-              {timeRemaining}
-            </Text>
-
-            <View style={styles.usersCount}>
-              <Ionicons
-                name='people'
-                size={16}
-                color={isJoined ? THEME.colors.primary : THEME.colors.textMuted}
-              />
+          <View style={styles.debateInfo}>
+            <View style={styles.titleRow}>
               <Text
                 style={[
-                  styles.usersCountText,
-                  isJoined && {
-                    color: THEME.colors.primary,
-                    fontWeight: "600",
-                  },
+                  styles.debateTitle, 
+                  isJoined && { color: "#FFFFFF" },
+                  activeTab === "mine" && styles.mineTitle
                 ]}
+                numberOfLines={1}
               >
-                {joinedUsers} joined
+                {debate.title || "Untitled Debate"}
               </Text>
+
+              {activeTab === "mine" && (
+                <View
+                  style={[
+                    styles.statusBadge,
+                    item.isJoined ? styles.joinedBadge : styles.notJoinedBadge,
+                  ]}
+                >
+                  {isJoiningThis ? (
+                    <ActivityIndicator
+                      size='small'
+                      color={THEME.colors.primary}
+                    />
+                  ) : (
+                    <Text
+                      style={[
+                        styles.statusText,
+                        item.isJoined ? styles.joinedText : styles.notJoinedText,
+                      ]}
+                    >
+                      {item.isJoined ? "Joined" : "Join Now"}
+                    </Text>
+                  )}
+                </View>
+              )}
+            </View>
+
+            <Text
+              style={[styles.debateDescription, isNotJoined && { opacity: 0.7 }]}
+              numberOfLines={2}
+            >
+              {debate.description || "No description available"}
+            </Text>
+
+            <View style={styles.debateStats}>
+              <Text
+                style={[styles.timeRemaining, isJoined && { fontWeight: "700" }]}
+              >
+                {timeRemaining}
+              </Text>
+
+              <View style={styles.usersCount}>
+                <Ionicons
+                  name='people'
+                  size={16}
+                  color={isJoined ? THEME.colors.primary : THEME.colors.textMuted}
+                />
+                <Text
+                  style={[
+                    styles.usersCountText,
+                    isJoined && {
+                      color: THEME.colors.primary,
+                      fontWeight: "600",
+                    },
+                  ]}
+                >
+                  {joinedUsers} joined
+                </Text>
+              </View>
             </View>
           </View>
-        </View>
-      </TouchableOpacity>
+        </TouchableOpacity>
+
+        {/* Three dots menu for mine tab */}
+        {activeTab === "mine" && (
+          <TouchableOpacity
+            style={styles.menuButton}
+            onPress={() => handleMenuPress(debate)}
+            activeOpacity={0.8}
+          >
+            <View style={styles.menuButtonContent}>
+              <Ionicons
+                name="ellipsis-vertical"
+                size={18}
+                color="#FFFFFF"
+              />
+            </View>
+          </TouchableOpacity>
+        )}
+      </View>
     );
   };
 
@@ -579,6 +693,70 @@ const Rooms = () => {
         </TouchableOpacity>
       ))}
     </View>
+  );
+
+  const MenuModal = () => (
+    <Modal
+      visible={showMenuModal}
+      transparent={true}
+      animationType="fade"
+      onRequestClose={() => setShowMenuModal(false)}
+    >
+      <TouchableWithoutFeedback onPress={() => setShowMenuModal(false)}>
+        <View style={styles.menuOverlay}>
+          <TouchableWithoutFeedback onPress={() => {}}>
+            <View style={styles.menuContainer}>
+              <View style={styles.menuHeader}>
+                <View style={styles.menuTitleContainer}>
+                  <Ionicons name="settings-outline" size={20} color={THEME.colors.primary} />
+                  <Text style={styles.menuTitle}>Debate Options</Text>
+                </View>
+                <TouchableOpacity
+                  style={styles.menuCloseButton}
+                  onPress={() => setShowMenuModal(false)}
+                >
+                  <Ionicons name="close" size={20} color={THEME.colors.textMuted} />
+                </TouchableOpacity>
+              </View>
+              
+              <View style={styles.menuOptionsContainer}>
+                <TouchableOpacity
+                  style={styles.menuOption}
+                  onPress={handleEditDebate}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.menuOptionIcon}>
+                    <Ionicons name="create-outline" size={22} color={THEME.colors.primary} />
+                  </View>
+                  <View style={styles.menuOptionContent}>
+                    <Text style={styles.menuOptionText}>Edit Debate</Text>
+                    <Text style={styles.menuOptionSubtext}>Modify title, description, or image</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={16} color={THEME.colors.textMuted} />
+                </TouchableOpacity>
+                
+                <View style={styles.menuDivider} />
+                
+                <TouchableOpacity
+                  style={styles.menuOption}
+                  onPress={showDeleteConfirmation}
+                  activeOpacity={0.7}
+                >
+                  <View style={[styles.menuOptionIcon, { backgroundColor: "rgba(255, 107, 107, 0.1)" }]}>
+                    <Ionicons name="trash-outline" size={22} color="#FF6B6B" />
+                  </View>
+                  <View style={styles.menuOptionContent}>
+                    <Text style={[styles.menuOptionText, { color: "#FF6B6B" }]}>Delete Debate</Text>
+                    <Text style={styles.menuOptionSubtext}>Permanently remove this debate</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={16} color="#FF6B6B" />
+                </TouchableOpacity>
+              </View>
+            </View>
+          </TouchableWithoutFeedback>
+        </View>
+      </TouchableWithoutFeedback>
+    </Modal>
   );
 
   if (loading && !refreshing && !tabDataCache[activeTab]) {
@@ -704,8 +882,8 @@ const Rooms = () => {
           maxToRenderPerBatch={10}
           windowSize={10}
           initialNumToRender={8}
-          getItemLayout={(data, index) => {
-            const item = data[index];
+          getItemLayout={(data: any, index: number) => {
+            const item = data?.[index];
             if (item && item.type === "section-header") {
               return { length: 60, offset: 60 * index, index };
             }
@@ -714,6 +892,9 @@ const Rooms = () => {
         />
       )}
       </View>
+      
+      {/* Menu Modal */}
+      <MenuModal />
     </TabScreenWrapper>
   );
 };
@@ -1022,6 +1203,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     marginBottom: 4,
+    flex: 1,
   },
 
   // Status badges
@@ -1109,6 +1291,156 @@ const styles = StyleSheet.create({
     backgroundColor: THEME.colors.primary + "33",
     marginTop: 8,
     marginHorizontal: 4,
+  },
+  // Menu styles
+  debateCardContent: {
+    flexDirection: "row",
+    flex: 1,
+  },
+  menuButton: {
+    position: "absolute",
+    top: 8,
+    right: 8,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "rgba(0, 0, 0, 0.7)",
+    justifyContent: "center",
+    alignItems: "center",
+    zIndex: 10,
+    shadowColor: "#000000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 5,
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.1)",
+  },
+  menuButtonContent: {
+    width: 20,
+    height: 20,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  menuOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.6)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  menuContainer: {
+    backgroundColor: THEME.colors.backgroundDarker,
+    borderRadius: 20,
+    padding: 0,
+    minWidth: 320,
+    maxWidth: 400,
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.1)",
+    shadowColor: "#000000",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 16,
+    elevation: 12,
+    overflow: "hidden",
+  },
+  menuHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(255, 255, 255, 0.1)",
+  },
+  menuTitleContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  menuTitle: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: THEME.colors.text,
+    marginLeft: 8,
+  },
+  menuCloseButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "rgba(255, 255, 255, 0.1)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  menuOptionsContainer: {
+    paddingVertical: 8,
+  },
+  menuOption: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    backgroundColor: "transparent",
+  },
+  menuOptionIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "rgba(0, 255, 148, 0.1)",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 12,
+  },
+  menuOptionContent: {
+    flex: 1,
+  },
+  menuOptionText: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: THEME.colors.text,
+    marginBottom: 2,
+  },
+  menuOptionSubtext: {
+    fontSize: 13,
+    color: THEME.colors.textMuted,
+    lineHeight: 18,
+  },
+  menuDivider: {
+    height: 1,
+    backgroundColor: "rgba(255, 255, 255, 0.1)",
+    marginHorizontal: 20,
+  },
+  glowEffect: {
+    position: "absolute",
+    top: -2,
+    left: -2,
+    right: -2,
+    bottom: -2,
+    borderRadius: 14,
+    backgroundColor: "transparent",
+    borderWidth: 2,
+    borderColor: THEME.colors.primary,
+    shadowColor: THEME.colors.primary,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  // Mine tab specific styles
+  mineCard: {
+    borderRadius: 16,
+    padding: 16,
+    elevation: 3,
+    shadowColor: "#000000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.08)",
+    position: "relative",
+  },
+  mineTitle: {
+    flex: 1,
+    marginRight: 8,
   },
 });
 

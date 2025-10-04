@@ -15,7 +15,7 @@
       },
       "env": {
         "EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY": "pk_live_Y2xlcmsuZHRydWUub25saW5lJA",
-        "EXPO_PUBLIC_BASE_URL": "http://3.109.184.119:8000",
+        "EXPO_PUBLIC_BASE_URL": "https://api.dtrue.online",
         "EXPO_PUBLIC_SHARE_URL": "links.dtrue.online",
         "EXPO_PUBLIC_JWT_TEMPLATE_NAME": "dtrue_app",
         "SENTRY_SKIP_UPLOAD": "1",
@@ -25,13 +25,12 @@
     "production": {
       "autoIncrement": true,
       "android": {
-        "buildType": "apk",
-        "gradleCommand": ":app:assembleRelease"
+        "buildType": "app-bundle"
       },
       "channel": "production",
       "env": {
         "EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY": "pk_live_Y2xlcmsuZHRydWUub25saW5lJA",
-        "EXPO_PUBLIC_BASE_URL": "http://3.109.184.119:8000",
+        "EXPO_PUBLIC_BASE_URL": "https://api.dtrue.online",
         "EXPO_PUBLIC_SHARE_URL": "links.dtrue.online",
         "EXPO_PUBLIC_JWT_TEMPLATE_NAME": "dtrue_app",
         "SENTRY_SKIP_UPLOAD": "1",
