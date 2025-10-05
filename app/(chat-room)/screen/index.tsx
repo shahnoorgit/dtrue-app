@@ -736,20 +736,11 @@ export default function DebateRoom() {
         style={{ flex: 1, backgroundColor: theme.colors.background }}
       >
         <StatusBar barStyle='light-content' />
-        <Header
-          timeRemaining={0}
-          setShowModal={setShowModal}
-          agreePct={endedRoomResults.agreementRatio}
-          opinions={[]}
-          debateTitle={debateTitle}
-          debateImage={finalDebateImage}
-        />
-
         <DebateEndedResults
           results={endedRoomResults}
           insets={insets}
           debateTitle={debateTitle}
-          debateImage={finalDebateImage}
+          debateImage={finalDebateImage || ""}
         />
       </SafeAreaView>
     );

@@ -107,7 +107,6 @@ const Rooms = () => {
   const [joiningRoomId, setJoiningRoomId] = useState(null);
   const [showMenuModal, setShowMenuModal] = useState(false);
   const [selectedDebate, setSelectedDebate] = useState<any>(null);
-  const [deletingDebateId, setDeletingDebateId] = useState(null);
   const router = useRouter();
   const [token, refreshToken] = useAuthToken();
   const retryCount = useRef(0);
@@ -176,67 +175,6 @@ const Rooms = () => {
     }
   }, [selectedDebate, router]);
 
-  const handleDeleteDebate = useCallback(async () => {
-    if (!selectedDebate || !token) return;
-
-    setDeletingDebateId(selectedDebate.id);
-    setShowMenuModal(false);
-
-    try {
-      const response = await fetch(
-        `${process.env.EXPO_PUBLIC_BASE_URL}/debate-room/${selectedDebate.id}`,
-        {
-          method: "DELETE",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-        }
-      );
-
-      if (!response.ok) {
-        if (response.status === 401) {
-          refreshToken();
-          return;
-        }
-        throw new Error(`API error ${response.status}`);
-      }
-
-      // Remove the deleted debate from the local state
-      setRooms((prevRooms: any[]) => 
-        prevRooms.filter((room: any) => room.id !== selectedDebate.id)
-      );
-
-      // Clear cache for 'mine' tab to refresh data
-      setTabDataCache((prev) => ({ ...prev, mine: null }));
-
-      Alert.alert("Success", "Debate deleted successfully");
-    } catch (error) {
-      console.error("Failed to delete debate:", error);
-      Alert.alert("Error", "Failed to delete debate. Please try again.");
-    } finally {
-      setDeletingDebateId(null);
-      setSelectedDebate(null);
-    }
-  }, [selectedDebate, token, refreshToken]);
-
-  const showDeleteConfirmation = useCallback(() => {
-    Alert.alert(
-      "Delete Debate",
-      "Are you sure you want to delete this debate? This action cannot be undone.",
-      [
-        {
-          text: "Cancel",
-          style: "cancel",
-        },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: handleDeleteDebate,
-        },
-      ]
-    );
-  }, [handleDeleteDebate]);
 
   const joinDebateRoom = useCallback(
     async (roomId: string) => {
@@ -656,8 +594,8 @@ const Rooms = () => {
           </View>
         </TouchableOpacity>
 
-        {/* Three dots menu for mine tab */}
-        {activeTab === "mine" && (
+        {/* Three dots menu for mine tab - only show for active debates */}
+        {activeTab === "mine" && debate.active && (
           <TouchableOpacity
             style={styles.menuButton}
             onPress={() => handleMenuPress(debate)}
@@ -733,23 +671,6 @@ const Rooms = () => {
                     <Text style={styles.menuOptionSubtext}>Modify title, description, or image</Text>
                   </View>
                   <Ionicons name="chevron-forward" size={16} color={THEME.colors.textMuted} />
-                </TouchableOpacity>
-                
-                <View style={styles.menuDivider} />
-                
-                <TouchableOpacity
-                  style={styles.menuOption}
-                  onPress={showDeleteConfirmation}
-                  activeOpacity={0.7}
-                >
-                  <View style={[styles.menuOptionIcon, { backgroundColor: "rgba(255, 107, 107, 0.1)" }]}>
-                    <Ionicons name="trash-outline" size={22} color="#FF6B6B" />
-                  </View>
-                  <View style={styles.menuOptionContent}>
-                    <Text style={[styles.menuOptionText, { color: "#FF6B6B" }]}>Delete Debate</Text>
-                    <Text style={styles.menuOptionSubtext}>Permanently remove this debate</Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={16} color="#FF6B6B" />
                 </TouchableOpacity>
               </View>
             </View>

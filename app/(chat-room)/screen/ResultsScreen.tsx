@@ -6,18 +6,40 @@ import {
   ScrollView,
   StyleSheet,
   Pressable,
+  TouchableOpacity,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { theme } from "../theme";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 
-const DebateEndedResults = ({ results, insets, debateTitle, debateImage }) => {
+interface ResultsData {
+  code?: number;
+  agreementRatio: number;
+  totalParticipants: number;
+  aiGeneratedSummary: string;
+  topOpinions: Array<{
+    opinion: string;
+    upvotes: number;
+    user: {
+      id: string;
+      username: string;
+      image: string;
+    };
+  }>;
+}
+
+interface DebateEndedResultsProps {
+  results: ResultsData;
+  insets: { bottom: number };
+  debateTitle: string;
+  debateImage: string;
+}
+
+const DebateEndedResults = ({ results, insets, debateTitle, debateImage }: DebateEndedResultsProps) => {
   if (results?.code === 102) {
     return (
-      <View
-        style={[styles.waitContainer, { paddingBottom: insets.bottom + 40 }]}
-      >
+      <View style={[styles.waitContainer, { paddingBottom: insets.bottom + 40 }]}>
         <Text style={styles.waitTitle}>Debate Room Closed</Text>
         <Text style={styles.waitMessage}>
           The results are being prepared. You'll be notified once they are
@@ -35,10 +57,15 @@ const DebateEndedResults = ({ results, insets, debateTitle, debateImage }) => {
       style={styles.container}
       contentContainerStyle={{ paddingBottom: insets.bottom + 20 }}
     >
-      <LinearGradient
-        colors={[theme.colors.backgroundDarker, theme.colors.background]}
-        style={styles.header}
-      >
+      {/* Simple Header with Back Button */}
+      <View style={styles.header}>
+        <TouchableOpacity
+          onPress={() => router.push("/(tabs)/rooms")}
+          style={styles.backButton}
+        >
+          <Ionicons name="arrow-back" size={24} color="white" />
+        </TouchableOpacity>
+        
         <Image
           source={{ uri: debateImage }}
           style={styles.debateImage}
@@ -46,7 +73,7 @@ const DebateEndedResults = ({ results, insets, debateTitle, debateImage }) => {
         />
         <Text style={styles.title}>{debateTitle}</Text>
         <Text style={styles.subtitle}>Debate Ended - Final Results</Text>
-      </LinearGradient>
+      </View>
 
       <View style={styles.resultsContainer}>
         {/* Participation Stats */}
@@ -83,7 +110,7 @@ const DebateEndedResults = ({ results, insets, debateTitle, debateImage }) => {
         <View style={styles.opinionsCard}>
           <Text style={styles.sectionTitle}>Top Opinionists</Text>
 
-          {results.topOpinions.map((opinion, index) => (
+          {results.topOpinions?.map((opinion: any, index: number) => (
             <View key={index} style={styles.opinionItem}>
               <Pressable
                 onPress={() => {
@@ -146,10 +173,24 @@ const styles = StyleSheet.create({
   },
   header: {
     padding: 20,
-    paddingTop: 40,
+    paddingTop: 60,
     alignItems: "center",
     borderBottomLeftRadius: 30,
     borderBottomRightRadius: 30,
+    backgroundColor: theme.colors.backgroundDarker,
+    position: 'relative',
+  },
+  backButton: {
+    position: 'absolute',
+    top: 60,
+    left: 20,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 10,
   },
   debateImage: {
     width: 120,
