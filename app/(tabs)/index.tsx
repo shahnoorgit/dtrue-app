@@ -15,6 +15,7 @@ import {
   TouchableOpacity,
 } from "react-native";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
+import { Ionicons } from "@expo/vector-icons";
 import axios from "axios";
 import * as Haptics from "expo-haptics";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -537,16 +538,16 @@ export default function DebateFeed() {
             style={{
               flexDirection: "row",
               alignItems: "center",
-              gap: 12,
+              gap: 8,
             }}
           >
             <Pressable
               hitSlop={10}
               onPress={() => router.push("/(noti)/screen/screen")}
               style={({ pressed }) => ({
-                width: 56,
-                height: 56,
-                borderRadius: 28,
+                width: 44,
+                height: 44,
+                borderRadius: 22,
                 backgroundColor: pressed
                   ? "rgba(255, 255, 255, 0.12)"
                   : "rgba(255, 255, 255, 0.06)",
@@ -567,7 +568,7 @@ export default function DebateFeed() {
             >
               <Icon
                 name='bell-outline'
-                size={28}
+                size={22}
                 color='rgba(255, 255, 255, 0.95)'
               />
 
@@ -606,6 +607,35 @@ export default function DebateFeed() {
                 </View>
               )}
             </Pressable>
+            <TouchableOpacity
+              onPress={handleCreateDebate}
+              activeOpacity={0.8}
+              style={{
+                borderRadius: 20,
+                overflow: "hidden",
+                shadowColor: cyberpunkTheme.colors.primary,
+                shadowOffset: { width: 0, height: 4 },
+                shadowOpacity: 0.25,
+                shadowRadius: 6,
+                elevation: 6,
+              }}
+            >
+              <LinearGradient
+                colors={[cyberpunkTheme.colors.primary, "#00CC77"]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={{
+                  paddingHorizontal: 12,
+                  paddingVertical: 8,
+                  borderRadius: 20,
+                }}
+              >
+                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center" }}>
+                  <Ionicons name='add' size={16} color='#000000' style={{ marginRight: 4 }} />
+                  <Text style={{ color: '#000000', fontSize: 12, fontWeight: '600' }}>Create</Text>
+                </View>
+              </LinearGradient>
+            </TouchableOpacity>
           </View>
         </LinearGradient>
       </Animated.View>

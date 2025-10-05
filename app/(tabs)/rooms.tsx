@@ -685,24 +685,6 @@ const Rooms = () => {
       <View style={styles.container}>
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Rooms</Text>
-          <View style={styles.createButtonContainer}>
-            <LinearGradient
-              colors={[THEME.colors.primary, "#00CC77"]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.createButtonGradient}
-            >
-              <View style={styles.createButtonContent}>
-                <Ionicons
-                  name='add'
-                  size={20}
-                  color='#000000'
-                  style={styles.createButtonIcon}
-                />
-                <Text style={styles.createButtonText}>Create</Text>
-              </View>
-            </LinearGradient>
-          </View>
         </View>
         <TabBar />
         <SkeletonLoader />
@@ -724,28 +706,6 @@ const Rooms = () => {
       <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Rooms</Text>
-        <TouchableOpacity
-          onPress={handleCreateDebate}
-          activeOpacity={0.8}
-          style={styles.createButtonContainer}
-        >
-          <LinearGradient
-            colors={[THEME.colors.primary, "#00CC77"]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.createButtonGradient}
-          >
-            <View style={styles.createButtonContent}>
-              <Ionicons
-                name='add'
-                size={20}
-                color='#000000'
-                style={styles.createButtonIcon}
-              />
-              <Text style={styles.createButtonText}>Create</Text>
-            </View>
-          </LinearGradient>
-        </TouchableOpacity>
       </View>
 
       <TabBar />
