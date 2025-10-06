@@ -324,8 +324,14 @@ export default function DebateFeed() {
   }, [router]);
 
   const handleCreateDebate = useCallback(() => {
+    Haptics.selectionAsync();
     setShowActionModal(false);
     router.push("/(create)/screen/screen");
+  }, [router]);
+
+  const handleOpenNotifications = useCallback(() => {
+    Haptics.selectionAsync();
+    router.push("/(noti)/screen/screen");
   }, [router]);
 
   const renderItem = useCallback(
@@ -543,7 +549,7 @@ export default function DebateFeed() {
           >
             <Pressable
               hitSlop={10}
-              onPress={() => router.push("/(noti)/screen/screen")}
+              onPress={handleOpenNotifications}
               style={({ pressed }) => ({
                 width: 44,
                 height: 44,

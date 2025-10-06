@@ -52,11 +52,6 @@ function TabButton({ icon, label, isFocused, onPress, index }: TabButtonProps) {
   }, [isFocused]);
 
   const handlePress = () => {
-    // Haptic feedback
-    if (Platform.OS === 'ios') {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    }
-    
     // Button press animation
     Animated.sequence([
       Animated.timing(scaleAnim, {
@@ -215,10 +210,8 @@ function CyberpunkTabBar({ state, navigation }: BottomTabBarProps) {
                 index={idx}
                 onPress={() => {
                   if (!isFocused && !isTransitioning) {
-                    // Enhanced haptic feedback
-                    if (Platform.OS === 'ios') {
-                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                    }
+                    // Extra-light haptic feedback on actual tab change
+                    Haptics.selectionAsync();
                     navigation.navigate(name);
                   }
                 }}
@@ -240,14 +233,6 @@ export default function TabsLayout() {
       screenOptions={{ 
         headerShown: false,
         tabBarStyle: { display: 'none' }, // Hide default tab bar since we have custom one
-      }}
-      screenListeners={{
-        tabPress: () => {
-          // Additional haptic feedback on tab press
-          if (Platform.OS === 'ios') {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-          }
-        },
       }}
     >
       {TAB_CONFIG.map(({ name, label }) => (

@@ -68,7 +68,7 @@
       [
         "expo-router",
         {
-          "origin": "https://links-dev.dtrue.online"
+          "origin": "https://links.dtrue.online"
         }
       ],
       [
@@ -104,7 +104,7 @@
     "extra": {
       "posthogApiKey": "phc_j1d6CVG1Ba0xEWy1VTtX4QrdUubcQzq8xi6zCrNeL0n",
       "router": {
-        "origin": "https://links-dev.dtrue.online"
+        "origin": "https://links.dtrue.online"
       },
       "eas": {
         "projectId": "161ac660-74b1-4723-b57c-ba70d81bc91e"

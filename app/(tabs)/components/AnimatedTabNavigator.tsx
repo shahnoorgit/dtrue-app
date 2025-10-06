@@ -53,10 +53,8 @@ export default function AnimatedTabNavigator({
           if (newIndex >= 0 && newIndex < TAB_ORDER.length) {
             setIsTransitioning(true);
             
-            // Haptic feedback
-            if (Platform.OS === 'ios') {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            }
+            // Subtle haptic feedback on actual tab change
+            Haptics.selectionAsync();
             
             onTabChange(newIndex);
             
