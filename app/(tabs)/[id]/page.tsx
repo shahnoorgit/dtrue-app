@@ -26,6 +26,7 @@ import * as Haptics from "expo-haptics";
 import ProfileSkeleton from "@/components/profile/ProfileSkeliton";
 import DebateGrid from "@/components/debate/DebateGrid";
 import TabScreenWrapper from "../components/TabScreenWrapper";
+import ProfileCard from "@/components/profile/ProfileCard";
 import { useAuth } from "@clerk/clerk-expo";
 import { logError } from "@/utils/sentry/sentry"; // Added Sentry import
 
@@ -385,10 +386,8 @@ const ProfilePage: React.FC = () => {
 
   const renderHeader = () => (
     <View>
-      <LinearGradient
-        colors={['#080F12', '#0A1A1F', '#080F12']}
-        style={[styles.headerSection, { paddingTop: insets.top }]}
-      >
+      {/* Navigation Header */}
+      <View style={[styles.navigationHeader, { paddingTop: insets.top }]}>
         <TouchableOpacity
           style={[styles.backButton, { top: insets.top + 8 }]}
           onPress={() => {
@@ -415,107 +414,50 @@ const ProfilePage: React.FC = () => {
             />
           </TouchableOpacity>
         </View>
+      </View>
 
-        <View style={styles.profileSection}>
-          <TouchableOpacity
-            style={styles.profileImageContainer}
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              setShowImageOptions(true);
-            }}
-          >
-            <View style={styles.profileImageWrapper}>
-              <Image source={{ uri: user.image }} style={styles.profileImage} />
-              <View style={styles.profileImageBorder} />
-              <View style={styles.profileImageShadow} />
-            </View>
-          </TouchableOpacity>
-          <View style={styles.statsContainer}>
-            <Pressable
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                router.push({
-                  pathname: "/(follow)/followers/[id]/page",
-                  params: {
-                    id: user.id,
-                    username: user.username,
-                    followersCount: user.followers?.length,
-                    image: user.image,
-                    backTo: pathname,
-                  },
-                });
-              }}
-              style={styles.statItem}
-            >
-              <View style={styles.statItemContent}>
-                <Text style={styles.statNumber}>
-                  {user.followers?.length || 0}
-                </Text>
-                <Text style={styles.statLabel}>Followers</Text>
-              </View>
-            </Pressable>
-            <Pressable
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                router.push({
-                  pathname: "/(follow)/following/[id]/page",
-                  params: {
-                    id: user.id,
-                    username: user.username,
-                    followersCount: user.followers?.length,
-                    image: user.image,
-                    backTo: pathname,
-                  },
-                });
-              }}
-              style={styles.statItem}
-            >
-              <View style={styles.statItemContent}>
-                <Text style={styles.statNumber}>
-                  {user.following?.length || 0}
-                </Text>
-                <Text style={styles.statLabel}>Following</Text>
-              </View>
-            </Pressable>
-            <View style={styles.statItem}>
-              <View style={styles.statItemContent}>
-                <Text style={styles.statNumber}>
-                  {user.created_debates?.length || 0}
-                </Text>
-                <Text style={styles.statLabel}>Debates</Text>
-              </View>
-            </View>
-          </View>
-        </View>
-      </LinearGradient>
-      <View style={styles.bioSection}>
-        <View style={styles.nameRow}>
-          <Text style={styles.name}>@{user.name}</Text>
-          {user.clerkId === userId ? (
-            ""
-          ) : (
-            <TouchableOpacity
-              style={[
-                styles.followButton,
-                isFollowing && styles.followingButton,
-              ]}
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                handleFollow();
-              }}
-            >
-              <Text
-                style={[
-                  styles.followButtonText,
-                  isFollowing && styles.followingButtonText,
-                ]}
-              >
-                {isFollowing ? "Following" : "Follow"}
-              </Text>
-            </TouchableOpacity>
-          )}
-        </View>
-        {user.about && <Text style={styles.bio}>{user.about}</Text>}
+      {/* Profile Card */}
+      <View style={styles.profileCardContainer}>
+        <ProfileCard
+        user={user}
+        isFollowing={isFollowing}
+        onFollow={() => {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+          handleFollow();
+        }}
+        onFollowersPress={() => {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          router.push({
+            pathname: "/(follow)/followers/[id]/page",
+            params: {
+              id: user.id,
+              username: user.username,
+              followersCount: user.followers?.length,
+              image: user.image,
+              backTo: pathname,
+            },
+          });
+        }}
+        onFollowingPress={() => {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          router.push({
+            pathname: "/(follow)/following/[id]/page",
+            params: {
+              id: user.id,
+              username: user.username,
+              followersCount: user.followers?.length,
+              image: user.image,
+              backTo: pathname,
+            },
+          });
+        }}
+        showFollowButton={user.clerkId !== userId}
+        isCurrentUser={user.clerkId === userId}
+        />
+      </View>
+
+      {/* Additional Info */}
+      <View style={styles.additionalInfoSection}>
         <View style={styles.additionalStatItem}>
           <Ionicons name='calendar' size={16} color={THEME.colors.textMuted} />
           <Text style={styles.additionalStatText}>
@@ -523,6 +465,7 @@ const ProfilePage: React.FC = () => {
           </Text>
         </View>
       </View>
+
       <View style={styles.debatesHeader}>
         <Text style={styles.debatesTitle}>Debates ({debates.length})</Text>
       </View>
@@ -673,6 +616,11 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingBottom: 120,
   },
+  navigationHeader: {
+    paddingTop: 0,
+    paddingBottom: THEME.spacing.md,
+    position: 'relative',
+  },
   headerSection: {
     paddingTop: 0,
     paddingBottom: THEME.spacing.md,
@@ -822,6 +770,15 @@ const styles = StyleSheet.create({
     color: THEME.colors.textSecondary,
     lineHeight: 24,
     marginBottom: THEME.spacing.md,
+  },
+  profileCardContainer: {
+    marginTop: THEME.spacing.xl + 20, // More space below navigation icons
+    paddingHorizontal: THEME.spacing.md,
+  },
+  additionalInfoSection: {
+    paddingHorizontal: THEME.spacing.md,
+    paddingVertical: THEME.spacing.sm,
+    backgroundColor: THEME.colors.background,
   },
   additionalStatItem: {
     flexDirection: "row",

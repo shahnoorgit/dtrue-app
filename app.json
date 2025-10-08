@@ -35,6 +35,10 @@
         "backgroundColor": "#0A0E13"
       },
       "jsEngine": "hermes",
+      "buildToolsVersion":"35.0.0",
+      "compileSdkVersion": 35,
+      "targetSdkVersion": 35,
+      "minSdkVersion": 24,
       "intentFilters": [
         {
           "action": "VIEW",
@@ -43,7 +47,7 @@
           "data": [
             {
               "scheme": "https",
-              "host": "links-dev.dtrue.online",
+              "host": "links.dtrue.online",
               "pathPrefix": "/"
             }
           ]
@@ -83,7 +87,10 @@
         "expo-build-properties",
         {
           "android": {
-            "usesCleartextTraffic": true
+            "usesCleartextTraffic": true,
+            "compileSdkVersion": 35,
+            "targetSdkVersion": 35,
+            "buildToolsVersion": "35.0.0"
           }
         }
       ],

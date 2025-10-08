@@ -30,6 +30,7 @@ import ProfileSkeleton from "@/components/profile/ProfileSkeliton";
 import DebateGrid from "@/components/debate/DebateGrid";
 import TabScreenWrapper from "./components/TabScreenWrapper";
 import SearchModal from "@/components/search/SearchModal";
+import EditableProfileCard from "@/components/profile/EditableProfileCard";
 import { logError } from "@/utils/sentry/sentry"; // Added Sentry import
 import { invalidateUserCache } from "../_layout";
 import {
@@ -1055,10 +1056,8 @@ const ProfilePage: React.FC = () => {
 
   const renderHeader = () => (
     <View>
-      <LinearGradient
-        colors={['#080F12', '#0A1A1F', '#080F12']}
-        style={[styles.headerSection, { paddingTop: insets.top }]}
-      >
+      {/* Navigation Header */}
+      <View style={[styles.navigationHeader, { paddingTop: insets.top }]}>
         <TouchableOpacity
           style={[styles.backButton, { top: insets.top + 8 }]}
           onPress={() => {
@@ -1115,211 +1114,66 @@ const ProfilePage: React.FC = () => {
             />
           </TouchableOpacity>
         </View>
+      </View>
 
-        <View style={styles.profileSection}>
-          <View style={styles.profileImageContainer}>
-            <TouchableOpacity
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                setShowImageOptions(true);
-              }}
-            >
-              <View style={styles.profileImageWrapper}>
-                <Image
-                  source={{ uri: newImageUri || user.image }}
-                  style={styles.profileImage}
-                />
-                <View style={styles.profileImageBorder} />
-                <View style={styles.profileImageShadow} />
-              </View>
-            </TouchableOpacity>
-          </View>
+      {/* Editable Profile Card */}
+      <View style={styles.profileCardContainer}>
+        <EditableProfileCard
+        user={user}
+        onFollowersPress={() => {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          router.push({
+            pathname: "/(follow)/followers/[id]/page",
+            params: {
+              id: user.id,
+              username: user.username,
+              followersCount: user.followers?.length,
+              image: user.image,
+              backTo: pathname,
+            },
+          });
+        }}
+        onFollowingPress={() => {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          router.push({
+            pathname: "/(follow)/following/[id]/page",
+            params: {
+              id: user.id,
+              backTo: pathname,
+              username: user.username,
+              followersCount: user.followers?.length,
+              image: user.image,
+            },
+          });
+        }}
+        onImagePress={() => {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          setShowImageOptions(true);
+        }}
+        // Name editing props
+        isEditingName={isEditingName}
+        newNameText={newNameText}
+        onNameTextChange={handleNameTextChange}
+        onStartEditName={handleStartEditName}
+        onSaveName={handleSaveName}
+        onCancelNameEdit={handleCancelNameEdit}
+        updatingName={updatingName}
+        isCheckingUsername={isCheckingUsername}
+        isUsernameAvailable={isUsernameAvailable}
+        usernameError={usernameError}
+        // Bio editing props
+        isEditingAbout={isEditingAbout}
+        newAboutText={newAboutText}
+        onAboutTextChange={setNewAboutText}
+        onStartEditAbout={handleStartEditAbout}
+        onSaveAbout={handleSaveAbout}
+        onCancelAboutEdit={handleCancelAboutEdit}
+        updatingAbout={updatingAbout}
+        />
+      </View>
 
-          <View style={styles.statsContainer}>
-            <Pressable
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                router.push({
-                  pathname: "/(follow)/followers/[id]/page",
-                  params: {
-                    id: user.id,
-                    username: user.username,
-                    followersCount: user.followers?.length,
-                    image: user.image,
-                    backTo: pathname,
-                  },
-                });
-              }}
-              style={styles.statItem}
-            >
-              <View style={styles.statItemContent}>
-                <Text style={styles.statNumber}>
-                  {user.followers?.length || 0}
-                </Text>
-                <Text style={styles.statLabel}>Followers</Text>
-              </View>
-            </Pressable>
-            <Pressable
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                router.push({
-                  pathname: "/(follow)/following/[id]/page",
-                  params: {
-                    id: user.id,
-                    backTo: pathname,
-                    username: user.username,
-                    followersCount: user.followers?.length,
-                    image: user.image,
-                  },
-                });
-              }}
-              style={styles.statItem}
-            >
-              <View style={styles.statItemContent}>
-                <Text style={styles.statNumber}>
-                  {user.following?.length || 0}
-                </Text>
-                <Text style={styles.statLabel}>Following</Text>
-              </View>
-            </Pressable>
-            <View style={styles.statItem}>
-              <View style={styles.statItemContent}>
-                <Text style={styles.statNumber}>
-                  {user.created_debates?.length || 0}
-                </Text>
-                <Text style={styles.statLabel}>Debates</Text>
-              </View>
-            </View>
-          </View>
-        </View>
-      </LinearGradient>
-      <View style={styles.bioSection}>
-        {/* Name Section */}
-        <View style={styles.nameSection}>
-          {isEditingName ? (
-            <View style={styles.editContainer}>
-              <TextInput
-                style={styles.nameInput}
-                value={newNameText}
-                onChangeText={handleNameTextChange}
-                placeholder="Enter your name"
-                placeholderTextColor={THEME.colors.textMuted}
-                maxLength={100}
-                autoFocus
-              />
-              {/* Username availability feedback */}
-              {newNameText.trim() && newNameText.trim() !== user?.name && (
-                <View style={styles.usernameFeedback}>
-                  {isCheckingUsername ? (
-                    <View style={styles.usernameStatus}>
-                      <ActivityIndicator size="small" color={THEME.colors.primary} />
-                      <Text style={styles.usernameStatusText}>Checking...</Text>
-                    </View>
-                  ) : isUsernameAvailable === true ? (
-                    <View style={styles.usernameStatus}>
-                      <Ionicons name="checkmark-circle" size={14} color="#00FF94" />
-                      <Text style={[styles.usernameStatusText, { color: "#00FF94" }]}>Available</Text>
-                    </View>
-                  ) : isUsernameAvailable === false ? (
-                    <View style={styles.usernameStatus}>
-                      <Ionicons name="close-circle" size={14} color="#FF6B6B" />
-                      <Text style={[styles.usernameStatusText, { color: "#FF6B6B" }]}>Taken</Text>
-                    </View>
-                  ) : null}
-                  {usernameError && (
-                    <Text style={styles.usernameErrorText}>{usernameError}</Text>
-                  )}
-                </View>
-              )}
-              <View style={styles.editButtons}>
-                <TouchableOpacity
-                  style={styles.cancelButton}
-                  onPress={handleCancelNameEdit}
-                  disabled={updatingName}
-                >
-                  <Text style={styles.cancelButtonText}>Cancel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[
-                    styles.saveButton, 
-                    (updatingName || isCheckingUsername || (newNameText.trim() !== user?.name && isUsernameAvailable === false)) && styles.disabledButton
-                  ]}
-                  onPress={handleSaveName}
-                  disabled={updatingName || isCheckingUsername || (newNameText.trim() !== user?.name && isUsernameAvailable === false)}
-                >
-                  {updatingName ? (
-                    <ActivityIndicator size="small" color={THEME.colors.primary} />
-                  ) : (
-                    <Text style={styles.saveButtonText}>Save</Text>
-                  )}
-                </TouchableOpacity>
-              </View>
-            </View>
-          ) : (
-            <View style={styles.nameDisplayContainer}>
-              <Text style={styles.name}>@{user.name}</Text>
-              <TouchableOpacity
-                style={styles.editIconButton}
-                onPress={handleStartEditName}
-              >
-                <Ionicons name="create-outline" size={18} color={THEME.colors.primary} />
-              </TouchableOpacity>
-            </View>
-          )}
-        </View>
-
-        {/* Bio Section */}
-        <View style={styles.bioContainer}>
-          {isEditingAbout ? (
-            <View style={styles.editContainer}>
-              <TextInput
-                style={styles.bioInput}
-                value={newAboutText}
-                onChangeText={setNewAboutText}
-                placeholder="Tell us about yourself..."
-                placeholderTextColor={THEME.colors.textMuted}
-                multiline
-                maxLength={500}
-                autoFocus
-              />
-              <View style={styles.editButtons}>
-                <TouchableOpacity
-                  style={styles.cancelButton}
-                  onPress={handleCancelAboutEdit}
-                  disabled={updatingAbout}
-                >
-                  <Text style={styles.cancelButtonText}>Cancel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.saveButton, updatingAbout && styles.disabledButton]}
-                  onPress={handleSaveAbout}
-                  disabled={updatingAbout}
-                >
-                  {updatingAbout ? (
-                    <ActivityIndicator size="small" color={THEME.colors.primary} />
-                  ) : (
-                    <Text style={styles.saveButtonText}>Save</Text>
-                  )}
-                </TouchableOpacity>
-              </View>
-            </View>
-          ) : (
-            <View style={styles.bioDisplayContainer}>
-              {user.about ? (
-                <Text style={styles.bio}>{user.about}</Text>
-              ) : (
-                <Text style={styles.bioPlaceholder}>No bio yet. Tap to add one.</Text>
-              )}
-              <TouchableOpacity
-                style={styles.editIconButton}
-                onPress={handleStartEditAbout}
-              >
-                <Ionicons name="create-outline" size={18} color={THEME.colors.primary} />
-              </TouchableOpacity>
-            </View>
-          )}
-        </View>
-
+      {/* Additional Info */}
+      <View style={styles.additionalInfoSection}>
         <View style={styles.additionalStatItem}>
           <Ionicons name='calendar' size={16} color={THEME.colors.textMuted} />
           <Text style={styles.additionalStatText}>
@@ -1515,6 +1369,11 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingBottom: 100,
+  },
+  navigationHeader: {
+    paddingTop: 0,
+    paddingBottom: THEME.spacing.md,
+    position: 'relative',
   },
   headerSection: {
     paddingTop: 0,
@@ -1765,6 +1624,15 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: "#FF6B6B",
     marginTop: 2,
+  },
+  profileCardContainer: {
+    marginTop: THEME.spacing.xl + 20, // More space below navigation icons
+    paddingHorizontal: THEME.spacing.md,
+  },
+  additionalInfoSection: {
+    paddingHorizontal: THEME.spacing.md,
+    paddingVertical: THEME.spacing.sm,
+    backgroundColor: THEME.colors.background,
   },
   additionalStatItem: {
     flexDirection: "row",

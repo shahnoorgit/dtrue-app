@@ -43,33 +43,48 @@ const ProfileSkeleton = () => {
   
   return (
     <View style={styles.container}>
-      <View style={[styles.headerSection, { paddingTop: insets.top }]}>
+      {/* Navigation Header */}
+      <View style={[styles.navigationHeader, { paddingTop: insets.top }]}>
         <View style={styles.topButtonRow}>
           <SkeletonElement style={styles.navButtonSkeleton} />
           <View style={{ flex: 1 }} />
           <SkeletonElement style={styles.navButtonSkeleton} />
         </View>
+      </View>
 
-        {/* Profile Image */}
-        <View style={styles.profileImageContainer}>
-          <SkeletonElement style={styles.profileImageSkeleton} />
-        </View>
-
-        {/* Stats */}
-        <View style={styles.statsContainer}>
-          {[...Array(3)].map((_, index) => (
-            <View key={index} style={styles.statItem}>
-              <SkeletonElement style={styles.statNumberSkeleton} />
-              <SkeletonElement style={styles.statLabelSkeleton} />
+      {/* Profile Card */}
+      <View style={styles.profileCardContainer}>
+        <View style={styles.cardContainer}>
+          <View style={styles.profileCard}>
+          <View style={styles.cardContent}>
+            {/* Profile Picture */}
+            <View style={styles.profileImageContainer}>
+              <SkeletonElement style={styles.profileImageSkeleton} />
             </View>
-          ))}
+
+            {/* Stats */}
+            <View style={styles.statsContainer}>
+              {[...Array(3)].map((_, index) => (
+                <View key={index} style={styles.statItem}>
+                  <SkeletonElement style={styles.statNumberSkeleton} />
+                  <SkeletonElement style={styles.statLabelSkeleton} />
+                </View>
+              ))}
+            </View>
+          </View>
+
+          {/* Username and Bio */}
+          <View style={styles.userInfoSection}>
+            <SkeletonElement style={styles.nameSkeleton} />
+            <SkeletonElement style={styles.bioLineSkeleton} />
+            <SkeletonElement style={styles.bioLineSkeletonShort} />
+          </View>
+        </View>
         </View>
       </View>
 
-      <View style={styles.bioSection}>
-        <SkeletonElement style={styles.nameSkeleton} />
-        <SkeletonElement style={styles.bioLineSkeleton} />
-        <SkeletonElement style={styles.bioLineSkeletonShort} />
+      {/* Additional Info */}
+      <View style={styles.additionalInfoSection}>
         <View style={styles.additionalStatItem}>
           <SkeletonElement style={styles.calendarIconSkeleton} />
           <SkeletonElement style={styles.joinedTextSkeleton} />
@@ -121,14 +136,11 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: THEME.colors.background,
   },
-  // --- Header Section ---
-  headerSection: {
+  // --- Navigation Header ---
+  navigationHeader: {
     paddingTop: 0,
     paddingBottom: THEME.spacing.md,
-    backgroundColor: THEME.colors.background,
-    borderBottomWidth: 1,
-    borderBottomColor: THEME.colors.border,
-    alignItems: "center",
+    position: 'relative',
   },
   topButtonRow: {
     flexDirection: "row",
@@ -144,44 +156,77 @@ const styles = StyleSheet.create({
     height: 40,
     borderRadius: 20,
   },
-  profileImageContainer: {
+  // --- Profile Card Container ---
+  profileCardContainer: {
+    marginTop: THEME.spacing.xl + 20, // More space below navigation icons
+    paddingHorizontal: THEME.spacing.md,
+  },
+  cardContainer: {
+    // No padding - let it blend with outside
+  },
+  profileCard: {
+    backgroundColor: THEME.colors.cardBackground,
+    borderRadius: THEME.borderRadius.lg,
+    padding: THEME.spacing.xl,
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+    borderWidth: 1,
+    borderColor: THEME.colors.border,
+  },
+  cardContent: {
+    flexDirection: "row",
+    alignItems: "flex-start",
     marginBottom: THEME.spacing.md,
   },
+  profileImageContainer: {
+    marginRight: THEME.spacing.lg,
+  },
   profileImageSkeleton: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
+    width: 100,
+    height: 100,
+    borderRadius: 50,
   },
   statsContainer: {
+    flex: 1,
     flexDirection: "row",
-    marginBottom: THEME.spacing.lg,
-    gap: THEME.spacing.xl,
+    justifyContent: "space-around",
+    alignItems: "center",
+    marginTop: THEME.spacing.sm,
   },
   statItem: {
     alignItems: "center",
+    flex: 1,
   },
   statNumberSkeleton: {
-    width: 40, // Approximate width for a number
+    width: 40, // Larger for bigger card
     height: 24,
-    marginBottom: 4,
+    marginBottom: 2,
     borderRadius: 4,
   },
   statLabelSkeleton: {
-    width: 60, // Approximate width for label
+    width: 60, // Larger for bigger card
     height: 14,
     borderRadius: 4,
   },
-  // --- Bio Section ---
-  bioSection: {
+  userInfoSection: {
+    marginBottom: THEME.spacing.md,
+  },
+  // --- Additional Info Section ---
+  additionalInfoSection: {
+    paddingHorizontal: THEME.spacing.md,
+    paddingVertical: THEME.spacing.sm,
     backgroundColor: THEME.colors.background,
-    padding: THEME.spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: THEME.colors.border,
   },
   nameSkeleton: {
-    width: "60%", // Approximate width for name
-    height: 28,
-    marginBottom: THEME.spacing.sm,
+    width: "50%", // Smaller for card layout
+    height: 24,
+    marginBottom: THEME.spacing.xs,
     borderRadius: 4,
   },
   bioLineSkeleton: {
