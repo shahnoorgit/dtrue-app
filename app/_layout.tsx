@@ -543,28 +543,44 @@ function InitialStateNavigator() {
         });
         logError(err, { clerkId });
         
-        // Only retry if it's a network error, not a 404
-        if (err?.name !== "AbortError" && !err?.message?.includes("404")) {
-          const retryCount = appState.retryCount;
-          const maxRetries = 3;
+        const retryCount = appState.retryCount;
+        const maxRetries = 3;
+        
+        // Only retry for network/timeout errors, not for 404
+        const isNetworkError = err?.name === "AbortError" || 
+                               err?.message?.toLowerCase().includes("network") ||
+                               err?.message?.toLowerCase().includes("timeout") ||
+                               err?.message?.toLowerCase().includes("fetch");
+        
+        if (isNetworkError && retryCount < maxRetries) {
+          console.log(`[API] Network error, retrying (${retryCount + 1}/${maxRetries}):`, err?.message);
+          setAppState((s) => ({ 
+            ...s, 
+            retryCount: retryCount + 1,
+            apiError: {
+              message: `Connection failed. Retrying... (${retryCount + 1}/${maxRetries})`,
+              isRetrying: true,
+            }
+          }));
           
-          if (retryCount < maxRetries) {
-            console.log(`[API] Retrying authentication check (${retryCount + 1}/${maxRetries})`);
-            setAppState((s) => ({ 
-              ...s, 
-              retryCount: retryCount + 1,
-              apiError: {
-                message: `Connection failed. Retrying... (${retryCount + 1}/${maxRetries})`,
-                isRetrying: true,
-              }
-            }));
-            
-            // Retry after a delay
-            setTimeout(() => {
-              checkUserStatus(clerkId, true);
-            }, 1000 * Math.pow(2, retryCount)); // Exponential backoff
-          } else {
-            console.log("[API] Max retries reached, assuming user needs onboarding");
+          // Retry after a delay with exponential backoff
+          setTimeout(() => {
+            checkUserStatus(clerkId, true);
+          }, 1000 * Math.pow(2, retryCount));
+        } else if (retryCount >= maxRetries) {
+          // After max retries, redirect to sign-in for safety
+          console.log("[API] Max retries reached, will redirect to sign-in for safety");
+          setAppState((s) => ({
+            ...s,
+            userStatus: UserStatus.NOT_SIGNED_IN,
+            isUserStatusChecked: true,
+            apiError: null,
+            retryCount: 0,
+          }));
+        } else {
+          // For non-network errors, check if it's a 404 or other error
+          if (err?.message?.includes("404") || err?.message?.toLowerCase().includes("not found")) {
+            console.log("[API] 404 error - user not in database:", err?.message);
             setAppState((s) => ({
               ...s,
               userStatus: UserStatus.SIGNED_IN_NOT_IN_DB,
@@ -572,17 +588,17 @@ function InitialStateNavigator() {
               apiError: null,
               retryCount: 0,
             }));
+          } else {
+            // For other errors, redirect to sign-in for safety
+            console.log("[API] Unknown error, redirecting to sign-in for safety:", err?.message);
+            setAppState((s) => ({
+              ...s,
+              userStatus: UserStatus.NOT_SIGNED_IN,
+              isUserStatusChecked: true,
+              apiError: null,
+              retryCount: 0,
+            }));
           }
-        } else {
-          // If it's a 404 or abort, assume user doesn't exist in DB
-          console.log("[API] Assuming user not in database due to error");
-          setAppState((s) => ({
-            ...s,
-            userStatus: UserStatus.SIGNED_IN_NOT_IN_DB,
-            isUserStatusChecked: true,
-            apiError: null,
-            retryCount: 0,
-          }));
         }
       }
     },

@@ -34,14 +34,16 @@ export function useRedirectIfSignedIn(redirectPath: string = "/(tabs)") {
             router.replace(redirectPath as any);
           } else {
             console.error("Unexpected API response:", res.status, res.statusText);
-            // Reset flag to allow retry
-            hasNavigatedRef.current = false;
+            // Redirect to sign-in on error - safer than guessing
+            console.log("Redirecting to sign-in screen for safety");
+            router.replace("/(auth)/sign-in");
           }
         })
         .catch((error) => {
           console.error("Error checking user in useUserRedirect:", error);
-          // Reset flag to allow retry
-          hasNavigatedRef.current = false;
+          // Redirect to sign-in on network error - safer than blocking
+          console.log("Network error, redirecting to sign-in screen");
+          router.replace("/(auth)/sign-in");
         });
     }
   }, [isSignedIn, userId, router, redirectPath]);
