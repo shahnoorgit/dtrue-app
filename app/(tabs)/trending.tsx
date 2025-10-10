@@ -22,6 +22,7 @@ import { useAuth } from "@clerk/clerk-expo";
 import { logError } from "@/utils/sentry/sentry"; // Added Sentry import
 import { trackDebateJoined, trackContentShared } from "@/lib/posthog/events";
 import TrendingSkeleton from "@/components/explore/TrendingSkeleton";
+import { useFetchWithAutoRetry } from "@/utils/fetchWithAutoRetry";
 
 // Define theme as a constant outside the component to avoid recreation on re-render
 const THEME = {
@@ -46,6 +47,7 @@ const TrendingDebatesPage = () => {
   const [token, refreshToken] = useAuthToken();
   const { userId } = useAuth();
   const router = useRouter();
+  const { fetchWithToken } = useFetchWithAutoRetry();
 
   const retryCount = useRef(0);
   const maxRetries = 3;
@@ -73,27 +75,12 @@ const TrendingDebatesPage = () => {
 
     setFetchError(null);
     try {
-      const response = await fetch(
+      const data = await fetchWithToken(
         `${process.env.EXPO_PUBLIC_BASE_URL}/trending/debates`,
         {
           method: "GET",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
         }
       );
-
-      if (response.status == 401) {
-        refreshToken();
-        fetchTrendingDebates();
-      }
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
 
       if (isMountedRef.current) {
         if (data.success && data.data && data.data.debates) {
@@ -127,7 +114,7 @@ const TrendingDebatesPage = () => {
         setRefreshing(false);
       }
     }
-  }, [token]);
+  }, [token, fetchWithToken]);
 
   const handleRefresh = useCallback(() => {
     setRefreshing(true);

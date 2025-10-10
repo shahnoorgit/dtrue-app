@@ -22,12 +22,14 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { cyberpunkTheme } from "@/constants/theme";
 import DebateCard from "@/components/tabs/debate_card/DebateCard";
 import { useAuth } from "@clerk/clerk-expo";
+import { useAuthAxios } from "@/utils/axiosInstance";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { logError } from "@/utils/sentry/sentry";
 import { trackDebateJoined, trackContentShared } from "@/lib/posthog/events";
 import { useSimpleNetworkStatus } from "@/hook/useSimpleNetworkStatus";
+import { useFetchWithAutoRetry } from "@/utils/fetchWithAutoRetry";
 
 const DEBATES_STORAGE_KEY = "cached_debates";
 const DEBATES_TIMESTAMP_KEY = "cached_debates_timestamp";
@@ -52,6 +54,7 @@ export default function DebateFeed() {
   const [showActionModal, setShowActionModal] = useState(false);
 
   const { getToken } = useAuth();
+  const authAxios = useAuthAxios();
   const { networkStatus } = useSimpleNetworkStatus();
   const router = useRouter();
   const tokenRef = useRef<string | null>(null);
@@ -172,9 +175,7 @@ export default function DebateFeed() {
     if (!tokenRef.current) return;
     try {
       const url = `${process.env.EXPO_PUBLIC_BASE_URL}/notifications/unseen-count`;
-      const { data } = await axios.get(url, {
-        headers: { Authorization: `Bearer ${tokenRef.current}` },
-      });
+      const { data } = await authAxios.get(url);
       if (data?.success) {
         setUnseenCount(data.data.unseenCount);
       }
@@ -182,7 +183,7 @@ export default function DebateFeed() {
       console.warn("Error fetching unseen count:", error);
       logError(error, { context: "DebateFeed.fetchUnseenCount" });
     }
-  }, []);
+  }, [authAxios]);
 
   const fetchDebates = useCallback(
     async (fetchCursor: string | null = null, shouldRefresh = false) => {
@@ -206,9 +207,7 @@ export default function DebateFeed() {
           fetchCursor ? `&cursor=${fetchCursor}` : ""
         }`;
 
-        const { data } = await axios.get(url, {
-          headers: { Authorization: `Bearer ${tokenRef.current}` },
-        });
+        const { data } = await authAxios.get(url);
 
         if (data?.success) {
           const newDebates = data.data.data;
@@ -263,7 +262,7 @@ export default function DebateFeed() {
         }
       }
     },
-    [getToken, networkStatus.isOffline, refreshTimeout]
+    [authAxios, getToken, networkStatus.isOffline, refreshTimeout]
   );
 
   const handleRefresh = useCallback(() => {

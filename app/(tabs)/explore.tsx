@@ -26,6 +26,7 @@ import {
   trackContentShared,
 } from "@/lib/posthog/events";
 import ExploreSkeleton from "@/components/explore/ExploreSkeleton";
+import { useFetchWithAutoRetry } from "@/utils/fetchWithAutoRetry";
 
 const THEME = {
   colors: {
@@ -56,6 +57,7 @@ const ExploreDebatesPage = () => {
   const [token, refreshToken] = useAuthToken();
   const { userId } = useAuth();
   const router = useRouter();
+  const { fetchWithToken } = useFetchWithAutoRetry();
 
   const retryCount = useRef(0);
   const maxRetries = 3;
@@ -114,22 +116,12 @@ const ExploreDebatesPage = () => {
     setFetchError(null);
 
     try {
-      const res = await fetch(`${process.env.EXPO_PUBLIC_BASE_URL}/explore`, {
-        method: "GET",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-      });
-
-      if (res.status === 401) {
-        refreshToken();
-        return;
-      }
-
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-
-      const json = await res.json();
+      const json = await fetchWithToken(
+        `${process.env.EXPO_PUBLIC_BASE_URL}/explore`,
+        {
+          method: "GET",
+        }
+      );
       if (!isMountedRef.current) return;
 
       if (json.success && json.data?.data) {
@@ -154,7 +146,7 @@ const ExploreDebatesPage = () => {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [token, refreshToken]);
+  }, [token, fetchWithToken]);
 
   // Initial load effect - only run when token changes and no search query
   useEffect(() => {
@@ -199,7 +191,7 @@ const ExploreDebatesPage = () => {
       if (page === 1) setSearchLoading(true);
 
       try {
-        const res = await fetch(
+        const json = await fetchWithToken(
           `${
             process.env.EXPO_PUBLIC_BASE_URL
           }/debate-room/search/${encodeURIComponent(
@@ -207,30 +199,8 @@ const ExploreDebatesPage = () => {
           )}?page=${page}&limit=${limit}`,
           {
             method: "GET",
-            headers: {
-              Authorization: `Bearer ${token}`,
-              "Content-Type": "application/json",
-            },
           }
         );
-
-        if (res.status === 401) {
-          refreshToken();
-          return;
-        }
-        
-        // Handle 500 errors gracefully - treat as no results
-        if (res.status === 500) {
-          console.warn("Search API returned 500, treating as no results");
-          if (page === 1) setDebates([]);
-          setHasMorePages(false);
-          retryCount.current = 0;
-          return;
-        }
-        
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-
-        const json = await res.json();
         if (!isMountedRef.current) return;
 
         if (json.success && json.data) {
@@ -253,6 +223,16 @@ const ExploreDebatesPage = () => {
         }
       } catch (err: any) {
         if (!isMountedRef.current) return;
+        
+        // Handle 500 errors gracefully - treat as no results
+        if (err.message?.includes("500")) {
+          console.warn("Search API returned 500, treating as no results");
+          if (page === 1) setDebates([]);
+          setHasMorePages(false);
+          retryCount.current = 0;
+          return;
+        }
+        
         setFetchError(err.message || "Search failed");
         logError(err, {
           context: "ExploreDebatesPage.performDebateSearch",
@@ -273,7 +253,7 @@ const ExploreDebatesPage = () => {
         setIsSearching(false);
       }
     },
-    [token, refreshToken]
+    [token, fetchWithToken]
   );
 
 
