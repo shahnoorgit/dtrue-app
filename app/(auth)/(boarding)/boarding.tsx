@@ -266,7 +266,7 @@ const ProfileCreationStep = ({
   onTakePhoto,
 }) => (
   <View
-    className='flex-1 p-6 pt-12'
+    className='flex-1 p-6 pt-12 pb-4'
     style={{ backgroundColor: cyberpunkTheme.colors.background.dark }}
   >
     <Text className='text-4xl font-bold text-white text-center mt-6'>
@@ -275,7 +275,10 @@ const ProfileCreationStep = ({
     <Text className='text-gray-400 text-center mb-8'>
       Define your digital identity
     </Text>
-    <ScrollView contentContainerStyle={{ alignItems: "center" }}>
+    <ScrollView 
+      contentContainerStyle={{ alignItems: "center", paddingBottom: 20 }}
+      showsVerticalScrollIndicator={false}
+    >
       <ProfileImageSelector
         profileImage={profileImage}
         isUploading={isUploading}
@@ -346,8 +349,9 @@ const ProfileCreationStep = ({
             placeholder='Tell us about yourself (optional)'
             placeholderTextColor={cyberpunkTheme.colors.text.muted}
             value={bio}
-            onChangeText={(text) => onBioChange(text.trim())}
+            onChangeText={onBioChange}
             multiline
+            textAlignVertical='top'
           />
         </View>
       </View>
@@ -363,41 +367,43 @@ const NavigationButtons = ({
   isUploading,
   isUsernameAvailable,
 }) => (
-  <View className='absolute bottom-10 left-6 right-6 flex-row justify-between'>
-    {currentStep > 0 && (
-      <TouchableOpacity onPress={onPrevious} className='flex-1 mr-4'>
+  <View className='px-6 py-4 bg-[#111]'>
+    <View className='flex-row justify-between'>
+      {currentStep > 0 && (
+        <TouchableOpacity onPress={onPrevious} className='flex-1 mr-4'>
+          <LinearGradient
+            colors={["rgba(8,15,18,0.7)", "rgba(3,18,17,0.7)"]}
+            className='rounded-xl py-4 items-center'
+          >
+            <Text className='text-gray-300 font-bold text-lg'>BACK</Text>
+          </LinearGradient>
+        </TouchableOpacity>
+      )}
+      <TouchableOpacity
+        onPress={onNext}
+        className={currentStep === 0 ? "w-full" : "flex-1"}
+        disabled={
+          currentStep === 1 && (isUploading || isUsernameAvailable === false)
+        }
+      >
         <LinearGradient
-          colors={["rgba(8,15,18,0.7)", "rgba(3,18,17,0.7)"]}
+          colors={
+            isUploading || (currentStep === 1 && isUsernameAvailable === false)
+              ? ["#888888", "#666666"]
+              : [cyberpunkTheme.colors.primary, "#00A3FF"]
+          }
           className='rounded-xl py-4 items-center'
         >
-          <Text className='text-gray-300 font-bold text-lg'>BACK</Text>
+          {isUploading ? (
+            <ActivityIndicator size='small' color='#000000' />
+          ) : (
+            <Text className='text-black font-bold text-lg'>
+              {currentStep === 0 ? "NEXT" : "COMPLETE"}
+            </Text>
+          )}
         </LinearGradient>
       </TouchableOpacity>
-    )}
-    <TouchableOpacity
-      onPress={onNext}
-      className={currentStep === 0 ? "w-full" : "flex-1"}
-      disabled={
-        currentStep === 1 && (isUploading || isUsernameAvailable === false)
-      }
-    >
-      <LinearGradient
-        colors={
-          isUploading || (currentStep === 1 && isUsernameAvailable === false)
-            ? ["#888888", "#666666"]
-            : [cyberpunkTheme.colors.primary, "#00A3FF"]
-        }
-        className='rounded-xl py-4 items-center'
-      >
-        {isUploading ? (
-          <ActivityIndicator size='small' color='#000000' />
-        ) : (
-          <Text className='text-black font-bold text-lg'>
-            {currentStep === 0 ? "NEXT" : "COMPLETE"}
-          </Text>
-        )}
-      </LinearGradient>
-    </TouchableOpacity>
+    </View>
   </View>
 );
 
@@ -881,38 +887,48 @@ export default function OnboardingScreen() {
         </View>
       )}
       {currentStep === 0 ? (
-        <CategorySelectionStep
-          selectedCategories={selectedCategories}
-          onToggleCategory={toggleCategory}
-        />
+        <>
+          <CategorySelectionStep
+            selectedCategories={selectedCategories}
+            onToggleCategory={toggleCategory}
+          />
+          <NavigationButtons
+            currentStep={currentStep}
+            onPrevious={goToPreviousStep}
+            onNext={goToNextStep}
+            isUploading={isSubmitting || isUploading}
+            isUsernameAvailable={isUsernameAvailable}
+          />
+        </>
       ) : (
         <KeyboardAvoidingView
           behavior={Platform.OS === "ios" ? "padding" : "height"}
           className='flex-1'
-          keyboardVerticalOffset={80}
+          keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
         >
-          <ScrollView
-            className='flex-1'
-            contentContainerStyle={{ flexGrow: 1 }}
-            keyboardShouldPersistTaps='handled'
-          >
-            <ProfileCreationStep
-              username={username}
-              onUsernameChange={handleUsernameChange}
-              usernameError={usernameError}
-              isCheckingUsername={isCheckingUsername}
-              isUsernameAvailable={isUsernameAvailable}
-              suggestedUsernames={suggestedUsernames}
-              onSelectSuggestion={selectSuggestedUsername}
-              bio={bio}
-              onBioChange={setBio}
-              profileImage={profileImage}
-              isUploading={isUploading}
-              profileImageUrl={profileImageUrl}
-              onPickImage={pickImage}
-              onTakePhoto={takePhoto}
-            />
-          </ScrollView>
+          <ProfileCreationStep
+            username={username}
+            onUsernameChange={handleUsernameChange}
+            usernameError={usernameError}
+            isCheckingUsername={isCheckingUsername}
+            isUsernameAvailable={isUsernameAvailable}
+            suggestedUsernames={suggestedUsernames}
+            onSelectSuggestion={selectSuggestedUsername}
+            bio={bio}
+            onBioChange={setBio}
+            profileImage={profileImage}
+            isUploading={isUploading}
+            profileImageUrl={profileImageUrl}
+            onPickImage={pickImage}
+            onTakePhoto={takePhoto}
+          />
+          <NavigationButtons
+            currentStep={currentStep}
+            onPrevious={goToPreviousStep}
+            onNext={goToNextStep}
+            isUploading={isSubmitting || isUploading}
+            isUsernameAvailable={isUsernameAvailable}
+          />
         </KeyboardAvoidingView>
       )}
       <InterestModal
@@ -924,13 +940,6 @@ export default function OnboardingScreen() {
         onSelectAll={selectAllTempInterests}
         onClose={closeModal}
         animatedValue={animatedValue}
-      />
-      <NavigationButtons
-        currentStep={currentStep}
-        onPrevious={goToPreviousStep}
-        onNext={goToNextStep}
-        isUploading={isSubmitting || isUploading}
-        isUsernameAvailable={isUsernameAvailable}
       />
     </View>
   );
