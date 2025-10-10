@@ -214,11 +214,15 @@ const ProfilePage: React.FC = () => {
       ]);
       const profileData = await profileResponse.json();
       const debatesData = await debatesResponse.json();
-      if (profileData.success) setUser(profileData.data);
-      if (debatesData.success) setDebates(debatesData.data);
-      if (profileData.data.isFollowing) {
-        setIsFollowing(true);
+      
+      if (profileData.success) {
+        setUser(profileData.data);
+        // Check if I'm following them
+        if (profileData.data.isFollowing) {
+          setIsFollowing(true);
+        }
       }
+      if (debatesData.success) setDebates(debatesData.data);
       setDataFetched(true);
     } catch (error: any) {
       console.error("Error fetching profile data:", error);
@@ -241,6 +245,7 @@ const ProfilePage: React.FC = () => {
   const onRefresh = () => {
     setRefreshing(true);
     setDataFetched(false);
+    setIsFollowing(false);
     fetchProfileData();
   };
 
@@ -451,6 +456,10 @@ const ProfilePage: React.FC = () => {
             },
           });
         }}
+        onImagePress={() => {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          openImageModal(user.image);
+        }}
         showFollowButton={user.clerkId !== userId}
         isCurrentUser={user.clerkId === userId}
         />
@@ -536,36 +545,32 @@ const ProfilePage: React.FC = () => {
         onRequestClose={closeImageModal}
         animationType="fade"
       >
-        <View style={styles.modalContainer}>
+        <TouchableOpacity
+          style={styles.modalBackdrop}
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            closeImageModal();
+          }}
+          activeOpacity={1}
+        >
+          <Image
+            source={{ uri: modalImageUri }}
+            style={styles.modalImage}
+            resizeMode='contain'
+          />
           <TouchableOpacity
-            style={styles.modalBackdrop}
+            style={styles.closeModalButton}
             onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
               closeImageModal();
             }}
-            activeOpacity={1}
           >
-            <View style={styles.modalImageContainer}>
-              <Image
-                source={{ uri: modalImageUri }}
-                style={styles.modalImage}
-                resizeMode='contain'
-              />
-            </View>
-            <TouchableOpacity
-              style={styles.closeModalButton}
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                closeImageModal();
-              }}
-            >
-              <Ionicons name='close' size={30} color='#FFFFFF' />
-            </TouchableOpacity>
-            <View style={styles.modalInfo}>
-              <Text style={styles.modalInfoText}>Tap to close</Text>
-            </View>
+            <Ionicons name='close' size={30} color='#FFFFFF' />
           </TouchableOpacity>
-        </View>
+          <View style={styles.modalInfo}>
+            <Text style={styles.modalInfoText}>Tap to close</Text>
+          </View>
+        </TouchableOpacity>
       </Modal>
     </TabScreenWrapper>
   );
@@ -935,34 +940,15 @@ const styles = StyleSheet.create({
     lineHeight: 24,
   },
   // Enhanced Modal Styles
-  modalContainer: {
-    flex: 1,
-  },
   modalBackdrop: {
     flex: 1,
     backgroundColor: "rgba(0, 0, 0, 0.95)",
     justifyContent: "center",
     alignItems: "center",
   },
-  modalImageContainer: {
-    width: width * 0.9,
-    height: height * 0.7,
-    justifyContent: "center",
-    alignItems: "center",
-    borderRadius: 12,
-    overflow: "hidden",
-    shadowColor: THEME.colors.primary,
-    shadowOffset: {
-      width: 0,
-      height: 10,
-    },
-    shadowOpacity: 0.3,
-    shadowRadius: 20,
-    elevation: 10,
-  },
   modalImage: {
-    width: "100%",
-    height: "100%",
+    width: width,
+    height: height * 0.8,
   },
   closeModalButton: {
     position: "absolute",

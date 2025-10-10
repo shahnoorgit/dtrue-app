@@ -38,7 +38,7 @@ const SCROLL_POSITION_KEY = "saved_scroll_offset";
 const CACHE_EXPIRY = 1000 * 60 * 60; // 1 hour
 const tabBarHeight = 70;
 const screenHeight = Dimensions.get("window").height;
-const HEADER_HEIGHT = 110;
+const HEADER_HEIGHT = 85;
 
 export default function DebateFeed() {
   const [debates, setDebates] = useState<any[]>([]);
@@ -441,9 +441,16 @@ export default function DebateFeed() {
     []
   );
 
-  const headerTranslate = scrollY.interpolate({
-    inputRange: [0, 120],
-    outputRange: [0, -120],
+  // Header opacity and background animation on scroll
+  const headerOpacity = scrollY.interpolate({
+    inputRange: [0, 50],
+    outputRange: [1, 0.95],
+    extrapolate: "clamp",
+  });
+
+  const headerBackgroundOpacity = scrollY.interpolate({
+    inputRange: [0, 50],
+    outputRange: [1, 0.7],
     extrapolate: "clamp",
   });
 
@@ -456,28 +463,33 @@ export default function DebateFeed() {
     >
       <Animated.View
         style={{
-          transform: [{ translateY: headerTranslate }],
           position: "absolute",
           top: 0,
           left: 0,
           right: 0,
           zIndex: 10,
+          opacity: headerOpacity,
         }}
       >
-        <LinearGradient
-          colors={["rgba(0, 0, 0, 1)", "rgba(8, 15, 18, 0.95)"]}
+        <Animated.View
           style={{
-            paddingHorizontal: 20,
-            paddingTop: Platform.OS === "ios" ? 12 : 24,
-            paddingBottom: 16,
-            flexDirection: "row",
-            alignItems: "center",
-            justifyContent: "space-between",
-            backgroundColor: "#000000",
-            borderBottomWidth: 1,
-            borderBottomColor: "rgba(255, 255, 255, 0.08)",
+            opacity: headerBackgroundOpacity,
           }}
         >
+          <LinearGradient
+            colors={["rgba(0, 0, 0, 1)", "rgba(8, 15, 18, 0.95)"]}
+            style={{
+              paddingHorizontal: 20,
+              paddingTop: Platform.OS === "ios" ? 8 : 16,
+              paddingBottom: 12,
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "space-between",
+              backgroundColor: "#000000",
+              borderBottomWidth: 1,
+              borderBottomColor: "rgba(255, 255, 255, 0.08)",
+            }}
+          >
           <View
             style={{
               flexDirection: "row",
@@ -487,13 +499,13 @@ export default function DebateFeed() {
           >
             <View
               style={{
-                width: 42,
-                height: 42,
-                borderRadius: 12,
+                width: 36,
+                height: 36,
+                borderRadius: 10,
                 backgroundColor: "rgba(255, 255, 255, 0.05)",
                 justifyContent: "center",
                 alignItems: "center",
-                marginRight: 14,
+                marginRight: 12,
                 borderWidth: 1,
                 borderColor: "rgba(255, 255, 255, 0.1)",
                 shadowColor: cyberpunkTheme.colors.primary,
@@ -506,9 +518,9 @@ export default function DebateFeed() {
               <Image
                 source={require("@/assets/images/logo.png")}
                 style={{
-                  width: 28,
-                  height: 28,
-                  borderRadius: 6,
+                  width: 24,
+                  height: 24,
+                  borderRadius: 5,
                 }}
                 resizeMode='contain'
               />
@@ -518,21 +530,21 @@ export default function DebateFeed() {
               <Text
                 style={{
                   color: "#FFFFFF",
-                  fontSize: 22,
+                  fontSize: 20,
                   fontWeight: "800",
                   letterSpacing: -0.5,
-                  lineHeight: 26,
+                  lineHeight: 24,
                 }}
               >
                 Dtrue
               </Text>
               <View
                 style={{
-                  width: 24,
+                  width: 22,
                   height: 2,
                   backgroundColor: cyberpunkTheme.colors.primary,
                   borderRadius: 1,
-                  marginTop: 2,
+                  marginTop: 1,
                   opacity: 0.8,
                 }}
               />
@@ -550,9 +562,9 @@ export default function DebateFeed() {
               hitSlop={10}
               onPress={handleOpenNotifications}
               style={({ pressed }) => ({
-                width: 44,
-                height: 44,
-                borderRadius: 22,
+                width: 40,
+                height: 40,
+                borderRadius: 20,
                 backgroundColor: pressed
                   ? "rgba(255, 255, 255, 0.12)"
                   : "rgba(255, 255, 255, 0.06)",
@@ -573,7 +585,7 @@ export default function DebateFeed() {
             >
               <Icon
                 name='bell-outline'
-                size={22}
+                size={20}
                 color='rgba(255, 255, 255, 0.95)'
               />
 
@@ -631,18 +643,19 @@ export default function DebateFeed() {
                 end={{ x: 1, y: 1 }}
                 style={{
                   paddingHorizontal: 12,
-                  paddingVertical: 8,
-                  borderRadius: 20,
+                  paddingVertical: 6,
+                  borderRadius: 18,
                 }}
               >
                 <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center" }}>
-                  <Ionicons name='add' size={16} color='#000000' style={{ marginRight: 4 }} />
+                  <Ionicons name='add' size={16} color='#000000' style={{ marginRight: 3 }} />
                   <Text style={{ color: '#000000', fontSize: 12, fontWeight: '600' }}>Create</Text>
                 </View>
               </LinearGradient>
             </TouchableOpacity>
           </View>
-        </LinearGradient>
+          </LinearGradient>
+        </Animated.View>
       </Animated.View>
 
       {loading && cursor === null ? (

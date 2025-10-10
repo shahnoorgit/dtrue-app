@@ -528,7 +528,7 @@ const DebateCard = ({ debate, onJoinPress }) => {
             <View
               style={{
                 flex: debate.agreedCount || 1,
-                backgroundColor: "#FFF", // bright white
+                backgroundColor: "#00FF94", // green for agree
               }}
             />
 
@@ -536,7 +536,7 @@ const DebateCard = ({ debate, onJoinPress }) => {
             <View
               style={{
                 flex: debate.disagreedCount || 1,
-                backgroundColor: "#888", // mid grey
+                backgroundColor: "#FF4757", // red for disagree
               }}
             />
           </View>
@@ -550,11 +550,11 @@ const DebateCard = ({ debate, onJoinPress }) => {
                   width: 8,
                   height: 8,
                   borderRadius: 4,
-                  backgroundColor: "#FFF",
+                  backgroundColor: "#00FF94",
                   marginRight: 6,
                 }}
               />
-              <Text style={{ color: "#FFF", fontSize: 12, fontWeight: "600" }}>
+              <Text style={{ color: "#00FF94", fontSize: 12, fontWeight: "600" }}>
                 {debate.agreedCount} Agreed
               </Text>
             </View>
@@ -564,11 +564,11 @@ const DebateCard = ({ debate, onJoinPress }) => {
                   width: 8,
                   height: 8,
                   borderRadius: 4,
-                  backgroundColor: "#888",
+                  backgroundColor: "#FF4757",
                   marginRight: 6,
                 }}
               />
-              <Text style={{ color: "#888", fontSize: 12, fontWeight: "600" }}>
+              <Text style={{ color: "#FF4757", fontSize: 12, fontWeight: "600" }}>
                 {debate.disagreedCount} Disagreed
               </Text>
             </View>

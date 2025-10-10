@@ -70,22 +70,22 @@ const ModalSheet: React.FC<ModalSheetProps> = ({
           </Text>
 
           <View style={styles.progressSection}>
-            <Text style={styles.progressLabel}>{positivePct}%</Text>
+            <Text style={[styles.progressLabel, { color: "#00FF94" }]}>{positivePct}%</Text>
             <View style={styles.progressBarContainer}>
               <View
                 style={[
                   styles.progressFill,
-                  { flex: positivePct || 1, backgroundColor: "#FFF" },
+                  { flex: positivePct || 1, backgroundColor: "#00FF94" },
                 ]}
               />
               <View
                 style={[
                   styles.progressFill,
-                  { flex: negativePct || 1, backgroundColor: "#888" },
+                  { flex: negativePct || 1, backgroundColor: "#FF4757" },
                 ]}
               />
             </View>
-            <Text style={styles.progressLabel}>{negativePct}%</Text>
+            <Text style={[styles.progressLabel, { color: "#FF4757" }]}>{negativePct}%</Text>
           </View>
 
           <View style={styles.footerRow}>

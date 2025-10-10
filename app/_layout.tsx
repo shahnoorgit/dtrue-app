@@ -15,7 +15,7 @@ import {
   useRootNavigationState,
 } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
-import { ClerkProvider, useAuth } from "@clerk/clerk-expo";
+import { ClerkProvider, useAuth, useClerk } from "@clerk/clerk-expo";
 import { tokenCache } from "@clerk/clerk-expo/token-cache";
 import { cyberpunkTheme } from "@/constants/theme";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -193,10 +193,29 @@ const getCachedUserStatus = async (
       const remainingTime = Math.round(
         (cache.expiresAt - now) / (1000 * 60 * 60)
       );
-      console.log(
-        `[CACHE] Using cached user status: ${cache.status} (expires in ${remainingTime}h)`
-      );
-      return cache.status;
+      
+      // IMPORTANT: Only trust positive cache (user exists in DB)
+      // For negative cache, redirect to sign-in to re-authenticate
+      if (cache.status === UserStatus.SIGNED_IN_IN_DB) {
+        console.log(
+          `[CACHE] Valid positive cache found: ${cache.status} (expires in ${remainingTime}h)`
+        );
+        return cache.status;
+      } else if (cache.status === UserStatus.SIGNED_IN_NOT_IN_DB) {
+        // Don't use negative cache - redirect to sign-in for safety
+        console.log(
+          `[CACHE] Found negative cache (${cache.status}), clearing and redirecting to sign-in`
+        );
+        await clearUserStatusCache();
+        // Return NOT_SIGNED_IN to force redirect to sign-in page
+        return UserStatus.NOT_SIGNED_IN;
+      } else {
+        console.log(
+          `[CACHE] Ignoring cache status (${cache.status}), will recheck with API`
+        );
+        await clearUserStatusCache();
+        return null;
+      }
     }
     await clearUserStatusCache();
     return null;
@@ -426,6 +445,7 @@ async function registerPushTokenIfNeeded(clerkId: string) {
  */
 function InitialStateNavigator() {
   const { isSignedIn, isLoaded, userId } = useAuth();
+  const clerk = useClerk();
   const router = useRouter();
   const navigationState = useRootNavigationState();
   const hasNavigatedRef = useRef(false);
@@ -473,16 +493,39 @@ function InitialStateNavigator() {
       if (!forceRefresh) {
         const cachedStatus = await getCachedUserStatus(clerkId);
         if (cachedStatus) {
-          console.log("[CACHE] Using cached user status:", cachedStatus);
-          setAppState((s) => ({
-            ...s,
-            userStatus: cachedStatus,
-            isUserStatusChecked: true,
-          }));
+          console.log("[CACHE] Using cached user status:", cachedStatus, "for clerkId:", clerkId);
+          
+          // Handle different cache statuses
           if (cachedStatus === UserStatus.SIGNED_IN_IN_DB) {
+            // Positive cache - user exists in DB
+            setAppState((s) => ({
+              ...s,
+              userStatus: cachedStatus,
+              isUserStatusChecked: true,
+            }));
             registerPushTokenIfNeeded(clerkId).catch(console.error);
+            return;
+          } else if (cachedStatus === UserStatus.NOT_SIGNED_IN) {
+            // Cache says to redirect to sign-in (this comes from negative cache handling)
+            // Sign out from Clerk first to clear session
+            console.log("[CACHE] Negative cache detected, signing out user and redirecting to sign-in");
+            
+            try {
+              await clerk.signOut();
+              console.log("[CACHE] User signed out successfully from Clerk");
+            } catch (signOutError) {
+              console.error("[CACHE] Error signing out user:", signOutError);
+              // Continue anyway - worst case user will see the session exists error
+            }
+            
+            setAppState((s) => ({
+              ...s,
+              userStatus: UserStatus.NOT_SIGNED_IN,
+              isUserStatusChecked: true,
+            }));
+            return;
           }
-          return;
+          // For any other status, continue to API check
         }
       }
 
@@ -568,8 +611,14 @@ function InitialStateNavigator() {
             checkUserStatus(clerkId, true);
           }, 1000 * Math.pow(2, retryCount));
         } else if (retryCount >= maxRetries) {
-          // After max retries, redirect to sign-in for safety
-          console.log("[API] Max retries reached, will redirect to sign-in for safety");
+          // After max retries, sign out and redirect to sign-in for safety
+          console.log("[API] Max retries reached, signing out and redirecting to sign-in");
+          try {
+            await clerk.signOut();
+            console.log("[API] User signed out successfully from Clerk after max retries");
+          } catch (signOutError) {
+            console.error("[API] Error signing out user after max retries:", signOutError);
+          }
           setAppState((s) => ({
             ...s,
             userStatus: UserStatus.NOT_SIGNED_IN,
@@ -589,8 +638,14 @@ function InitialStateNavigator() {
               retryCount: 0,
             }));
           } else {
-            // For other errors, redirect to sign-in for safety
-            console.log("[API] Unknown error, redirecting to sign-in for safety:", err?.message);
+            // For other errors, sign out and redirect to sign-in for safety
+            console.log("[API] Unknown error, signing out and redirecting to sign-in:", err?.message);
+            try {
+              await clerk.signOut();
+              console.log("[API] User signed out successfully from Clerk after error");
+            } catch (signOutError) {
+              console.error("[API] Error signing out user after error:", signOutError);
+            }
             setAppState((s) => ({
               ...s,
               userStatus: UserStatus.NOT_SIGNED_IN,
@@ -602,7 +657,7 @@ function InitialStateNavigator() {
         }
       }
     },
-    [isSignedIn]
+    [isSignedIn, clerk]
   );
 
   useEffect(() => {
@@ -732,10 +787,16 @@ function InitialStateNavigator() {
       if (parsedUrl && isSignedIn) {
         handleDeepLinkNavigation(parsedUrl.path, parsedUrl.query, router, userId);
       } else if (userStatus === UserStatus.SIGNED_IN_IN_DB) {
+        console.log("[NAVIGATION] User exists in DB, navigating to tabs");
         router.replace("/(tabs)");
       } else if (userStatus === UserStatus.SIGNED_IN_NOT_IN_DB) {
+        console.log("[NAVIGATION] User not in DB, navigating to boarding");
         router.replace("/(auth)/(boarding)/boarding");
+      } else if (userStatus === UserStatus.NOT_SIGNED_IN) {
+        console.log("[NAVIGATION] User not signed in, navigating to sign-in");
+        router.replace("/(auth)/sign-in");
       } else {
+        console.log("[NAVIGATION] Unknown status, defaulting to onboarding");
         router.replace("/onboarding");
       }
 

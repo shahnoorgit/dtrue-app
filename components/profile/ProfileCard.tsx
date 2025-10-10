@@ -47,6 +47,7 @@ interface ProfileCardProps {
   onFollow?: () => void;
   onFollowersPress?: () => void;
   onFollowingPress?: () => void;
+  onImagePress?: () => void;
   showFollowButton?: boolean;
   isCurrentUser?: boolean;
 }
@@ -57,6 +58,7 @@ const ProfileCard: React.FC<ProfileCardProps> = ({
   onFollow,
   onFollowersPress,
   onFollowingPress,
+  onImagePress,
   showFollowButton = true,
   isCurrentUser = false,
 }) => {
@@ -69,9 +71,13 @@ const ProfileCard: React.FC<ProfileCardProps> = ({
       <View style={styles.profileCard}>
         <View style={styles.cardContent}>
           {/* Profile Picture */}
-          <View style={styles.profileImageContainer}>
+          <Pressable 
+            style={styles.profileImageContainer}
+            onPress={onImagePress}
+            disabled={!onImagePress}
+          >
             <Image source={{ uri: user.image }} style={styles.profileImage} />
-          </View>
+          </Pressable>
 
           {/* Stats Section */}
           <View style={styles.statsContainer}>
@@ -113,11 +119,17 @@ const ProfileCard: React.FC<ProfileCardProps> = ({
         {/* Follow Button */}
         {showFollowButton && !isCurrentUser && (
           <TouchableOpacity
-            style={styles.followButton}
+            style={[
+              styles.followButton,
+              isFollowing && styles.followingButton
+            ]}
             onPress={onFollow}
             activeOpacity={0.8}
           >
-            <Text style={styles.followButtonText}>
+            <Text style={[
+              styles.followButtonText,
+              isFollowing && styles.followingButtonText
+            ]}>
               {isFollowing ? "Following" : "Follow"}
             </Text>
           </TouchableOpacity>
@@ -201,15 +213,21 @@ const styles = StyleSheet.create({
     backgroundColor: THEME.colors.followButtonBg,
     paddingVertical: THEME.spacing.sm,
     paddingHorizontal: THEME.spacing.lg,
-    borderRadius: 25, // Pill-shaped like in the image
+    borderRadius: 25, // Pill-shaped
     alignItems: "center",
     justifyContent: "center",
     minHeight: 44,
+  },
+  followingButton: {
+    backgroundColor: THEME.colors.success, // Green when following
   },
   followButtonText: {
     color: THEME.colors.followButtonText,
     fontSize: 16,
     fontWeight: "700",
+  },
+  followingButtonText: {
+    color: "#FFFFFF", // White text when following
   },
 });
 

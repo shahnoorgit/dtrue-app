@@ -35,9 +35,11 @@ const InputBar: React.FC<InputBarProps> = ({
 }) => {
   if (showModal || submitted) return null;
 
-  const activeBg = "rgba(255,255,255,0.1)";
+  const agreeBg = "rgba(0, 255, 148, 0.15)";
+  const disagreeBg = "rgba(255, 71, 87, 0.15)";
   const inactiveBg = "transparent";
-  const activeBorder = "#FFF";
+  const agreeBorder = "#00FF94";
+  const disagreeBorder = "#FF4757";
   const inactiveBorder = "rgba(200,200,200,0.3)";
   const placeholder = "rgba(200,200,200,0.6)";
 
@@ -49,14 +51,19 @@ const InputBar: React.FC<InputBarProps> = ({
       <View style={styles.stanceRow}>
         {["agree", "disagree"].map((opt) => {
           const selected = stance === opt;
+          const isAgree = opt === "agree";
           return (
             <TouchableOpacity
               key={opt}
               style={[
                 styles.stanceButton,
                 {
-                  backgroundColor: selected ? activeBg : inactiveBg,
-                  borderColor: selected ? activeBorder : inactiveBorder,
+                  backgroundColor: selected 
+                    ? (isAgree ? agreeBg : disagreeBg) 
+                    : inactiveBg,
+                  borderColor: selected 
+                    ? (isAgree ? agreeBorder : disagreeBorder) 
+                    : inactiveBorder,
                 },
               ]}
               onPress={() => setStance(opt as any)}
@@ -64,11 +71,14 @@ const InputBar: React.FC<InputBarProps> = ({
               <MaterialCommunityIcons
                 name={opt === "agree" ? "thumb-up" : "thumb-down"}
                 size={16}
-                color={selected ? "#FFF" : "#888"}
+                color={selected ? (isAgree ? "#00FF94" : "#FF4757") : "#888"}
                 style={styles.iconSpacing}
               />
               <Text
-                style={[styles.stanceText, selected && styles.stanceTextActive]}
+                style={[
+                  styles.stanceText, 
+                  selected && { color: isAgree ? "#00FF94" : "#FF4757" }
+                ]}
               >
                 {opt.charAt(0).toUpperCase() + opt.slice(1)}
               </Text>

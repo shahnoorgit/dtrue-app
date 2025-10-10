@@ -1290,36 +1290,32 @@ const ProfilePage: React.FC = () => {
         onRequestClose={closeImageModal}
         animationType="fade"
       >
-        <View style={styles.imageModalContainer}>
+        <TouchableOpacity
+          style={styles.modalBackdrop}
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            closeImageModal();
+          }}
+          activeOpacity={1}
+        >
+          <Image
+            source={{ uri: modalImageUri }}
+            style={styles.modalImage}
+            resizeMode='contain'
+          />
           <TouchableOpacity
-            style={styles.modalBackdrop}
+            style={styles.closeModalButton}
             onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
               closeImageModal();
             }}
-            activeOpacity={1}
           >
-            <View style={styles.modalImageContainer}>
-              <Image
-                source={{ uri: modalImageUri }}
-                style={styles.modalImage}
-                resizeMode='contain'
-              />
-            </View>
-            <TouchableOpacity
-              style={styles.closeModalButton}
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                closeImageModal();
-              }}
-            >
-              <Ionicons name='close' size={30} color='#FFFFFF' />
-            </TouchableOpacity>
-            <View style={styles.modalInfo}>
-              <Text style={styles.modalInfoText}>Tap to close</Text>
-            </View>
+            <Ionicons name='close' size={30} color='#FFFFFF' />
           </TouchableOpacity>
-        </View>
+          <View style={styles.modalInfo}>
+            <Text style={styles.modalInfoText}>Tap to close</Text>
+          </View>
+        </TouchableOpacity>
       </Modal>
     </TabScreenWrapper>
   );
@@ -1944,34 +1940,15 @@ const styles = StyleSheet.create({
     color: THEME.colors.text,
   },
   // Enhanced Modal Styles
-  imageModalContainer: {
-    flex: 1,
-  },
   modalBackdrop: {
     flex: 1,
     backgroundColor: "rgba(0, 0, 0, 0.95)",
     justifyContent: "center",
     alignItems: "center",
   },
-  modalImageContainer: {
-    width: "90%",
-    height: "70%",
-    justifyContent: "center",
-    alignItems: "center",
-    borderRadius: 12,
-    overflow: "hidden",
-    shadowColor: THEME.colors.primary,
-    shadowOffset: {
-      width: 0,
-      height: 10,
-    },
-    shadowOpacity: 0.3,
-    shadowRadius: 20,
-    elevation: 10,
-  },
   modalImage: {
     width: "100%",
-    height: "100%",
+    height: "80%",
   },
   closeModalButton: {
     position: "absolute",

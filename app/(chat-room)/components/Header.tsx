@@ -79,12 +79,12 @@ const Header: React.FC<HeaderProps> = ({
         </View>
 
         <View style={styles.progressContainer}>
-          <Text style={styles.progressLabel}>{positivePct}%</Text>
+          <Text style={[styles.progressLabel, { color: "#00FF94" }]}>{positivePct}%</Text>
           <View style={styles.progressBarContainer}>
-            <View style={{ flex: positivePct || 1, backgroundColor: "#FFF" }} />
-            <View style={{ flex: negativePct || 1, backgroundColor: "#888" }} />
+            <View style={{ flex: positivePct || 1, backgroundColor: "#00FF94" }} />
+            <View style={{ flex: negativePct || 1, backgroundColor: "#FF4757" }} />
           </View>
-          <Text style={styles.progressLabelSecondary}>{negativePct}%</Text>
+          <Text style={[styles.progressLabelSecondary, { color: "#FF4757" }]}>{negativePct}%</Text>
         </View>
       </SafeAreaView>
     </LinearGradient>

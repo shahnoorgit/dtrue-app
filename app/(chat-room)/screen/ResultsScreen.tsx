@@ -93,7 +93,7 @@ const DebateEndedResults = ({ results, insets, debateTitle, debateImage }: Debat
             </View>
 
             <View style={styles.statItem}>
-              <Ionicons name='thumbs-down' size={24} color='#FF0055' />
+              <Ionicons name='thumbs-down' size={24} color='#FF4757' />
               <Text style={styles.statValue}>{disagreed}</Text>
               <Text style={styles.statLabel}>Disagreed</Text>
             </View>
