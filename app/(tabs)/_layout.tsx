@@ -93,14 +93,14 @@ function TabButton({ icon, label, isFocused, onPress, index }: TabButtonProps) {
             transform: [{ scale: iconScaleAnim }],
           }}
         >
-          <Icon name={icon} size={24} color={isFocused ? "#00FF94" : "#888"} />
+          <Icon name={icon} size={24} color={isFocused ? "#FFFFFF" : "#888"} />
         </Animated.View>
         <Animated.Text
           style={{
             marginTop: 4,
             fontSize: 13,
             fontWeight: isFocused ? "600" : "400",
-            color: isFocused ? "#00FF94" : "#888",
+            color: isFocused ? "#FFFFFF" : "#888",
             opacity: textOpacityAnim,
           }}
         >
@@ -112,17 +112,11 @@ function TabButton({ icon, label, isFocused, onPress, index }: TabButtonProps) {
 }
 
 function CyberpunkTabBar({ state, navigation }: BottomTabBarProps) {
-  const { width } = useWindowDimensions();
-  const tabCount = TAB_CONFIG.length;
-  const indicatorAnim = useRef(new Animated.Value(state.index)).current;
   const [previousIndex, setPreviousIndex] = useState(state.index);
   const [isTransitioning, setIsTransitioning] = useState(false);
   const backgroundOpacity = useRef(new Animated.Value(0.95)).current;
 
   useEffect(() => {
-    const tabWidth = width / tabCount;
-    const targetX = state.index * tabWidth;
-    
     // Set transitioning state
     if (state.index !== previousIndex) {
       setIsTransitioning(true);
@@ -138,23 +132,14 @@ function CyberpunkTabBar({ state, navigation }: BottomTabBarProps) {
           duration: 150,
           useNativeDriver: true,
         }),
-      ]).start();
+      ]).start(() => {
+        // Reset transitioning state after animation completes
+        setIsTransitioning(false);
+      });
     }
-    
-    Animated.spring(indicatorAnim, {
-      toValue: targetX,
-      useNativeDriver: true,
-      tension: 300,
-      friction: 30,
-    }).start(() => {
-      // Reset transitioning state after animation completes
-      setIsTransitioning(false);
-    });
 
     setPreviousIndex(state.index);
-  }, [state.index, width, tabCount, previousIndex]);
-
-  const tabWidth = width / tabCount;
+  }, [state.index, previousIndex]);
 
   return (
     <View style={{ position: "absolute", bottom: 0, left: 0, right: 0 }}>
@@ -173,24 +158,6 @@ function CyberpunkTabBar({ state, navigation }: BottomTabBarProps) {
           opacity: backgroundOpacity,
         }}
       >
-        {/* Animated indicator */}
-        <Animated.View
-          style={{
-            position: "absolute",
-            top: 6,
-            left: 0,
-            width: tabWidth,
-            height: 2,
-            backgroundColor: "#00FF94",
-            borderRadius: 1,
-            transform: [
-              {
-                translateX: indicatorAnim,
-              },
-            ],
-          }}
-        />
-        
         {/* Tab buttons */}
         <View
           style={{

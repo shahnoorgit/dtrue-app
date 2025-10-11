@@ -20,6 +20,8 @@ interface InputBarProps {
   isLoading: boolean;
   submitted: boolean;
   showModal: boolean;
+  isEditMode?: boolean;
+  onCancelEdit?: () => void;
 }
 
 const InputBar: React.FC<InputBarProps> = ({
@@ -32,8 +34,11 @@ const InputBar: React.FC<InputBarProps> = ({
   isLoading,
   submitted,
   showModal,
+  isEditMode = false,
+  onCancelEdit,
 }) => {
-  if (showModal || submitted) return null;
+  // Show input bar if in edit mode, even if submitted
+  if (showModal || (submitted && !isEditMode)) return null;
 
   const agreeBg = "rgba(0, 255, 148, 0.15)";
   const disagreeBg = "rgba(255, 71, 87, 0.15)";
@@ -48,6 +53,21 @@ const InputBar: React.FC<InputBarProps> = ({
       colors={["#222", "#111"]}
       style={[styles.container, { paddingBottom: Math.max(12, insets.bottom) }]}
     >
+      {/* Edit Mode Header */}
+      {isEditMode && (
+        <View style={styles.editModeHeader}>
+          <View style={styles.editModeInfo}>
+            <Ionicons name="create-outline" size={16} color="#00FF94" />
+            <Text style={styles.editModeText}>Editing your opinion</Text>
+          </View>
+          {onCancelEdit && (
+            <TouchableOpacity onPress={onCancelEdit} style={styles.cancelButton}>
+              <Text style={styles.cancelButtonText}>Cancel</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      )}
+
       <View style={styles.stanceRow}>
         {["agree", "disagree"].map((opt) => {
           const selected = stance === opt;
@@ -91,7 +111,7 @@ const InputBar: React.FC<InputBarProps> = ({
         <TextInput
           value={userOpinion}
           onChangeText={setUserOpinion}
-          placeholder='Your opinion…'
+          placeholder={isEditMode ? 'Edit your opinion…' : 'Your opinion…'}
           placeholderTextColor={placeholder}
           multiline
           style={styles.textInput}
@@ -108,7 +128,7 @@ const InputBar: React.FC<InputBarProps> = ({
             <ActivityIndicator size='small' color='#111' />
           ) : (
             <Ionicons
-              name='send'
+              name={isEditMode ? 'checkmark' : 'send'}
               size={20}
               color={userOpinion.trim() && stance ? "#FFF" : placeholder}
             />
@@ -130,6 +150,36 @@ const styles = StyleSheet.create({
     padding: 12,
     borderTopWidth: 1,
     borderTopColor: "rgba(200,200,200,0.2)",
+  },
+  editModeHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 8,
+    paddingHorizontal: 4,
+  },
+  editModeInfo: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  editModeText: {
+    color: "#00FF94",
+    fontSize: 13,
+    fontWeight: "500",
+  },
+  cancelButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 12,
+    backgroundColor: "rgba(255, 71, 87, 0.15)",
+    borderWidth: 1,
+    borderColor: "rgba(255, 71, 87, 0.3)",
+  },
+  cancelButtonText: {
+    color: "#FF4757",
+    fontSize: 12,
+    fontWeight: "500",
   },
   stanceRow: {
     flexDirection: "row",

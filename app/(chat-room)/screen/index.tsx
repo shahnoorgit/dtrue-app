@@ -32,6 +32,7 @@ import DebateEndedResults from "./ResultsScreen";
 import { router } from "expo-router";
 import { logError } from "@/utils/sentry/sentry";
 import { trackOpinionSubmitted, trackOpinionLiked, trackDebateJoined } from "@/lib/posthog/events";
+import { Modal } from "react-native";
 
 export default function DebateRoom() {
   const { debateId, debateImage, clerkId } = useLocalSearchParams();
@@ -65,6 +66,12 @@ export default function DebateRoom() {
   // Optimistic like state
   const [optimisticLikes, setOptimisticLikes] = useState<{[key: string]: {count: number, isLiked: boolean}}>({});
   const [pendingLikes, setPendingLikes] = useState<Set<string>>(new Set());
+  
+  // Edit opinion state
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [editingOpinionData, setEditingOpinionData] = useState<any>(null);
+  const [showEditMenu, setShowEditMenu] = useState(false);
+  const [selectedOpinionForEdit, setSelectedOpinionForEdit] = useState<any>(null);
 
   useEffect(() => {
     // Track debate joined when user enters the room
@@ -301,9 +308,56 @@ export default function DebateRoom() {
   }, [isDebateActive, token]);
 
 
+  // Edit opinion
+  const onEditOpinion = useCallback(async () => {
+    if (!userOpinion.trim() || !stance || isLoading || !isDebateActive || !isEditMode) return;
+    setIsLoading(true);
+    try {
+      const { data } = await axios.patch(
+        `${process.env.EXPO_PUBLIC_BASE_URL}/debate-participant/opinion`,
+        {
+          roomId: debateId,
+          opinion: userOpinion.trim(),
+          isAgree: stance === "agree" ? true : false,
+        },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      if (data.statusCode === 200 || data.success) {
+        setUserOpinion("");
+        setStance(null);
+        setIsEditMode(false);
+        setEditingOpinionData(null);
+        fetchOpinions();
+        setTimeout(() => {
+          flatRef.current?.scrollToEnd({ animated: true });
+        }, 300);
+      }
+    } catch (err: any) {
+      logError(err, {
+        context: "DebateRoom.onEditOpinion",
+        debateId: debateId ? `[REDACTED_DEBATE_ID]` : "undefined",
+        stance,
+        userOpinionLength: userOpinion.length,
+      });
+
+      if (err.response?.status === 401) {
+        await refreshToken();
+        onEditOpinion();
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  }, [debateId, token, userOpinion, stance, isDebateActive, isEditMode]);
+
   // Submit opinion
   const onSubmit = useCallback(async () => {
     if (!userOpinion.trim() || !stance || isLoading || !isDebateActive) return;
+    
+    // If in edit mode, call edit function instead
+    if (isEditMode) {
+      return onEditOpinion();
+    }
+    
     setIsLoading(true);
     trackOpinionSubmitted({
       debateId: debateId as string,
@@ -347,7 +401,7 @@ export default function DebateRoom() {
     } finally {
       setIsLoading(false);
     }
-  }, [debateId, token, userOpinion, stance, isDebateActive]);
+  }, [debateId, token, userOpinion, stance, isDebateActive, isEditMode, onEditOpinion]);
 
   // Handle like/unlike with optimistic updates
   const handleLike = async (userId: string, opinion: any) => {
@@ -577,6 +631,25 @@ export default function DebateRoom() {
               >
                 {formatDateTime(item.createdAt)}
               </Text>
+              
+              {/* 3-dot menu for user's own opinion */}
+              {userOpinionId == item?.user.clerkId && (
+                <TouchableOpacity
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    setSelectedOpinionForEdit(item);
+                    setShowEditMenu(true);
+                  }}
+                  hitSlop={10}
+                  style={{ marginLeft: 8 }}
+                >
+                  <Ionicons
+                    name="ellipsis-vertical"
+                    size={16}
+                    color={theme.colors.textMuted}
+                  />
+                </TouchableOpacity>
+              )}
             </Pressable>
 
             <Text style={{ color: theme.colors.text, lineHeight: 20 }}>
@@ -688,6 +761,27 @@ export default function DebateRoom() {
     [handleLike, likedUserIds, isDebateActive, optimisticLikes, pendingLikes, userOpinionId, formatDateTime]
   );
 
+  // Handle edit button click
+  const handleEditClick = useCallback(() => {
+    if (selectedOpinionForEdit) {
+      setUserOpinion(selectedOpinionForEdit.opinion);
+      setStance(selectedOpinionForEdit.agreed ? "agree" : "disagree");
+      setIsEditMode(true);
+      setEditingOpinionData(selectedOpinionForEdit);
+      setSubmitted(false); // Allow input bar to show
+      setShowEditMenu(false);
+    }
+  }, [selectedOpinionForEdit]);
+
+  // Handle cancel edit
+  const handleCancelEdit = useCallback(() => {
+    setIsEditMode(false);
+    setEditingOpinionData(null);
+    setUserOpinion("");
+    setStance(null);
+    setSubmitted(true); // Hide input bar
+  }, []);
+
   if (loadingInitial || isDebateActive === null) {
     return (
       <SafeAreaView
@@ -788,6 +882,8 @@ export default function DebateRoom() {
             setUserOpinion={setUserOpinion}
             submitted={submitted}
             userOpinion={userOpinion}
+            isEditMode={isEditMode}
+            onCancelEdit={handleCancelEdit}
           />
         </>
       ) : (
@@ -811,6 +907,100 @@ export default function DebateRoom() {
           insets={insets}
         />
       )}
+
+      {/* Edit Opinion Menu Modal */}
+      <Modal
+        visible={showEditMenu}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowEditMenu(false)}
+      >
+        <Pressable
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(0, 0, 0, 0.5)",
+            justifyContent: "center",
+            alignItems: "center",
+          }}
+          onPress={() => setShowEditMenu(false)}
+        >
+          <View
+            style={{
+              backgroundColor: theme.colors.backgroundDarker,
+              borderRadius: 16,
+              padding: 20,
+              width: "80%",
+              maxWidth: 300,
+              borderWidth: 1,
+              borderColor: "rgba(255, 255, 255, 0.1)",
+            }}
+          >
+            <Text
+              style={{
+                color: theme.colors.text,
+                fontSize: 18,
+                fontWeight: "600",
+                marginBottom: 16,
+                textAlign: "center",
+              }}
+            >
+              Edit Opinion
+            </Text>
+
+            <TouchableOpacity
+              onPress={handleEditClick}
+              style={{
+                backgroundColor: "rgba(0, 255, 148, 0.1)",
+                borderRadius: 12,
+                padding: 14,
+                marginBottom: 10,
+                borderWidth: 1,
+                borderColor: theme.colors.primary,
+              }}
+            >
+              <View style={{ flexDirection: "row", alignItems: "center" }}>
+                <Ionicons
+                  name="create-outline"
+                  size={20}
+                  color={theme.colors.primary}
+                  style={{ marginRight: 10 }}
+                />
+                <Text
+                  style={{
+                    color: theme.colors.primary,
+                    fontSize: 16,
+                    fontWeight: "500",
+                  }}
+                >
+                  Edit Opinion
+                </Text>
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() => setShowEditMenu(false)}
+              style={{
+                backgroundColor: "rgba(255, 255, 255, 0.05)",
+                borderRadius: 12,
+                padding: 14,
+                borderWidth: 1,
+                borderColor: "rgba(255, 255, 255, 0.1)",
+              }}
+            >
+              <Text
+                style={{
+                  color: theme.colors.textMuted,
+                  fontSize: 16,
+                  fontWeight: "500",
+                  textAlign: "center",
+                }}
+              >
+                Cancel
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </Pressable>
+      </Modal>
     </SafeAreaView>
   );
 }
