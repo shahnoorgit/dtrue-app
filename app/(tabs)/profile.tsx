@@ -1123,26 +1123,30 @@ const ProfilePage: React.FC = () => {
         onFollowersPress={() => {
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
           router.push({
-            pathname: "/(follow)/followers/[id]/page",
+            pathname: "/(follow)/[id]/page",
             params: {
               id: user.id,
               username: user.username,
               followersCount: user.followers?.length,
+              followingsCount: user.following?.length,
               image: user.image,
               backTo: pathname,
+              initialTab: "followers",
             },
           });
         }}
         onFollowingPress={() => {
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
           router.push({
-            pathname: "/(follow)/following/[id]/page",
+            pathname: "/(follow)/[id]/page",
             params: {
               id: user.id,
               backTo: pathname,
               username: user.username,
               followersCount: user.followers?.length,
+              followingsCount: user.following?.length,
               image: user.image,
+              initialTab: "following",
             },
           });
         }}
