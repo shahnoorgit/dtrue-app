@@ -32,7 +32,7 @@ import TabScreenWrapper from "./components/TabScreenWrapper";
 import SearchModal from "@/components/search/SearchModal";
 import EditableProfileCard from "@/components/profile/EditableProfileCard";
 import { logError } from "@/utils/sentry/sentry"; // Added Sentry import
-import { invalidateUserCache } from "../_layout";
+import { clearUserDataOnSignOut } from "../_layout";
 import {
   trackContentShared,
   trackProfileViewed,
@@ -997,9 +997,9 @@ const ProfilePage: React.FC = () => {
         reason: "manual",
       });
       await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-      await invalidateUserCache();
+      await clearUserDataOnSignOut();
       await clerk.signOut();
-      router.replace("/onboarding");
+      router.replace("/(auth)/sign-in");
     } catch (error: any) {
       console.error("Error signing out:", error);
       // Log error to Sentry

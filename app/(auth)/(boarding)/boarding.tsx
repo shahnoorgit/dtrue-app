@@ -19,6 +19,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { StatusBar } from "expo-status-bar";
 import { useRouter } from "expo-router";
 import axios from "axios";
+import { useUser } from "@clerk/clerk-expo";
 
 import {
   CategoryEnum,
@@ -697,6 +698,7 @@ export default function OnboardingScreen() {
   const [bio, setBio] = useState("");
   
   const { showError } = useError();
+  const { user } = useUser();
   const [modalVisible, setModalVisible] = useState(false);
   const [currentCategory, setCurrentCategory] = useState<CategoryEnum | null>(
     null
@@ -801,6 +803,10 @@ export default function OnboardingScreen() {
       setCurrentStep(1);
     } else if (currentStep === 1) {
       if (!validateUsername()) return;
+      if (!user) {
+        showError("Authentication Error", "User session not found. Please sign in again.", { type: 'error' });
+        return;
+      }
 
       const submissionData = {
         categories: selectedCategories,
@@ -814,20 +820,44 @@ export default function OnboardingScreen() {
       (async () => {
         setIsSubmitting(true);
         try {
+          // STEP 1: Update Clerk metadata FIRST (single source of truth)
+          console.log("[ONBOARDING] Updating Clerk metadata...");
+          await user.update({
+            unsafeMetadata: {
+              onboarded: true,
+              onboardedAt: Date.now(),
+            },
+          });
+          console.log("[ONBOARDING] Clerk metadata updated successfully");
+
+          // STEP 2: Create user in database
+          console.log("[ONBOARDING] Creating user in database...");
           const response = await addUser(submissionData);
+          
           if (response) {
+            console.log("[ONBOARDING] User created in database successfully");
             trackOnboardingCompleted({
               hasProfileImage: !!profileImageUrl,
               username: username,
               timeToComplete: Date.now() - onboardingStartTime,
             });
+            
+            // Navigate to main app
             await new Promise((resolve) => setTimeout(resolve, 500));
             router.replace("/(tabs)");
             setTimeout(() => {
               router.replace("/(tabs)");
             }, 1000);
           } else {
-            console.error("Failed to create user");
+            console.error("[ONBOARDING] Failed to create user in database");
+            // Rollback Clerk metadata
+            console.log("[ONBOARDING] Rolling back Clerk metadata...");
+            await user.update({
+              unsafeMetadata: {
+                onboarded: false,
+              },
+            });
+            
             setIsSubmitting(false);
             showError("Creation Error", "Failed to create user profile. Please try again.", {
               type: 'error',
@@ -836,7 +866,7 @@ export default function OnboardingScreen() {
             });
           }
         } catch (error: any) {
-          console.error("Error creating user:", error);
+          console.error("[ONBOARDING] Error during onboarding:", error);
           
           // Log error to Sentry
           logError(error, {
@@ -847,6 +877,21 @@ export default function OnboardingScreen() {
             bioLength: bio.length,
             step: currentStep,
           });
+          
+          // Rollback Clerk metadata on error
+          try {
+            console.log("[ONBOARDING] Error occurred, rolling back Clerk metadata...");
+            await user.update({
+              unsafeMetadata: {
+                onboarded: false,
+              },
+            });
+          } catch (rollbackError) {
+            console.error("[ONBOARDING] Failed to rollback Clerk metadata:", rollbackError);
+            logError(rollbackError, {
+              context: "OnboardingScreen.goToNextStep.rollback",
+            });
+          }
           
           setIsSubmitting(false);
           showError("Creation Error", "An error occurred while creating your profile. Please try again.", {
@@ -866,6 +911,9 @@ export default function OnboardingScreen() {
     profileImageUrl,
     addUser,
     router,
+    user,
+    showError,
+    onboardingStartTime,
   ]);
 
   const goToPreviousStep = useCallback(() => {

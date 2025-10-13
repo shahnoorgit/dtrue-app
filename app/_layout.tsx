@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef, useCallback } from "react";
+import React, { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import {
   StatusBar,
   View,
@@ -15,7 +15,7 @@ import {
   useRootNavigationState,
 } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
-import { ClerkProvider, useAuth, useClerk } from "@clerk/clerk-expo";
+import { ClerkProvider, useAuth, useClerk, useUser } from "@clerk/clerk-expo";
 import { tokenCache } from "@clerk/clerk-expo/token-cache";
 import { cyberpunkTheme } from "@/constants/theme";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -34,23 +34,6 @@ import { useSimpleUpdates } from "@/hook/useSimpleUpdates";
 // Prevent the splash screen from auto-hiding. We will control this manually.
 SplashScreen.preventAutoHideAsync();
 
-// Cache configuration
-const USER_STATUS_CACHE_KEY = "userStatusCache";
-const CACHE_DURATION = 7 * 24 * 60 * 60 * 1000; // 7 days
-
-interface UserStatusCache {
-  status: UserStatus;
-  clerkId: string;
-  timestamp: number;
-  expiresAt: number;
-}
-
-enum UserStatus {
-  UNKNOWN = "unknown",
-  NOT_SIGNED_IN = "not_signed_in",
-  SIGNED_IN_NOT_IN_DB = "signed_in_not_in_db",
-  SIGNED_IN_IN_DB = "signed_in_in_db",
-}
 
 // --- POSTHOG HELPER ---
 import {
@@ -174,84 +157,7 @@ class ErrorBoundary extends React.Component<
   }
 }
 
-// --- START: CACHE HELPER FUNCTIONS ---
-const getCachedUserStatus = async (
-  clerkId: string
-): Promise<UserStatus | null> => {
-  try {
-    const cachedData = await AsyncStorage.getItem(USER_STATUS_CACHE_KEY);
-    if (!cachedData) return null;
 
-    const cache: UserStatusCache = JSON.parse(cachedData);
-    const now = Date.now();
-
-    if (
-      cache.clerkId === clerkId &&
-      now < cache.expiresAt &&
-      cache.status !== UserStatus.UNKNOWN
-    ) {
-      const remainingTime = Math.round(
-        (cache.expiresAt - now) / (1000 * 60 * 60)
-      );
-      
-      // IMPORTANT: Only trust positive cache (user exists in DB)
-      // For negative cache, redirect to sign-in to re-authenticate
-      if (cache.status === UserStatus.SIGNED_IN_IN_DB) {
-        console.log(
-          `[CACHE] Valid positive cache found: ${cache.status} (expires in ${remainingTime}h)`
-        );
-        return cache.status;
-      } else if (cache.status === UserStatus.SIGNED_IN_NOT_IN_DB) {
-        // Don't use negative cache - redirect to sign-in for safety
-        console.log(
-          `[CACHE] Found negative cache (${cache.status}), clearing and redirecting to sign-in`
-        );
-        await clearUserStatusCache();
-        // Return NOT_SIGNED_IN to force redirect to sign-in page
-        return UserStatus.NOT_SIGNED_IN;
-      } else {
-        console.log(
-          `[CACHE] Ignoring cache status (${cache.status}), will recheck with API`
-        );
-        await clearUserStatusCache();
-        return null;
-      }
-    }
-    await clearUserStatusCache();
-    return null;
-  } catch (error) {
-    console.error("[CACHE] Error reading cached user status:", error);
-    await clearUserStatusCache();
-    return null;
-  }
-};
-
-const setCachedUserStatus = async (
-  status: UserStatus,
-  clerkId: string
-): Promise<void> => {
-  try {
-    const now = Date.now();
-    const cache: UserStatusCache = {
-      status,
-      clerkId,
-      timestamp: now,
-      expiresAt: now + CACHE_DURATION,
-    };
-    await AsyncStorage.setItem(USER_STATUS_CACHE_KEY, JSON.stringify(cache));
-  } catch (error) {
-    console.error("[CACHE] Error caching user status:", error);
-  }
-};
-
-const clearUserStatusCache = async (): Promise<void> => {
-  try {
-    await AsyncStorage.removeItem(USER_STATUS_CACHE_KEY);
-  } catch (error) {
-    console.error("[CACHE] Error clearing user status cache:", error);
-  }
-};
-// --- END: CACHE HELPER FUNCTIONS ---
 
 // --- START: DEEP LINKING & NAVIGATION HELPERS ---
 const parseIncomingUrl = (rawUrl?: string | null) => {
@@ -298,7 +204,9 @@ const handleDeepLinkNavigation = (
   router: any, // Using `any` for ExpoRouter.Router to keep it simple
   userId: string | null | undefined
 ) => {
-  console.log(`[DEEP LINK] Navigating to path:`, path, "with query:", query);
+  if (__DEV__) {
+    console.log(`[DEEP LINK] Navigating to path:`, path, "with query:", query);
+  }
 
   let destination: "debate" | "profile" | "trending" | undefined;
 
@@ -337,7 +245,7 @@ const handleDeepLinkNavigation = (
     destination,
   });
 
-  if (!destination) {
+  if (__DEV__ && !destination) {
     console.log("[DEEP LINK] Unknown path, ignoring:", path);
   }
 };
@@ -346,32 +254,34 @@ function useRuntimeDeepLinkHandler() {
   const router = useRouter();
   const { isSignedIn, userId } = useAuth();
 
-  useEffect(() => {
-    const linkSub = RNLinking.addEventListener("url", (ev) => {
-      if (!isSignedIn) return;
-      const parsed = parseIncomingUrl(ev.url);
+  // Memoize handlers to prevent unnecessary re-subscriptions
+  const handleUrlEvent = useCallback((ev: { url: string }) => {
+    if (!isSignedIn) return;
+    const parsed = parseIncomingUrl(ev.url);
+    if (parsed) {
+      handleDeepLinkNavigation(parsed.path, parsed.query, router, userId);
+    }
+  }, [isSignedIn, userId, router]);
+
+  const handleNotificationResponse = useCallback((response: any) => {
+    const deeplink = response.notification.request.content.data?.deeplink;
+    if (isSignedIn && deeplink) {
+      const parsed = parseIncomingUrl(deeplink);
       if (parsed) {
         handleDeepLinkNavigation(parsed.path, parsed.query, router, userId);
       }
-    });
+    }
+  }, [isSignedIn, userId, router]);
 
-    const notifSub = Notifications.addNotificationResponseReceivedListener(
-      (response) => {
-        const deeplink = response.notification.request.content.data?.deeplink;
-        if (isSignedIn && deeplink) {
-          const parsed = parseIncomingUrl(deeplink);
-          if (parsed) {
-            handleDeepLinkNavigation(parsed.path, parsed.query, router, userId);
-          }
-        }
-      }
-    );
+  useEffect(() => {
+    const linkSub = RNLinking.addEventListener("url", handleUrlEvent);
+    const notifSub = Notifications.addNotificationResponseReceivedListener(handleNotificationResponse);
 
     return () => {
       linkSub.remove();
       notifSub.remove();
     };
-  }, [isSignedIn, userId, router]);
+  }, [handleUrlEvent, handleNotificationResponse]);
 }
 // --- END: DEEP LINKING & NAVIGATION HELPERS ---
 
@@ -440,298 +350,66 @@ async function registerPushTokenIfNeeded(clerkId: string) {
 }
 
 /**
- * The central component for managing the app's initial state and navigation,
- * resolving all race conditions.
+ * SIMPLIFIED: The central component for managing app navigation using Clerk metadata.
+ * No more cache, no more complex API checks for routing!
  */
 function InitialStateNavigator() {
-  const { isSignedIn, isLoaded, userId } = useAuth();
-  const clerk = useClerk();
+  const { isSignedIn, isLoaded, user } = useUser(); // Use useUser() for metadata access
   const router = useRouter();
   const navigationState = useRootNavigationState();
   const hasNavigatedRef = useRef(false);
 
   const [appState, setAppState] = useState<{
-    userStatus: UserStatus;
-    isUserStatusChecked: boolean;
     initialUrl: string | null;
     isInitialUrlChecked: boolean;
-    apiError: { message: string; isRetrying: boolean } | null;
-    retryCount: number;
   }>({
-    userStatus: UserStatus.UNKNOWN,
-    isUserStatusChecked: false,
     initialUrl: null,
     isInitialUrlChecked: false,
-    apiError: null,
-    retryCount: 0,
   });
 
-  const checkUserStatusTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-
-  // Clear cache when user signs out
+  // Register push token for onboarded users (only once when they become onboarded)
+  const pushTokenRegisteredRef = useRef(false);
   useEffect(() => {
-    if (!isSignedIn && isLoaded) {
-      clearUserCacheOnSignOut();
+    if (
+      isLoaded &&
+      isSignedIn &&
+      user?.unsafeMetadata?.onboarded === true &&
+      !pushTokenRegisteredRef.current
+    ) {
+      pushTokenRegisteredRef.current = true;
+      registerPushTokenIfNeeded(user.id).catch(console.error);
     }
-  }, [isSignedIn, isLoaded]);
-
-  const checkUserStatus = useCallback(
-    async (clerkId: string, forceRefresh = false) => {
-      if (checkUserStatusTimeoutRef.current) {
-        clearTimeout(checkUserStatusTimeoutRef.current);
-      }
-
-      if (!isSignedIn) {
-        setAppState((s) => ({
-          ...s,
-          userStatus: UserStatus.NOT_SIGNED_IN,
-          isUserStatusChecked: true,
-        }));
-        return;
-      }
-
-      if (!forceRefresh) {
-        const cachedStatus = await getCachedUserStatus(clerkId);
-        if (cachedStatus) {
-          console.log("[CACHE] Using cached user status:", cachedStatus, "for clerkId:", clerkId);
-          
-          // Handle different cache statuses
-          if (cachedStatus === UserStatus.SIGNED_IN_IN_DB) {
-            // Positive cache - user exists in DB
-            setAppState((s) => ({
-              ...s,
-              userStatus: cachedStatus,
-              isUserStatusChecked: true,
-            }));
-            registerPushTokenIfNeeded(clerkId).catch(console.error);
-            return;
-          } else if (cachedStatus === UserStatus.NOT_SIGNED_IN) {
-            // Cache says to redirect to sign-in (this comes from negative cache handling)
-            // Sign out from Clerk first to clear session
-            console.log("[CACHE] Negative cache detected, signing out user and redirecting to sign-in");
-            
-            try {
-              await clerk.signOut();
-              console.log("[CACHE] User signed out successfully from Clerk");
-            } catch (signOutError) {
-              console.error("[CACHE] Error signing out user:", signOutError);
-              // Continue anyway - worst case user will see the session exists error
-            }
-            
-            setAppState((s) => ({
-              ...s,
-              userStatus: UserStatus.NOT_SIGNED_IN,
-              isUserStatusChecked: true,
-            }));
-            return;
-          }
-          // For any other status, continue to API check
-        }
-      }
-
-      console.log("[API] Checking user status from server...");
-      try {
-        const controller = new AbortController();
-        checkUserStatusTimeoutRef.current = setTimeout(
-          () => controller.abort(),
-          10000
-        );
-
-        const base = process.env.EXPO_PUBLIC_BASE_URL || "https://your-api.com";
-        const res = await fetch(
-          `${base.replace(/\/$/, "")}/user/find/${clerkId}`,
-          {
-            signal: controller.signal,
-          }
-        );
-        clearTimeout(checkUserStatusTimeoutRef.current);
-
-        let finalStatus: UserStatus;
-        console.log(
-          "[API] checkUserStatus response:",
-          res.status,
-          res.statusText
-        );
-        if (res.status === 404) {
-          finalStatus = UserStatus.SIGNED_IN_NOT_IN_DB;
-          console.log("[API] User not found in database, status: SIGNED_IN_NOT_IN_DB");
-        } else if (res.ok) {
-          const userData = await res.json();
-          // Check if user has completed onboarding
-          if (userData.data?.onboardingCompleted === false) {
-            finalStatus = UserStatus.SIGNED_IN_NOT_IN_DB;
-            console.log("[API] User exists but onboarding incomplete, status: SIGNED_IN_NOT_IN_DB");
-          } else {
-            finalStatus = UserStatus.SIGNED_IN_IN_DB;
-            console.log("[API] User found and onboarding complete, status: SIGNED_IN_IN_DB");
-            await registerPushTokenIfNeeded(clerkId);
-          }
-        } else {
-          throw new Error(`API Error: ${res.status} - ${res.statusText}`);
-        }
-
-        await setCachedUserStatus(finalStatus, clerkId);
-        setAppState((s) => ({
-          ...s,
-          userStatus: finalStatus,
-          isUserStatusChecked: true,
-          apiError: null,
-          retryCount: 0,
-        }));
-      } catch (err: any) {
-        console.error("[API] checkUserStatus error", err);
-        trackApiError({
-          endpoint: "user-status",
-          error: err?.message,
-        });
-        logError(err, { clerkId });
-        
-        const retryCount = appState.retryCount;
-        const maxRetries = 3;
-        
-        // Only retry for network/timeout errors, not for 404
-        const isNetworkError = err?.name === "AbortError" || 
-                               err?.message?.toLowerCase().includes("network") ||
-                               err?.message?.toLowerCase().includes("timeout") ||
-                               err?.message?.toLowerCase().includes("fetch");
-        
-        if (isNetworkError && retryCount < maxRetries) {
-          console.log(`[API] Network error, retrying (${retryCount + 1}/${maxRetries}):`, err?.message);
-          setAppState((s) => ({ 
-            ...s, 
-            retryCount: retryCount + 1,
-            apiError: {
-              message: `Connection failed. Retrying... (${retryCount + 1}/${maxRetries})`,
-              isRetrying: true,
-            }
-          }));
-          
-          // Retry after a delay with exponential backoff
-          setTimeout(() => {
-            checkUserStatus(clerkId, true);
-          }, 1000 * Math.pow(2, retryCount));
-        } else if (retryCount >= maxRetries) {
-          // After max retries, sign out and redirect to sign-in for safety
-          console.log("[API] Max retries reached, signing out and redirecting to sign-in");
-          try {
-            await clerk.signOut();
-            console.log("[API] User signed out successfully from Clerk after max retries");
-          } catch (signOutError) {
-            console.error("[API] Error signing out user after max retries:", signOutError);
-          }
-          setAppState((s) => ({
-            ...s,
-            userStatus: UserStatus.NOT_SIGNED_IN,
-            isUserStatusChecked: true,
-            apiError: null,
-            retryCount: 0,
-          }));
-        } else {
-          // For non-network errors, check if it's a 404 or other error
-          if (err?.message?.includes("404") || err?.message?.toLowerCase().includes("not found")) {
-            console.log("[API] 404 error - user not in database:", err?.message);
-            setAppState((s) => ({
-              ...s,
-              userStatus: UserStatus.SIGNED_IN_NOT_IN_DB,
-              isUserStatusChecked: true,
-              apiError: null,
-              retryCount: 0,
-            }));
-          } else {
-            // For other errors, sign out and redirect to sign-in for safety
-            console.log("[API] Unknown error, signing out and redirecting to sign-in:", err?.message);
-            try {
-              await clerk.signOut();
-              console.log("[API] User signed out successfully from Clerk after error");
-            } catch (signOutError) {
-              console.error("[API] Error signing out user after error:", signOutError);
-            }
-            setAppState((s) => ({
-              ...s,
-              userStatus: UserStatus.NOT_SIGNED_IN,
-              isUserStatusChecked: true,
-              apiError: null,
-              retryCount: 0,
-            }));
-          }
-        }
-      }
-    },
-    [isSignedIn, clerk]
-  );
-
-  useEffect(() => {
-    const { retryCount } = appState;
-    if (retryCount === 0 || !userId) return;
-
-    const MAX_RETRIES = 3;
-    if (retryCount > MAX_RETRIES) {
-      setAppState((s) => ({
-        ...s,
-        apiError: {
-          message: "Unable to connect after multiple attempts.",
-          isRetrying: false,
-        },
-        isUserStatusChecked: true,
-      }));
-      trackApiError({
-        endpoint: "user-status",
-        error: "retry_failed",
-        retryCount,
-      });
-      return;
+    
+    // Reset flag when user signs out
+    if (!isSignedIn) {
+      pushTokenRegisteredRef.current = false;
     }
+  }, [isLoaded, isSignedIn, user?.unsafeMetadata?.onboarded, user?.id]);
 
-    setAppState((s) => ({
-      ...s,
-      apiError: {
-        message: `Retrying connection... (${retryCount})`,
-        isRetrying: true,
-      },
-    }));
-    const delay = 1000 * Math.pow(2, retryCount - 1);
-    const timer = setTimeout(() => checkUserStatus(userId, true), delay);
-    return () => clearTimeout(timer);
-  }, [appState.retryCount, userId]);
-
+  // Get initial URL only once on mount
   useEffect(() => {
-    if (!isLoaded) return;
-    setAppState((s) => ({
-      ...s,
-      isUserStatusChecked: false,
-      apiError: null,
-      retryCount: 0,
-    }));
-    if (userId) {
-      checkUserStatus(userId);
-    } else {
-      setAppState((s) => ({
-        ...s,
-        userStatus: UserStatus.NOT_SIGNED_IN,
-        isUserStatusChecked: true,
-      }));
-    }
-  }, [isLoaded, isSignedIn, userId]); // Removed checkUserStatus to avoid re-triggering
-
-  useEffect(() => {
+    let mounted = true;
+    
     const getInitialUrl = async () => {
       try {
-        const url = await RNLinking.getInitialURL();
-        const response = await Notifications.getLastNotificationResponseAsync();
+        const [url, response] = await Promise.all([
+          RNLinking.getInitialURL(),
+          Notifications.getLastNotificationResponseAsync(),
+        ]);
+        
+        if (!mounted) return;
+        
         const notificationDeeplink = response?.notification.request.content.data
           ?.deeplink as string;
 
         const launchSource = notificationDeeplink
           ? "notification"
           : url
-          ? "link"
+          ? "deep_link"
           : "cold_start";
 
         trackAppOpened({
-          launchSource: launchSource as
-            | "cold_start"
-            | "notification"
-            | "deep_link",
+          launchSource,
           isSignedIn: false, // Will be updated when auth state is known
         });
 
@@ -741,7 +419,7 @@ function InitialStateNavigator() {
           isInitialUrlChecked: true,
         }));
       } catch (e: any) {
-        // *** CORRECTED: Explicitly typed 'e' ***
+        if (!mounted) return;
         console.error("[DEEP LINK] Failed to get initial URL", e);
         trackAppError({
           error: e?.message || "Failed to get initial URL",
@@ -750,104 +428,63 @@ function InitialStateNavigator() {
         setAppState((s) => ({ ...s, isInitialUrlChecked: true }));
       }
     };
+    
     getInitialUrl();
+    
+    return () => {
+      mounted = false;
+    };
   }, []);
 
+  // SIMPLIFIED NAVIGATION LOGIC - No more API calls!
+  // Memoize routing decision to prevent unnecessary re-calculations
+  const onboarded = user?.unsafeMetadata?.onboarded;
+  const userId = user?.id;
+  
   useEffect(() => {
-    const {
-      isUserStatusChecked,
-      isInitialUrlChecked,
-      userStatus,
-      initialUrl,
-      apiError,
-    } = appState;
+    const { isInitialUrlChecked, initialUrl } = appState;
 
     if (
       !isLoaded ||
       !navigationState?.key ||
-      !isUserStatusChecked ||
       !isInitialUrlChecked ||
       hasNavigatedRef.current
     ) {
       return;
     }
 
-    if (apiError && apiError.isRetrying) return;
-
-    if (apiError && !apiError.isRetrying) {
-      SplashScreen.hideAsync().catch(console.error);
-      return;
-    }
-
     hasNavigatedRef.current = true;
     const parsedUrl = parseIncomingUrl(initialUrl);
 
-    // Small delay to ensure smooth transition from splash screen
-    setTimeout(() => {
-      if (parsedUrl && isSignedIn) {
-        handleDeepLinkNavigation(parsedUrl.path, parsedUrl.query, router, userId);
-      } else if (userStatus === UserStatus.SIGNED_IN_IN_DB) {
-        console.log("[NAVIGATION] User exists in DB, navigating to tabs");
-        router.replace("/(tabs)");
-      } else if (userStatus === UserStatus.SIGNED_IN_NOT_IN_DB) {
-        console.log("[NAVIGATION] User not in DB, navigating to boarding");
-        router.replace("/(auth)/(boarding)/boarding");
-      } else if (userStatus === UserStatus.NOT_SIGNED_IN) {
-        console.log("[NAVIGATION] User not signed in, navigating to sign-in");
-        router.replace("/(auth)/sign-in");
-      } else {
-        console.log("[NAVIGATION] Unknown status, defaulting to onboarding");
-        router.replace("/onboarding");
-      }
+    if (__DEV__) {
+      console.log("[NAVIGATOR] Routing based on metadata...");
+      console.log("[NAVIGATOR] isSignedIn:", isSignedIn, "onboarded:", onboarded);
+    }
 
-      // Hide splash screen after navigation
-      SplashScreen.hideAsync().catch(console.error);
-    }, 100); // Small delay for smooth transition
-  }, [appState, isLoaded, navigationState?.key, isSignedIn, userId, router]);
+    // Navigate immediately without setTimeout for better perceived performance
+    if (parsedUrl && isSignedIn) {
+      // Deep link navigation
+      handleDeepLinkNavigation(parsedUrl.path, parsedUrl.query, router, userId);
+    } else if (!isSignedIn) {
+      router.replace("/(auth)/sign-in");
+    } else if (onboarded !== true) {
+      router.replace("/(auth)/(boarding)/boarding");
+    } else {
+      router.replace("/(tabs)");
+    }
 
-  if (appState.apiError && !appState.apiError.isRetrying) {
-    return (
-      <View className='absolute inset-0 z-10 flex-1 items-center justify-center bg-gray-900 p-4'>
-        <LinearGradient
-          colors={
-            cyberpunkTheme.colors.gradients.background as [string, string]
-          }
-          className='absolute inset-0'
-        />
-        <View className='bg-gray-800 p-6 rounded-lg w-4/5 max-w-md'>
-          <Text className='text-red-500 text-xl font-bold mb-4'>
-            Connection Error
-          </Text>
-          <Text className='text-white text-center mb-6'>
-            {appState.apiError.message}
-          </Text>
-          <TouchableOpacity
-            className='bg-blue-500 p-3 rounded-md mb-4'
-            onPress={() => {
-              if (userId) {
-                setAppState((s) => ({
-                  ...s,
-                  retryCount: 1,
-                  apiError: null,
-                  isUserStatusChecked: false,
-                }));
-              }
-            }}
-          >
-            <Text className='text-white text-center font-medium'>
-              Try Again
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            className='p-3 rounded-md'
-            onPress={() => router.replace("/(auth)/sign-in")}
-          >
-            <Text className='text-gray-400 text-center'>Go to Sign In</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    );
-  }
+    // Hide splash screen after navigation starts
+    SplashScreen.hideAsync().catch(console.error);
+  }, [
+    appState.isInitialUrlChecked,
+    appState.initialUrl,
+    isLoaded,
+    navigationState?.key,
+    isSignedIn,
+    onboarded,
+    userId,
+    router,
+  ]);
 
   return null; // Render nothing while loading; the native splash screen is visible.
 }
@@ -901,27 +538,13 @@ function RuntimeDeepLinkHandlerWrapper() {
   return null;
 }
 
-const invalidateUserCache = async (): Promise<void> => {
+// Export function for manual cache cleanup if needed (e.g., on sign out)
+export const clearUserDataOnSignOut = async (): Promise<void> => {
   try {
-    await Promise.all([
-      clearUserStatusCache(),
-      AsyncStorage.removeItem("expoPushToken"),
-    ]);
-    console.log("[CACHE] Invalidated all user caches on sign out");
+    // Clear push token cache
+    await AsyncStorage.removeItem("expoPushToken");
+    console.log("[CLEANUP] Cleared user data on sign out");
   } catch (error) {
-    console.error("[CACHE] Error invalidating user caches:", error);
-    logError(error, { context: "invalidateUserCache" });
+    console.error("[CLEANUP] Error clearing user data on sign out:", error);
   }
 };
-
-// Helper function to clear cache when user signs out
-const clearUserCacheOnSignOut = async (): Promise<void> => {
-  try {
-    await clearUserStatusCache();
-    console.log("[CACHE] Cleared user status cache on sign out");
-  } catch (error) {
-    console.error("[CACHE] Error clearing user cache on sign out:", error);
-  }
-};
-
-export { invalidateUserCache };
