@@ -33,6 +33,7 @@ import { router } from "expo-router";
 import { logError } from "@/utils/sentry/sentry";
 import { trackOpinionSubmitted, trackOpinionLiked, trackDebateJoined } from "@/lib/posthog/events";
 import { Modal } from "react-native";
+import InstagramStyleReplyModal from "@/components/chat/opinion/InstagramStyleReplyModal";
 
 export default function DebateRoom() {
   const { debateId, debateImage, clerkId } = useLocalSearchParams();
@@ -72,6 +73,11 @@ export default function DebateRoom() {
   const [editingOpinionData, setEditingOpinionData] = useState<any>(null);
   const [showEditMenu, setShowEditMenu] = useState(false);
   const [selectedOpinionForEdit, setSelectedOpinionForEdit] = useState<any>(null);
+  
+  // Reply modal state
+  const [showReplyModal, setShowReplyModal] = useState(false);
+  const [selectedOpinionForReply, setSelectedOpinionForReply] = useState<any>(null);
+  const [highlightedOpinionId, setHighlightedOpinionId] = useState<string | null>(null);
 
   useEffect(() => {
     // Track debate joined when user enters the room
@@ -552,18 +558,10 @@ export default function DebateRoom() {
       const isLiked = optimisticData ? optimisticData.isLiked : likedUserIds.includes(item.userId);
       const upvotes = optimisticData ? optimisticData.count : item.upvotes;
       const isPending = pendingLikes.has(item.userId);
+      const isHighlighted = highlightedOpinionId === item.userId;
       
       return (
-        <TouchableOpacity 
-          activeOpacity={0.8} 
-          disabled={!isDebateActive}
-          onPress={() => {
-            // Single tap - navigate to profile
-            router.push({
-              pathname: "/(tabs)/[id]/page",
-              params: { id: item.userId },
-            });
-          }}
+        <Pressable
           onLongPress={() => {
             // Long press - like the opinion
             if (isDebateActive && !isPending) {
@@ -571,25 +569,28 @@ export default function DebateRoom() {
             }
           }}
           delayLongPress={500}
+          style={{
+            marginHorizontal: 8,
+            marginVertical: 4,
+            alignSelf: isAgreed ? "flex-end" : "flex-start",
+            maxWidth: "80%",
+            borderRadius: 12,
+            backgroundColor: isHighlighted 
+              ? (isAgreed ? "rgba(0, 255, 148, 0.15)" : "rgba(255, 0, 229, 0.15)")
+              : (isAgreed ? "rgba(0, 255, 148, 0.08)" : "rgba(255, 0, 229, 0.08)"),
+            borderLeftWidth: isHighlighted ? 3 : 2,
+            borderLeftColor: isAgreed
+              ? theme.colors.primary
+              : theme.colors.secondary,
+            borderWidth: isHighlighted ? 1 : 0,
+            borderColor: isHighlighted 
+              ? (isAgreed ? "rgba(0, 255, 148, 0.3)" : "rgba(255, 0, 229, 0.3)")
+              : "transparent",
+            padding: 10,
+            opacity: isPending ? 0.7 : 1,
+            transform: isHighlighted ? [{ scale: 1.02 }] : [{ scale: 1 }],
+          }}
         >
-          <View
-            style={{
-              marginHorizontal: 8,
-              marginVertical: 4,
-              alignSelf: isAgreed ? "flex-end" : "flex-start",
-              maxWidth: "80%",
-              borderRadius: 12,
-              backgroundColor: isAgreed
-                ? "rgba(0, 255, 148, 0.08)"
-                : "rgba(255, 0, 229, 0.08)",
-              borderLeftWidth: 2,
-              borderLeftColor: isAgreed
-                ? theme.colors.primary
-                : theme.colors.secondary,
-              padding: 10,
-              opacity: isPending ? 0.7 : 1,
-            }}
-          >
             <Pressable
               onPress={() => {
                 router.push({
@@ -700,6 +701,34 @@ export default function DebateRoom() {
                 )}
               </Pressable>
 
+              {/* Reply Button */}
+              <Pressable
+                onPress={() => handleOpenReplyModal(item)}
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  marginLeft: 16,
+                }}
+              >
+                <Ionicons
+                  name="chatbubble-outline"
+                  size={12}
+                  color={theme.colors.textMuted}
+                  style={{ marginRight: 4 }}
+                />
+                <Text
+                  style={{
+                    color: theme.colors.textMuted,
+                    fontSize: 12,
+                  }}
+                >
+                  Reply
+                </Text>
+              </Pressable>
+            </View>
+
+            {/* AI Flags Section */}
+            <View style={{ marginTop: 8 }}>
               {item.aiFlagged ? (
                 <View
                   style={{
@@ -754,11 +783,11 @@ export default function DebateRoom() {
                 </View>
               ) : null}
             </View>
-          </View>
-        </TouchableOpacity>
+          
+        </Pressable>
       );
     },
-    [handleLike, likedUserIds, isDebateActive, optimisticLikes, pendingLikes, userOpinionId, formatDateTime]
+    [handleLike, likedUserIds, isDebateActive, optimisticLikes, pendingLikes, userOpinionId, formatDateTime, highlightedOpinionId]
   );
 
   // Handle edit button click
@@ -780,6 +809,19 @@ export default function DebateRoom() {
     setUserOpinion("");
     setStance(null);
     setSubmitted(true); // Hide input bar
+  }, []);
+
+  // Handle reply modal
+  const handleOpenReplyModal = useCallback((opinion: any) => {
+    setSelectedOpinionForReply(opinion);
+    setHighlightedOpinionId(opinion.userId);
+    setShowReplyModal(true);
+  }, []);
+
+  const handleCloseReplyModal = useCallback(() => {
+    setShowReplyModal(false);
+    setSelectedOpinionForReply(null);
+    setHighlightedOpinionId(null);
   }, []);
 
   if (loadingInitial || isDebateActive === null) {
@@ -1001,6 +1043,24 @@ export default function DebateRoom() {
           </View>
         </Pressable>
       </Modal>
+
+      {/* Instagram Style Reply Modal */}
+      {selectedOpinionForReply && (
+        <InstagramStyleReplyModal
+          visible={showReplyModal}
+          onClose={handleCloseReplyModal}
+          opinionId={selectedOpinionForReply.id}
+          debateRoomId={debateId as string}
+          participantUserId={selectedOpinionForReply.userId}
+          opinionAuthor={{
+            username: selectedOpinionForReply.user.username,
+            image: selectedOpinionForReply.user.image,
+          }}
+          opinionContent={selectedOpinionForReply.opinion}
+          isAgreed={selectedOpinionForReply.agreed}
+          opinionImage={selectedOpinionForReply.user.image}
+        />
+      )}
     </SafeAreaView>
   );
 }
