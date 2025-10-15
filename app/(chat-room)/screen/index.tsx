@@ -701,7 +701,7 @@ export default function DebateRoom() {
                 )}
               </Pressable>
 
-              {/* Reply Button */}
+              {/* Reply Button with Count */}
               <Pressable
                 onPress={() => handleOpenReplyModal(item)}
                 style={{
@@ -722,7 +722,7 @@ export default function DebateRoom() {
                     fontSize: 12,
                   }}
                 >
-                  Reply
+                  {item.reply_count > 0 ? item.reply_count : 'Reply'}
                 </Text>
               </Pressable>
             </View>
@@ -822,6 +822,16 @@ export default function DebateRoom() {
     setShowReplyModal(false);
     setSelectedOpinionForReply(null);
     setHighlightedOpinionId(null);
+  }, []);
+
+  // Handle reply count update
+  const handleReplyCreated = useCallback((participantUserId: string) => {
+    // Update the opinion's reply_count in the opinions list
+    setOpinions(prev => prev.map(opinion => 
+      opinion.userId === participantUserId
+        ? { ...opinion, reply_count: (opinion.reply_count || 0) + 1 }
+        : opinion
+    ));
   }, []);
 
   if (loadingInitial || isDebateActive === null) {
@@ -1059,6 +1069,7 @@ export default function DebateRoom() {
           opinionContent={selectedOpinionForReply.opinion}
           isAgreed={selectedOpinionForReply.agreed}
           opinionImage={selectedOpinionForReply.user.image}
+          onReplyCreated={handleReplyCreated}
         />
       )}
     </SafeAreaView>

@@ -20,7 +20,7 @@ import ReplySkeleton from './ReplySkeleton';
 import * as Haptics from 'expo-haptics';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
-const MODAL_HEIGHT = SCREEN_HEIGHT * 0.75; // 75% of screen height
+const MODAL_HEIGHT = SCREEN_HEIGHT * 0.92; // 92% of screen height for maximum space
 
 interface InstagramStyleReplyModalProps {
   visible: boolean;
@@ -35,6 +35,7 @@ interface InstagramStyleReplyModalProps {
   opinionContent: string;
   isAgreed: boolean;
   opinionImage?: string | null;
+  onReplyCreated?: (participantUserId: string) => void;
 }
 
 const theme = {
@@ -59,6 +60,7 @@ export default function InstagramStyleReplyModal({
   opinionContent,
   isAgreed,
   opinionImage,
+  onReplyCreated,
 }: InstagramStyleReplyModalProps) {
   const { userId } = useAuth();
   const replyService = useOpinionReplyService();
@@ -80,6 +82,8 @@ export default function InstagramStyleReplyModal({
   const [loadingChildReplies, setLoadingChildReplies] = useState<Set<string>>(new Set());
   const [replyingTo, setReplyingTo] = useState<OpinionReply | null>(null);
   const [hasLoaded, setHasLoaded] = useState(false);
+  const [sortBy, setSortBy] = useState<'best' | 'top' | 'controversial' | 'date'>('best');
+  const [isOpinionExpanded, setIsOpinionExpanded] = useState(false);
 
   // Load initial replies
   const loadReplies = useCallback(async (pageNum = 1, isLoadMore = false) => {
@@ -96,7 +100,7 @@ export default function InstagramStyleReplyModal({
         participantUserId,
         pageNum,
         20,
-        'date'
+        sortBy
       );
 
       // Handle API response structure - optimized parsing
@@ -145,7 +149,7 @@ export default function InstagramStyleReplyModal({
       setLoading(false);
       setLoadingMore(false);
     }
-  }, [userId, participantUserId, replyService, hasLoaded]);
+  }, [userId, participantUserId, replyService, hasLoaded, sortBy]);
 
   // Load child replies
   const loadChildReplies = useCallback(async (replyId: string) => {
@@ -154,7 +158,7 @@ export default function InstagramStyleReplyModal({
     setLoadingChildReplies(prev => new Set([...prev, replyId]));
 
     try {
-      const response = await replyService.getChildReplies(replyId, 1, 50, 'date');
+      const response = await replyService.getChildReplies(replyId, 1, 50, sortBy);
       
       // Handle API response structure
       let responseData: any[];
@@ -198,7 +202,7 @@ export default function InstagramStyleReplyModal({
         return newSet;
       });
     }
-  }, [replyService, loadingChildReplies]);
+  }, [replyService, loadingChildReplies, sortBy]);
 
   // Submit reply
   const submitReply = useCallback(async () => {
@@ -229,12 +233,42 @@ export default function InstagramStyleReplyModal({
 
       // Add to appropriate list
       if (replyingTo) {
+        // Add to child replies
         setChildReplies(prev => ({
           ...prev,
           [replyingTo.id]: [newReply, ...(prev[replyingTo.id] || [])],
         }));
+        
+        // Expand the parent to show the new reply
+        setExpandedReplies(prev => new Set([...prev, replyingTo.id]));
+        
+        // Update parent reply's child count
+        setReplies(prev => prev.map(r => 
+          r.id === replyingTo.id 
+            ? { ...r, childRepliesCount: (r.childRepliesCount || 0) + 1 }
+            : r
+        ));
+        
+        // Also check if replyingTo is in any child replies and update those
+        setChildReplies(prev => {
+          const updated = { ...prev };
+          Object.keys(updated).forEach(parentId => {
+            updated[parentId] = updated[parentId].map(r =>
+              r.id === replyingTo.id
+                ? { ...r, childRepliesCount: (r.childRepliesCount || 0) + 1 }
+                : r
+            );
+          });
+          return updated;
+        });
       } else {
+        // Top-level reply
         setReplies(prev => [newReply, ...prev]);
+        
+        // Notify parent component to update opinion's reply count
+        if (onReplyCreated) {
+          onReplyCreated(participantUserId);
+        }
       }
 
       setReplyText('');
@@ -275,6 +309,49 @@ export default function InstagramStyleReplyModal({
       loadChildReplies(replyId);
     }
   }, [loadChildReplies, expandedReplies]);
+
+  // Handle delete reply
+  const handleDeleteReply = useCallback((replyId: string) => {
+    // Remove from main replies list
+    setReplies(prev => prev.filter(r => r.id !== replyId));
+    
+    // Remove from child replies
+    setChildReplies(prev => {
+      const newChildReplies = { ...prev };
+      // Remove from any parent's child list
+      Object.keys(newChildReplies).forEach(parentId => {
+        newChildReplies[parentId] = newChildReplies[parentId].filter(r => r.id !== replyId);
+      });
+      return newChildReplies;
+    });
+  }, []);
+
+  // Handle upvote reply
+  const handleUpvoteReply = useCallback((replyId: string, upvoted: boolean, upvoteCount: number) => {
+    // Ensure we have valid values
+    const validUpvoted = upvoted ?? false;
+    const validUpvoteCount = upvoteCount ?? 0;
+    
+    // Update in main replies list
+    setReplies(prev => prev.map(r => 
+      r.id === replyId 
+        ? { ...r, isUpvoted: validUpvoted, upvotes: validUpvoteCount }
+        : r
+    ));
+    
+    // Update in child replies
+    setChildReplies(prev => {
+      const newChildReplies = { ...prev };
+      Object.keys(newChildReplies).forEach(parentId => {
+        newChildReplies[parentId] = newChildReplies[parentId].map(r =>
+          r.id === replyId
+            ? { ...r, isUpvoted: validUpvoted, upvotes: validUpvoteCount }
+            : r
+        );
+      });
+      return newChildReplies;
+    });
+  }, []);
 
   // Animation functions
   const showModal = useCallback(() => {
@@ -334,12 +411,23 @@ export default function InstagramStyleReplyModal({
       setChildReplies({});
       setLoadingChildReplies(new Set());
       setHasLoaded(false);
+      setSortBy('best'); // Reset sort to default
       
       // Reset animation values
       translateY.setValue(MODAL_HEIGHT);
       backdropOpacity.setValue(0);
     }
   }, [visible, translateY, backdropOpacity]);
+
+  // Reload replies when sort changes
+  useEffect(() => {
+    if (visible && hasLoaded) {
+      setHasLoaded(false); // Force reload
+      setReplies([]);
+      setPage(1);
+      loadReplies(1, false);
+    }
+  }, [sortBy]);
 
   const renderReply = ({ item }: { item: OpinionReply }) => (
     <ReplyItem
@@ -348,6 +436,8 @@ export default function InstagramStyleReplyModal({
       level={1}
       onReply={handleReply}
       onLoadReplies={handleLoadChildReplies}
+      onDelete={handleDeleteReply}
+      onUpvote={handleUpvoteReply}
       showReplies={expandedReplies.has(item.id)}
       childReplies={childReplies[item.id] || []}
       loadingChildReplies={loadingChildReplies.has(item.id)}
@@ -418,13 +508,13 @@ export default function InstagramStyleReplyModal({
                 />
               </TouchableOpacity>
 
-              {/* Header */}
+              {/* Header - Compact */}
               <View
                 style={{
                   flexDirection: 'row',
                   alignItems: 'center',
                   paddingHorizontal: 16,
-                  paddingBottom: 12,
+                  paddingBottom: 10,
                   borderBottomWidth: 1,
                   borderBottomColor: 'rgba(255, 255, 255, 0.1)',
                 }}
@@ -432,13 +522,13 @@ export default function InstagramStyleReplyModal({
                 <TouchableOpacity
                   onPress={hideModal}
                   style={{
-                    padding: 8,
+                    padding: 6,
                     marginRight: 12,
                   }}
                 >
                   <Ionicons
                     name="close"
-                    size={24}
+                    size={22}
                     color={theme.colors.text}
                   />
                 </TouchableOpacity>
@@ -447,73 +537,119 @@ export default function InstagramStyleReplyModal({
                   <Text
                     style={{
                       color: theme.colors.text,
-                      fontSize: 18,
+                      fontSize: 16,
                       fontWeight: '600',
                     }}
                   >
-                    Replies
-                  </Text>
-                  <Text
-                    style={{
-                      color: theme.colors.textMuted,
-                      fontSize: 14,
-                    }}
-                  >
-                    {replies.length} {replies.length === 1 ? 'reply' : 'replies'}
+                    Replies ({replies.length})
                   </Text>
                 </View>
               </View>
 
-              {/* Original Opinion - Instagram Style */}
+              {/* Sort Tabs - Compact */}
               <View
                 style={{
-                  backgroundColor: isAgreed 
-                    ? 'rgba(0, 255, 148, 0.08)' 
-                    : 'rgba(255, 0, 229, 0.08)',
-                  margin: 16,
-                  padding: 16,
-                  borderRadius: 12,
-                  borderLeftWidth: 3,
-                  borderLeftColor: isAgreed 
-                    ? theme.colors.primary 
-                    : theme.colors.secondary,
+                  flexDirection: 'row',
+                  paddingHorizontal: 16,
+                  paddingVertical: 8,
+                  borderBottomWidth: 1,
+                  borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+                  gap: 6,
+                }}
+              >
+                {(['best', 'top', 'controversial', 'date'] as const).map((sort) => (
+                  <TouchableOpacity
+                    key={sort}
+                    onPress={() => setSortBy(sort)}
+                    style={{
+                      paddingHorizontal: 12,
+                      paddingVertical: 6,
+                      borderRadius: 16,
+                      backgroundColor: sortBy === sort 
+                        ? theme.colors.primary 
+                        : 'rgba(255, 255, 255, 0.05)',
+                    }}
+                  >
+                    <Text
+                      style={{
+                        color: sortBy === sort ? theme.colors.background : theme.colors.text,
+                        fontSize: 12,
+                        fontWeight: sortBy === sort ? '600' : '400',
+                        textTransform: 'capitalize',
+                      }}
+                    >
+                      {sort}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              {/* Original Opinion - Expandable */}
+              <View
+                style={{
+                  backgroundColor: 'rgba(255, 255, 255, 0.02)',
+                  marginHorizontal: 16,
+                  marginVertical: 8,
+                  padding: 8,
+                  borderRadius: 6,
                 }}
               >
                 <View
                   style={{
                     flexDirection: 'row',
                     alignItems: 'center',
-                    marginBottom: 8,
+                    marginBottom: 6,
+                    gap: 6,
                   }}
                 >
                   <Text
                     style={{
-                      color: theme.colors.text,
+                      color: theme.colors.textMuted,
                       fontWeight: '600',
-                      fontSize: 14,
+                      fontSize: 11,
+                      textTransform: 'uppercase',
+                      letterSpacing: 0.5,
                     }}
                   >
-                    {opinionAuthor.username}
+                    Original Opinion
                   </Text>
                   <Text
                     style={{
                       color: theme.colors.textMuted,
-                      fontSize: 12,
-                      marginLeft: 'auto',
+                      fontSize: 10,
+                      opacity: 0.6,
                     }}
                   >
-                    Original opinion
+                    by {opinionAuthor.username}
                   </Text>
                 </View>
                 <Text
                   style={{
                     color: theme.colors.text,
-                    fontSize: 14,
-                    lineHeight: 20,
+                    fontSize: 13,
+                    lineHeight: 18,
+                    opacity: 0.8,
                   }}
+                  numberOfLines={isOpinionExpanded ? undefined : 2}
                 >
                   {opinionContent}
                 </Text>
+                {opinionContent.length > 100 && (
+                  <TouchableOpacity
+                    onPress={() => setIsOpinionExpanded(!isOpinionExpanded)}
+                    style={{ marginTop: 4 }}
+                  >
+                    <Text
+                      style={{
+                        color: theme.colors.primary,
+                        fontSize: 11,
+                        fontWeight: '500',
+                      }}
+                    >
+                      {isOpinionExpanded ? 'View less' : 'View more'}
+                    </Text>
+                  </TouchableOpacity>
+                )}
               </View>
 
               {/* Replies List */}

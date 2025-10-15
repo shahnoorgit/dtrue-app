@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
@@ -20,6 +20,8 @@ interface ReplyItemProps {
   level: number; // 0 = top level, 1 = first nested, 2 = second nested
   onReply: (reply: OpinionReply) => void;
   onLoadReplies?: (replyId: string) => void;
+  onDelete?: (replyId: string) => void;
+  onUpvote?: (replyId: string, upvoted: boolean, upvoteCount: number) => void;
   showReplies?: boolean;
   childReplies?: OpinionReply[];
   loadingChildReplies?: boolean;
@@ -44,6 +46,8 @@ const ReplyItem = React.memo(function ReplyItem({
   level,
   onReply,
   onLoadReplies,
+  onDelete,
+  onUpvote,
   showReplies = false,
   childReplies = [],
   loadingChildReplies = false,
@@ -53,14 +57,27 @@ const ReplyItem = React.memo(function ReplyItem({
   const { userId } = useAuth();
   const replyService = useOpinionReplyService();
   const [isUpvoting, setIsUpvoting] = useState(false);
-  const [optimisticUpvotes, setOptimisticUpvotes] = useState(reply?.upvotes || 0);
-  const [optimisticIsUpvoted, setOptimisticIsUpvoted] = useState(reply?.isUpvoted || false);
+  
+  // Local state for upvotes - this is the source of truth for display
+  const [localUpvoted, setLocalUpvoted] = useState(reply.isUpvoted || false);
+  const [localUpvoteCount, setLocalUpvoteCount] = useState(reply.upvotes ?? 0);
+  
+  // Track if user has manually interacted with this reply
+  const [hasUserInteracted, setHasUserInteracted] = useState(false);
 
   // Safety check for reply object
   if (!reply || !reply.id) {
     console.warn('Invalid reply object:', reply);
     return null;
   }
+
+  // Sync with props when they change (but not if user is currently interacting)
+  useEffect(() => {
+    if (!isUpvoting && !hasUserInteracted) {
+      setLocalUpvoted(reply.isUpvoted || false);
+      setLocalUpvoteCount(reply.upvotes ?? 0);
+    }
+  }, [reply.isUpvoted, reply.upvotes, isUpvoting, hasUserInteracted]);
 
   const maxLevel = 2; // Maximum nesting level (0, 1, 2)
   const canReply = level < maxLevel; // Hide reply button for level 2 (3rd level)
@@ -88,33 +105,52 @@ const ReplyItem = React.memo(function ReplyItem({
   // Handle upvote - memoized to prevent recreation
   const handleUpvote = useCallback(async () => {
     if (isUpvoting) return;
-
+    
     setIsUpvoting(true);
+    setHasUserInteracted(true);
     
-    // Optimistic update
-    const newUpvoted = !optimisticIsUpvoted;
-    const newUpvotes = newUpvoted ? optimisticUpvotes + 1 : optimisticUpvotes - 1;
+    // Immediate optimistic update
+    const newUpvoted = !localUpvoted;
+    const newUpvoteCount = newUpvoted 
+      ? localUpvoteCount + 1 
+      : Math.max(0, localUpvoteCount - 1);
     
-    setOptimisticIsUpvoted(newUpvoted);
-    setOptimisticUpvotes(newUpvotes);
+    setLocalUpvoted(newUpvoted);
+    setLocalUpvoteCount(newUpvoteCount);
     
     // Haptic feedback
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
     try {
       const response = await replyService.toggleUpvote(reply.id);
-      setOptimisticUpvotes(response.upvoteCount);
-      setOptimisticIsUpvoted(response.upvoted);
+      
+      // Update with actual server response
+      const serverUpvoted = response.upvoted ?? newUpvoted;
+      const serverUpvoteCount = response.upvoteCount ?? newUpvoteCount;
+      
+      setLocalUpvoted(serverUpvoted);
+      setLocalUpvoteCount(serverUpvoteCount);
+      
+      // Notify parent component to update its state
+      if (onUpvote) {
+        onUpvote(reply.id, serverUpvoted, serverUpvoteCount);
+      }
+      
+      // Reset interaction flag after a delay
+      setTimeout(() => {
+        setHasUserInteracted(false);
+      }, 1000);
     } catch (error) {
       console.error('Failed to upvote reply:', error);
-      // Rollback optimistic update
-      setOptimisticIsUpvoted(!newUpvoted);
-      setOptimisticUpvotes(optimisticUpvotes);
+      // Rollback on error
+      setLocalUpvoted(!newUpvoted);
+      setLocalUpvoteCount(newUpvoted ? localUpvoteCount : localUpvoteCount + 1);
+      setHasUserInteracted(false);
       Alert.alert('Error', 'Failed to upvote reply. Please try again.');
     } finally {
       setIsUpvoting(false);
     }
-  }, [isUpvoting, optimisticIsUpvoted, optimisticUpvotes, reply.id, replyService]);
+  }, [isUpvoting, localUpvoted, localUpvoteCount, reply.id, replyService, onUpvote]);
 
   // Handle reply - memoized
   const handleReply = useCallback(() => {
@@ -158,7 +194,11 @@ const ReplyItem = React.memo(function ReplyItem({
           onPress: async () => {
             try {
               await replyService.deleteReply(reply.id);
-              // The parent component should handle removing this reply from the list
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              // Notify parent component to remove this reply from the list
+              if (onDelete) {
+                onDelete(reply.id);
+              }
             } catch (error) {
               console.error('Failed to delete reply:', error);
               Alert.alert('Error', 'Failed to delete reply. Please try again.');
@@ -169,88 +209,54 @@ const ReplyItem = React.memo(function ReplyItem({
     );
   };
 
-  const leftMargin = level * 24; // Indent based on nesting level
+  const leftMargin = level * 12; // Minimal indent
 
   return (
-    <View style={{ marginLeft: leftMargin, marginBottom: 12 }}>
-      {/* Main Reply Content - Better Integrated Style */}
+    <View style={{ marginLeft: leftMargin, marginBottom: 8 }}>
+      {/* Main Reply Content - Clean & Minimal */}
       <View
         style={{
-          backgroundColor: 'rgba(255, 255, 255, 0.04)',
+          backgroundColor: 'rgba(255, 255, 255, 0.02)',
           borderRadius: 8,
-          padding: 12,
-          borderLeftWidth: 2,
-          borderLeftColor: level === 1 
-            ? theme.colors.primary 
-            : theme.colors.secondary,
-          borderWidth: 0.5,
-          borderColor: 'rgba(255, 255, 255, 0.1)',
+          padding: 8,
         }}
       >
-        {/* Header - Better Integrated Style */}
+        {/* Compact Header with Image */}
         <View
           style={{
             flexDirection: 'row',
             alignItems: 'center',
             marginBottom: 8,
+            gap: 6,
           }}
         >
-          {/* Child replies indicator */}
-          {reply.childRepliesCount > 0 && (
-            <View
-              style={{
-                width: 4,
-                height: 4,
-                borderRadius: 2,
-                backgroundColor: theme.colors.primary,
-                marginRight: 6,
-                opacity: showReplies ? 1 : 0.5,
-              }}
-            />
-          )}
-          {/* Profile Image - Clickable */}
-          <TouchableOpacity
-            onPress={() => {
-              // TODO: Navigate to user profile
-              // console.log('Navigate to profile:', reply.user?.id);
+          {/* Profile Image - Small */}
+          <Image
+            source={{ uri: reply.user?.image || 'https://via.placeholder.com/18' }}
+            style={{
+              width: 18,
+              height: 18,
+              borderRadius: 9,
             }}
-            style={{ marginRight: 10 }}
-          >
-            <Image
-              source={{ uri: reply.user?.image || 'https://via.placeholder.com/24' }}
-              style={{
-                width: 24,
-                height: 24,
-                borderRadius: 12,
-                borderWidth: 1,
-                borderColor: 'rgba(255, 255, 255, 0.2)',
-              }}
-            />
-          </TouchableOpacity>
+          />
           
-          {/* Username - Clickable */}
-          <TouchableOpacity
-            onPress={() => {
-              // TODO: Navigate to user profile
-              // console.log('Navigate to profile:', reply.user?.id);
+          {/* Username - Compact */}
+          <Text
+            style={{
+              color: theme.colors.text,
+              fontWeight: '600',
+              fontSize: 12,
             }}
           >
-            <Text
-              style={{
-                color: theme.colors.text,
-                fontWeight: '600',
-                fontSize: 14,
-              }}
-            >
-              {reply.user?.username || 'Unknown User'}
-            </Text>
-          </TouchableOpacity>
+            {reply.user?.username || 'Unknown User'}
+          </Text>
           
+          {/* Time - Minimal */}
           <Text
             style={{
               color: theme.colors.textMuted,
-              fontSize: 12,
-              marginLeft: 8,
+              fontSize: 10,
+              opacity: 0.6,
             }}
           >
             {formattedTime}
@@ -261,221 +267,156 @@ const ReplyItem = React.memo(function ReplyItem({
             <Text
               style={{
                 color: theme.colors.textMuted,
-                fontSize: 11,
-                marginLeft: 6,
-                fontStyle: 'italic',
+                fontSize: 9,
+                opacity: 0.5,
               }}
             >
-              (edited)
+              edited
             </Text>
+          )}
+          
+          {/* Delete button - Inline */}
+          {isOwner && !reply.isDeleted && (
+            <TouchableOpacity
+              onPress={handleDelete}
+              style={{
+                marginLeft: 'auto',
+                padding: 2,
+              }}
+            >
+              <Ionicons
+                name="trash-outline"
+                size={13}
+                color={theme.colors.textMuted}
+                style={{ opacity: 0.6 }}
+              />
+            </TouchableOpacity>
           )}
         </View>
 
-        {/* Reply Content - Better Integrated Style */}
+        {/* Reply Content - CLEAN & READABLE */}
         <Text
           style={{
             color: theme.colors.text,
-            lineHeight: 20,
-            fontSize: 14,
+            lineHeight: 22,
+            fontSize: 15,
             marginBottom: 10,
+            letterSpacing: 0.15,
           }}
         >
           {reply.isDeleted ? '[This reply has been deleted]' : reply.content}
         </Text>
 
-        {/* Actions - Better Integrated Style */}
+        {/* Minimal Actions Bar */}
         {!reply.isDeleted && (
           <View
             style={{
               flexDirection: 'row',
               alignItems: 'center',
-              justifyContent: 'space-between',
+              gap: 10,
             }}
           >
-            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              {/* Upvote Button - Better Integrated Style */}
+            {/* Upvote - Compact with Like Icon */}
+            <TouchableOpacity
+              onPress={handleUpvote}
+              disabled={isUpvoting}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                opacity: isUpvoting ? 0.5 : 1,
+              }}
+            >
+              <Ionicons
+                name={localUpvoted ? 'heart' : 'heart-outline'}
+                size={13}
+                color={localUpvoted ? '#FF0055' : theme.colors.textMuted}
+                style={{ marginRight: 3 }}
+              />
+              <Text
+                style={{
+                  color: localUpvoted ? '#FF0055' : theme.colors.textMuted,
+                  fontSize: 11,
+                  fontWeight: '500',
+                }}
+              >
+                {localUpvoteCount}
+              </Text>
+            </TouchableOpacity>
+
+            {/* Reply - Minimal */}
+            {canReply && (
               <TouchableOpacity
-                onPress={handleUpvote}
-                disabled={isUpvoting}
+                onPress={handleReply}
                 style={{
                   flexDirection: 'row',
                   alignItems: 'center',
-                  marginRight: 16,
-                  opacity: isUpvoting ? 0.6 : 1,
                 }}
               >
                 <Ionicons
-                  name={optimisticIsUpvoted ? 'thumbs-up' : 'thumbs-up-outline'}
-                  size={16}
-                  color={optimisticIsUpvoted ? theme.colors.primary : theme.colors.textMuted}
-                  style={{ marginRight: 6 }}
+                  name="arrow-undo-outline"
+                  size={13}
+                  color={theme.colors.textMuted}
+                  style={{ marginRight: 3 }}
                 />
                 <Text
                   style={{
-                    color: optimisticIsUpvoted ? theme.colors.primary : theme.colors.textMuted,
-                    fontSize: 13,
-                    fontWeight: optimisticIsUpvoted ? '600' : '500',
+                    color: theme.colors.textMuted,
+                    fontSize: 11,
                   }}
                 >
-                  {optimisticUpvotes}
+                  Reply
                 </Text>
-                {isUpvoting && (
-                  <View
-                    style={{
-                      width: 12,
-                      height: 12,
-                      backgroundColor: 'rgba(255, 255, 255, 0.1)',
-                      borderRadius: 6,
-                      marginLeft: 6,
-                    }}
-                  />
-                )}
               </TouchableOpacity>
+            )}
 
-              {/* Reply Button - Better Integrated Style */}
-              {canReply && (
-                <TouchableOpacity
-                  onPress={handleReply}
-                  style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    marginRight: 16,
-                  }}
-                >
-                  <Ionicons
-                    name="chatbubble-outline"
-                    size={16}
-                    color={theme.colors.textMuted}
-                    style={{ marginRight: 6 }}
-                  />
-                  <Text
-                    style={{
-                      color: theme.colors.textMuted,
-                      fontSize: 13,
-                      fontWeight: '500',
-                    }}
-                  >
-                    Reply
-                  </Text>
-                </TouchableOpacity>
-              )}
-
-              {/* View/Hide Replies Button - Better Integrated Style */}
-              {reply.childRepliesCount > 0 && (
-                <TouchableOpacity
-                  onPress={handleToggleReplies}
-                  disabled={loadingChildReplies}
-                  style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    opacity: loadingChildReplies ? 0.6 : 1,
-                  }}
-                >
-                  <Animated.View
-                    style={{
-                      transform: [{ rotate: showReplies ? '180deg' : '0deg' }],
-                    }}
-                  >
-                    <Ionicons
-                      name="chevron-down"
-                      size={14}
-                      color={theme.colors.primary}
-                      style={{ marginRight: 4 }}
-                    />
-                  </Animated.View>
-                  <Text
-                    style={{
-                      color: theme.colors.primary,
-                      fontSize: 13,
-                      fontWeight: '600',
-                    }}
-                  >
-                    {loadingChildReplies 
-                      ? 'Loading...' 
-                      : showReplies 
-                        ? `Hide ${reply.childRepliesCount} ${reply.childRepliesCount === 1 ? 'reply' : 'replies'}`
-                        : `View ${reply.childRepliesCount} ${reply.childRepliesCount === 1 ? 'reply' : 'replies'}`
-                    }
-                  </Text>
-                  {loadingChildReplies && (
-                    <View
-                      style={{
-                        width: 12,
-                        height: 12,
-                        backgroundColor: 'rgba(255, 255, 255, 0.1)',
-                        borderRadius: 6,
-                        marginLeft: 6,
-                      }}
-                    />
-                  )}
-                </TouchableOpacity>
-              )}
-            </View>
-
-            {/* Owner Actions - Better Integrated Style */}
-            {isOwner && (
+            {/* View Replies - Minimal */}
+            {reply.childRepliesCount > 0 && (
               <TouchableOpacity
-                onPress={handleDelete}
+                onPress={handleToggleReplies}
+                disabled={loadingChildReplies}
                 style={{
-                  padding: 6,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  opacity: loadingChildReplies ? 0.5 : 1,
                 }}
               >
-                <Ionicons
-                  name="trash-outline"
-                  size={16}
-                  color={theme.colors.textMuted}
-                />
+                <Text
+                  style={{
+                    color: theme.colors.textMuted,
+                    fontSize: 11,
+                  }}
+                >
+                  {loadingChildReplies 
+                    ? '...' 
+                    : showReplies 
+                      ? `Hide ${reply.childRepliesCount}`
+                      : `${reply.childRepliesCount} ${reply.childRepliesCount === 1 ? 'reply' : 'replies'}`
+                  }
+                </Text>
               </TouchableOpacity>
             )}
           </View>
         )}
       </View>
 
-      {/* Child Replies with Visual Connection */}
+      {/* Child Replies - Minimal */}
       {showReplies && childReplies.length > 0 && (
-        <View style={{ marginTop: 8, position: 'relative' }}>
-          {/* Connecting line for visual association */}
-          <View
-            style={{
-              position: 'absolute',
-              left: 12, // Align with profile image
-              top: 0,
-              bottom: 0,
-              width: 2,
-              backgroundColor: 'rgba(255, 255, 255, 0.1)',
-              borderRadius: 1,
-            }}
-          />
-          
-          {/* Child replies with better visual connection */}
-          {childReplies.map((childReply, index) => (
-            <View key={childReply.id} style={{ position: 'relative' }}>
-              {/* Horizontal connector line */}
-              <View
-                style={{
-                  position: 'absolute',
-                  left: 12,
-                  top: 20, // Align with profile image center
-                  width: 12,
-                  height: 2,
-                  backgroundColor: 'rgba(255, 255, 255, 0.1)',
-                  borderRadius: 1,
-                  zIndex: 1,
-                }}
-              />
-              
-              <ReplyItem
-                reply={childReply}
-                level={level + 1}
-                onReply={onReply}
-                onLoadReplies={onLoadReplies}
-                showReplies={false} // Child replies don't show their own children by default
-                childReplies={[]}
-                loadingChildReplies={false}
-                debateRoomId={debateRoomId}
-                participantUserId={participantUserId}
-              />
-            </View>
+        <View style={{ marginTop: 4 }}>
+          {childReplies.map((childReply) => (
+            <ReplyItem
+              key={childReply.id}
+              reply={childReply}
+              level={level + 1}
+              onReply={onReply}
+              onLoadReplies={onLoadReplies}
+              onDelete={onDelete}
+              onUpvote={onUpvote}
+              showReplies={false}
+              childReplies={[]}
+              loadingChildReplies={false}
+              debateRoomId={debateRoomId}
+              participantUserId={participantUserId}
+            />
           ))}
         </View>
       )}

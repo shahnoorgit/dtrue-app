@@ -81,7 +81,7 @@ export const useOpinionReplyService = () => {
     participantId: string,
     page: number = 1,
     pageSize: number = 20,
-    orderBy: 'date' | 'upvotes' = 'date'
+    orderBy: 'best' | 'top' | 'controversial' | 'date' = 'best'
   ): Promise<OpinionReplyResponse> => {
     const params = new URLSearchParams({
       page: page.toString(),
@@ -97,7 +97,7 @@ export const useOpinionReplyService = () => {
     replyId: string,
     page: number = 1,
     pageSize: number = 20,
-    orderBy: 'date' | 'upvotes' = 'date'
+    orderBy: 'best' | 'top' | 'controversial' | 'date' = 'best'
   ): Promise<OpinionReplyResponse> => {
     const params = new URLSearchParams({
       page: page.toString(),
