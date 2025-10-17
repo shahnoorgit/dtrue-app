@@ -8,10 +8,16 @@ import {
   FlatList,
   Alert,
   Pressable,
-  SafeAreaView,
   Animated,
   Dimensions,
+  KeyboardAvoidingView,
+  Platform,
+  InteractionManager,
+  Keyboard,
+  LayoutAnimation,
+  StatusBar,
 } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@clerk/clerk-expo';
 import { OpinionReply, useOpinionReplyService } from '@/services/opinionReplyApi';
@@ -20,7 +26,11 @@ import ReplySkeleton from './ReplySkeleton';
 import * as Haptics from 'expo-haptics';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
-const MODAL_HEIGHT = SCREEN_HEIGHT * 0.92; // 92% of screen height for maximum space
+const STATUS_BAR_HEIGHT = StatusBar.currentHeight || 0;
+const MODAL_HEIGHT = Platform.select({
+  ios: SCREEN_HEIGHT * 0.70,
+  android: SCREEN_HEIGHT - STATUS_BAR_HEIGHT,
+});
 
 interface InstagramStyleReplyModalProps {
   visible: boolean;
@@ -64,10 +74,12 @@ export default function InstagramStyleReplyModal({
 }: InstagramStyleReplyModalProps) {
   const { userId } = useAuth();
   const replyService = useOpinionReplyService();
+  const insets = useSafeAreaInsets();
   
   // Animation refs
-  const translateY = useRef(new Animated.Value(MODAL_HEIGHT)).current;
+  const translateY = useRef(new Animated.Value(MODAL_HEIGHT || 0)).current;
   const backdropOpacity = useRef(new Animated.Value(0)).current;
+  const listRef = useRef<FlatList>(null);
   
   // State
   const [replies, setReplies] = useState<OpinionReply[]>([]);
@@ -84,6 +96,33 @@ export default function InstagramStyleReplyModal({
   const [hasLoaded, setHasLoaded] = useState(false);
   const [sortBy, setSortBy] = useState<'best' | 'top' | 'controversial' | 'date'>('best');
   const [isOpinionExpanded, setIsOpinionExpanded] = useState(false);
+  const [inputContainerHeight, setInputContainerHeight] = useState(64);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const [headerHeight, setHeaderHeight] = useState(0);
+  const [listContentHeight, setListContentHeight] = useState(0);
+  const [visibleHeight, setVisibleHeight] = useState(MODAL_HEIGHT);
+  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
+
+  // Keyboard handling for Android modal (adjustResize doesn't apply within Modal)
+  useEffect(() => {
+    const showSub = Keyboard.addListener('keyboardDidShow', (e) => {
+      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+      const kbHeight = e.endCoordinates.height;
+      setKeyboardHeight(kbHeight);
+      setIsKeyboardVisible(true);
+      setVisibleHeight(SCREEN_HEIGHT - kbHeight);
+    });
+    const hideSub = Keyboard.addListener('keyboardDidHide', () => {
+      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+      setKeyboardHeight(0);
+      setIsKeyboardVisible(false);
+      setVisibleHeight(MODAL_HEIGHT);
+    });
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
 
   // Load initial replies
   const loadReplies = useCallback(async (pageNum = 1, isLoadMore = false) => {
@@ -358,12 +397,12 @@ export default function InstagramStyleReplyModal({
     Animated.parallel([
       Animated.timing(translateY, {
         toValue: 0,
-        duration: 300,
+        duration: 180,
         useNativeDriver: true,
       }),
       Animated.timing(backdropOpacity, {
         toValue: 1,
-        duration: 300,
+        duration: 180,
         useNativeDriver: true,
       }),
     ]).start();
@@ -372,13 +411,13 @@ export default function InstagramStyleReplyModal({
   const hideModal = useCallback(() => {
     Animated.parallel([
       Animated.timing(translateY, {
-        toValue: MODAL_HEIGHT,
-        duration: 250,
+        toValue: MODAL_HEIGHT || 0,
+        duration: 180,
         useNativeDriver: true,
       }),
       Animated.timing(backdropOpacity, {
         toValue: 0,
-        duration: 250,
+        duration: 180,
         useNativeDriver: true,
       }),
     ]).start(() => {
@@ -394,8 +433,11 @@ export default function InstagramStyleReplyModal({
   // Load replies when modal opens
   useEffect(() => {
     if (visible && !hasLoaded) {
-      loadReplies();
+      setLoading(true);
       showModal();
+      InteractionManager.runAfterInteractions(() => {
+        loadReplies();
+      });
     }
   }, [visible, hasLoaded, loadReplies, showModal]);
 
@@ -414,7 +456,7 @@ export default function InstagramStyleReplyModal({
       setSortBy('best'); // Reset sort to default
       
       // Reset animation values
-      translateY.setValue(MODAL_HEIGHT);
+      translateY.setValue(MODAL_HEIGHT || 0);
       backdropOpacity.setValue(0);
     }
   }, [visible, translateY, backdropOpacity]);
@@ -445,6 +487,15 @@ export default function InstagramStyleReplyModal({
       participantUserId={participantUserId}
     />
   );
+
+  // Calculate dynamic heights and padding
+  const actualModalHeight = Math.min(visibleHeight, SCREEN_HEIGHT - (insets.top || 0));
+  const listAvailableHeight = actualModalHeight - (headerHeight || 0) - (inputContainerHeight || 0);
+  const keyboardSpace = Platform.select({
+    ios: keyboardHeight,
+    android: isKeyboardVisible ? keyboardHeight : 0
+  }) || 0;
+  const bottomPadding = keyboardSpace + inputContainerHeight;
 
   return (
     <Modal
@@ -480,185 +531,211 @@ export default function InstagramStyleReplyModal({
             bottom: 0,
             left: 0,
             right: 0,
-            height: MODAL_HEIGHT,
+            height: actualModalHeight,
+            overflow: 'hidden',
             backgroundColor: theme.colors.background,
             borderTopLeftRadius: 20,
             borderTopRightRadius: 20,
             transform: [{ translateY }],
           }}
         >
-          <View style={{ flex: 1 }}>
-              {/* Handle Bar */}
-              <TouchableOpacity
-                onPress={hideModal}
-                style={{
-                  alignItems: 'center',
-                  paddingVertical: 8,
-                  marginBottom: 8,
-                }}
-                activeOpacity={0.7}
-              >
-                <View
-                  style={{
-                    width: 40,
-                    height: 4,
-                    backgroundColor: theme.colors.textMuted,
-                    borderRadius: 2,
-                  }}
-                />
-              </TouchableOpacity>
-
-              {/* Header - Compact */}
-              <View
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  paddingHorizontal: 16,
-                  paddingBottom: 10,
-                  borderBottomWidth: 1,
-                  borderBottomColor: 'rgba(255, 255, 255, 0.1)',
-                }}
-              >
+          <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.background }} edges={['bottom']}>
+            <KeyboardAvoidingView
+              style={{ flex: 1 }}
+              behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+              keyboardVerticalOffset={Platform.OS === 'ios' ? STATUS_BAR_HEIGHT : 0}
+            >
+              <View style={{ flex: 1 }}>
+              {/* Header Block (measured for iOS keyboard offset) */}
+              <View onLayout={(e) => setHeaderHeight(e.nativeEvent.layout.height)}>
+                {/* Handle Bar */}
                 <TouchableOpacity
                   onPress={hideModal}
                   style={{
-                    padding: 6,
-                    marginRight: 12,
+                    alignItems: 'center',
+                    paddingVertical: 8,
+                    marginBottom: 8,
                   }}
+                  activeOpacity={0.7}
                 >
-                  <Ionicons
-                    name="close"
-                    size={22}
-                    color={theme.colors.text}
+                  <View
+                    style={{
+                      width: 40,
+                      height: 4,
+                      backgroundColor: theme.colors.textMuted,
+                      borderRadius: 2,
+                    }}
                   />
                 </TouchableOpacity>
-                
-                <View style={{ flex: 1 }}>
-                  <Text
-                    style={{
-                      color: theme.colors.text,
-                      fontSize: 16,
-                      fontWeight: '600',
-                    }}
-                  >
-                    Replies ({replies.length})
-                  </Text>
-                </View>
-              </View>
 
-              {/* Sort Tabs - Compact */}
-              <View
-                style={{
-                  flexDirection: 'row',
-                  paddingHorizontal: 16,
-                  paddingVertical: 8,
-                  borderBottomWidth: 1,
-                  borderBottomColor: 'rgba(255, 255, 255, 0.1)',
-                  gap: 6,
-                }}
-              >
-                {(['best', 'top', 'controversial', 'date'] as const).map((sort) => (
-                  <TouchableOpacity
-                    key={sort}
-                    onPress={() => setSortBy(sort)}
-                    style={{
-                      paddingHorizontal: 12,
-                      paddingVertical: 6,
-                      borderRadius: 16,
-                      backgroundColor: sortBy === sort 
-                        ? theme.colors.primary 
-                        : 'rgba(255, 255, 255, 0.05)',
-                    }}
-                  >
-                    <Text
-                      style={{
-                        color: sortBy === sort ? theme.colors.background : theme.colors.text,
-                        fontSize: 12,
-                        fontWeight: sortBy === sort ? '600' : '400',
-                        textTransform: 'capitalize',
-                      }}
-                    >
-                      {sort}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-
-              {/* Original Opinion - Expandable */}
-              <View
-                style={{
-                  backgroundColor: 'rgba(255, 255, 255, 0.02)',
-                  marginHorizontal: 16,
-                  marginVertical: 8,
-                  padding: 8,
-                  borderRadius: 6,
-                }}
-              >
+                {/* Header - Compact */}
                 <View
                   style={{
                     flexDirection: 'row',
                     alignItems: 'center',
-                    marginBottom: 6,
+                    paddingHorizontal: 16,
+                    paddingBottom: 10,
+                    borderBottomWidth: 1,
+                    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+                  }}
+                >
+                  <TouchableOpacity
+                    onPress={hideModal}
+                    style={{
+                      padding: 6,
+                      marginRight: 12,
+                    }}
+                  >
+                    <Ionicons
+                      name="close"
+                      size={22}
+                      color={theme.colors.text}
+                    />
+                  </TouchableOpacity>
+                  
+                  <View style={{ flex: 1 }}>
+                    <Text
+                      style={{
+                        color: theme.colors.text,
+                        fontSize: 16,
+                        fontWeight: '600',
+                      }}
+                    >
+                      Replies ({replies.length})
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Sort Tabs - Compact */}
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    paddingHorizontal: 16,
+                    paddingVertical: 8,
+                    borderBottomWidth: 1,
+                    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
                     gap: 6,
                   }}
                 >
-                  <Text
-                    style={{
-                      color: theme.colors.textMuted,
-                      fontWeight: '600',
-                      fontSize: 11,
-                      textTransform: 'uppercase',
-                      letterSpacing: 0.5,
-                    }}
-                  >
-                    Original Opinion
-                  </Text>
-                  <Text
-                    style={{
-                      color: theme.colors.textMuted,
-                      fontSize: 10,
-                      opacity: 0.6,
-                    }}
-                  >
-                    by {opinionAuthor.username}
-                  </Text>
+                  {(['best', 'top', 'controversial', 'date'] as const).map((sort) => (
+                    <TouchableOpacity
+                      key={sort}
+                      onPress={() => setSortBy(sort)}
+                      style={{
+                        paddingHorizontal: 12,
+                        paddingVertical: 6,
+                        borderRadius: 16,
+                        backgroundColor: sortBy === sort 
+                          ? theme.colors.primary 
+                          : 'rgba(255, 255, 255, 0.05)',
+                      }}
+                    >
+                      <Text
+                        style={{
+                          color: sortBy === sort ? theme.colors.background : theme.colors.text,
+                          fontSize: 12,
+                          fontWeight: sortBy === sort ? '600' : '400',
+                          textTransform: 'capitalize',
+                        }}
+                      >
+                        {sort}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
                 </View>
-                <Text
+
+                {/* Original Opinion - Expandable */}
+                <View
                   style={{
-                    color: theme.colors.text,
-                    fontSize: 13,
-                    lineHeight: 18,
-                    opacity: 0.8,
+                    backgroundColor: 'rgba(255, 255, 255, 0.02)',
+                    marginHorizontal: 16,
+                    marginVertical: 8,
+                    padding: 8,
+                    borderRadius: 6,
                   }}
-                  numberOfLines={isOpinionExpanded ? undefined : 2}
                 >
-                  {opinionContent}
-                </Text>
-                {opinionContent.length > 100 && (
-                  <TouchableOpacity
-                    onPress={() => setIsOpinionExpanded(!isOpinionExpanded)}
-                    style={{ marginTop: 4 }}
+                  <View
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      marginBottom: 6,
+                      gap: 6,
+                    }}
                   >
                     <Text
                       style={{
-                        color: theme.colors.primary,
+                        color: theme.colors.textMuted,
+                        fontWeight: '600',
                         fontSize: 11,
-                        fontWeight: '500',
+                        textTransform: 'uppercase',
+                        letterSpacing: 0.5,
                       }}
                     >
-                      {isOpinionExpanded ? 'View less' : 'View more'}
+                      Original Opinion
                     </Text>
-                  </TouchableOpacity>
-                )}
+                    <Text
+                      style={{
+                        color: theme.colors.textMuted,
+                        fontSize: 10,
+                        opacity: 0.6,
+                      }}
+                    >
+                      by {opinionAuthor.username}
+                    </Text>
+                  </View>
+                  <Text
+                    style={{
+                      color: theme.colors.text,
+                      fontSize: 13,
+                      lineHeight: 18,
+                      opacity: 0.8,
+                    }}
+                    numberOfLines={isOpinionExpanded ? undefined : 2}
+                  >
+                    {opinionContent}
+                  </Text>
+                  {opinionContent.length > 100 && (
+                    <TouchableOpacity
+                      onPress={() => setIsOpinionExpanded(!isOpinionExpanded)}
+                      style={{ marginTop: 4 }}
+                    >
+                      <Text
+                        style={{
+                          color: theme.colors.primary,
+                          fontSize: 11,
+                          fontWeight: '500',
+                        }}
+                      >
+                        {isOpinionExpanded ? 'View less' : 'View more'}
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
               </View>
 
               {/* Replies List */}
               <FlatList
+                ref={listRef}
                 data={replies}
                 renderItem={renderReply}
                 keyExtractor={(item) => item.id}
-                style={{ flex: 1 }}
-                contentContainerStyle={{ paddingHorizontal: 16 }}
+                style={{ height: listAvailableHeight }}
+                contentContainerStyle={{
+                  paddingHorizontal: 16,
+                  paddingBottom: bottomPadding,
+                  flexGrow: 1,
+                }}
+                initialNumToRender={8}
+                maxToRenderPerBatch={8}
+                windowSize={7}
+                removeClippedSubviews
+                keyboardShouldPersistTaps="handled"
+                keyboardDismissMode="interactive"
+                onContentSizeChange={(w, h) => setListContentHeight(h)}
+                maintainVisibleContentPosition={{
+                  minIndexForVisible: 0,
+                  autoscrollToTopThreshold: 10,
+                }}
                 ListEmptyComponent={
                   loading ? (
                     <View style={{ padding: 16 }}>
@@ -732,7 +809,9 @@ export default function InstagramStyleReplyModal({
                   paddingHorizontal: 16,
                   paddingVertical: 12,
                   backgroundColor: theme.colors.backgroundDarker,
+                  marginBottom: 0,
                 }}
+                onLayout={(e) => setInputContainerHeight(e.nativeEvent.layout.height)}
               >
                 {replyingTo && (
                   <View
@@ -791,6 +870,16 @@ export default function InstagramStyleReplyModal({
                     }}
                     multiline
                     textAlignVertical="top"
+                    onFocus={() => {
+                      if (listContentHeight > listAvailableHeight) {
+                        InteractionManager.runAfterInteractions(() => {
+                          listRef.current?.scrollToOffset({
+                            offset: listContentHeight - listAvailableHeight,
+                            animated: true
+                          });
+                        });
+                      }
+                    }}
                   />
                   
                   <TouchableOpacity
@@ -826,7 +915,9 @@ export default function InstagramStyleReplyModal({
                   </TouchableOpacity>
                 </View>
               </View>
-          </View>
+              </View>
+            </KeyboardAvoidingView>
+          </SafeAreaView>
         </Animated.View>
       </View>
     </Modal>

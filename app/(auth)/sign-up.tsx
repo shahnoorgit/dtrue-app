@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useRef } from "react";
 import {
   Text,
   TextInput,
@@ -9,6 +9,10 @@ import {
   ActivityIndicator,
   Alert,
   Dimensions,
+  KeyboardAvoidingView,
+  ScrollView,
+  Keyboard,
+  TouchableWithoutFeedback,
 } from "react-native";
 import { useSignUp } from "@clerk/clerk-expo";
 import { useRouter } from "expo-router";
@@ -26,6 +30,11 @@ export default function SignUpScreen() {
   const router = useRouter();
   const { width } = Dimensions.get("window");
   const { showError } = useError();
+
+  // Input refs for focus management
+  const emailRef = useRef<TextInput>(null);
+  const passwordRef = useRef<TextInput>(null);
+  const verificationCodeRef = useRef<TextInput>(null);
 
   const [emailAddress, setEmailAddress] = useState("");
   const [password, setPassword] = useState("");
@@ -177,8 +186,18 @@ export default function SignUpScreen() {
   return (
     <SafeAreaView style={{ flex: 1 }}>
       <StatusBar style='light' />
-      <View style={{ flex: 1, paddingHorizontal: 24 }}>
-          {/* Header Section */}
+      <KeyboardAvoidingView 
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={{ flex: 1 }}
+      >
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+          <ScrollView 
+            contentContainerStyle={{ flexGrow: 1 }}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
+            <View style={{ flex: 1, paddingHorizontal: 24 }}>
+              {/* Header Section */}
           <View style={{ paddingTop: 32, paddingBottom: 16 }}>
             <View className='items-center mb-8'>
               <View
@@ -284,14 +303,17 @@ export default function SignUpScreen() {
                           paddingVertical: 4,
                         }}
                         placeholderTextColor='#9CA3AF'
-                        value={code}
-                        placeholder='Enter 6-digit code'
-                        keyboardType='number-pad'
-                        maxLength={6}
-                        onChangeText={(text) => {
-                          setCode(text);
-                          if (verificationError) setVerificationError("");
-                        }}
+                      ref={verificationCodeRef}
+                      value={code}
+                      placeholder='Enter 6-digit code'
+                      keyboardType='number-pad'
+                      maxLength={6}
+                      onChangeText={(text) => {
+                        setCode(text);
+                        if (verificationError) setVerificationError("");
+                      }}
+                      returnKeyType="go"
+                      onSubmitEditing={onVerifyPress}
                       />
                       {code && code.length === 6 && !verificationError && (
                         <Icon name='check-circle' size={20} color={cyberpunkTheme.colors.primary} />
@@ -385,12 +407,15 @@ export default function SignUpScreen() {
                       autoCapitalize='none'
                       keyboardType='email-address'
                       autoComplete='email'
+                      ref={emailRef}
                       value={emailAddress}
                       placeholder='Enter your email'
                       onChangeText={(text) => {
                         setEmailAddress(text);
                         if (emailError) setEmailError("");
                       }}
+                      returnKeyType="next"
+                      onSubmitEditing={() => passwordRef.current?.focus()}
                     />
                     {emailAddress && !emailError && (
                       <Icon name='check-circle' size={20} color={cyberpunkTheme.colors.primary} />
@@ -438,6 +463,7 @@ export default function SignUpScreen() {
                       }}
                       placeholderTextColor='#9CA3AF'
                       autoComplete='password'
+                      ref={passwordRef}
                       value={password}
                       placeholder='Create a strong password'
                       secureTextEntry={secureTextEntry}
@@ -445,6 +471,8 @@ export default function SignUpScreen() {
                         setPassword(text);
                         if (passwordError) setPasswordError("");
                       }}
+                      returnKeyType="go"
+                      onSubmitEditing={onSignUpPress}
                     />
                     <TouchableOpacity
                       onPress={() => setSecureTextEntry(!secureTextEntry)}
@@ -556,7 +584,10 @@ export default function SignUpScreen() {
               </View>
             </View>
           )}
-      </View>
+            </View>
+          </ScrollView>
+        </TouchableWithoutFeedback>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }

@@ -77,7 +77,6 @@ export default function DebateRoom() {
   // Reply modal state
   const [showReplyModal, setShowReplyModal] = useState(false);
   const [selectedOpinionForReply, setSelectedOpinionForReply] = useState<any>(null);
-  const [highlightedOpinionId, setHighlightedOpinionId] = useState<string | null>(null);
 
   useEffect(() => {
     // Track debate joined when user enters the room
@@ -413,6 +412,9 @@ export default function DebateRoom() {
   const handleLike = async (userId: string, opinion: any) => {
     if (!token || !isDebateActive || pendingLikes.has(userId)) return;
 
+    // Haptic feedback
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+
     const isCurrentlyLiked = likedUserIds.includes(userId);
     const currentCount = opinion.upvotes || 0;
     
@@ -558,7 +560,6 @@ export default function DebateRoom() {
       const isLiked = optimisticData ? optimisticData.isLiked : likedUserIds.includes(item.userId);
       const upvotes = optimisticData ? optimisticData.count : item.upvotes;
       const isPending = pendingLikes.has(item.userId);
-      const isHighlighted = highlightedOpinionId === item.userId;
       
       return (
         <Pressable
@@ -575,20 +576,15 @@ export default function DebateRoom() {
             alignSelf: isAgreed ? "flex-end" : "flex-start",
             maxWidth: "80%",
             borderRadius: 12,
-            backgroundColor: isHighlighted 
-              ? (isAgreed ? "rgba(0, 255, 148, 0.15)" : "rgba(255, 0, 229, 0.15)")
-              : (isAgreed ? "rgba(0, 255, 148, 0.08)" : "rgba(255, 0, 229, 0.08)"),
-            borderLeftWidth: isHighlighted ? 3 : 2,
+            backgroundColor: isAgreed ? "rgba(0, 255, 148, 0.08)" : "rgba(255, 0, 229, 0.08)",
+            borderLeftWidth: 2,
             borderLeftColor: isAgreed
               ? theme.colors.primary
               : theme.colors.secondary,
-            borderWidth: isHighlighted ? 1 : 0,
-            borderColor: isHighlighted 
-              ? (isAgreed ? "rgba(0, 255, 148, 0.3)" : "rgba(255, 0, 229, 0.3)")
-              : "transparent",
+            borderWidth: 0,
+            borderColor: "transparent",
             padding: 10,
             opacity: isPending ? 0.7 : 1,
-            transform: isHighlighted ? [{ scale: 1.02 }] : [{ scale: 1 }],
           }}
         >
             <Pressable
@@ -734,22 +730,25 @@ export default function DebateRoom() {
                   style={{
                     flexDirection: "row",
                     alignItems: "center",
-                    backgroundColor: "rgba(255, 60, 60, 0.1)",
-                    paddingHorizontal: 6,
-                    paddingVertical: 2,
-                    borderRadius: 8,
+                    backgroundColor: "rgba(255, 60, 60, 0.08)",
+                    paddingHorizontal: 8,
+                    paddingVertical: 3,
+                    borderRadius: 12,
+                    borderWidth: 1,
+                    borderColor: "rgba(255, 60, 60, 0.2)",
                   }}
                 >
                   <Ionicons
                     name='alert-circle'
-                    size={10}
-                    color='rgba(255, 60, 60, 0.8)'
-                    style={{ marginRight: 2 }}
+                    size={11}
+                    color='rgba(255, 60, 60, 0.9)'
+                    style={{ marginRight: 4 }}
                   />
                   <Text
                     style={{
-                      color: "rgba(255, 60, 60, 0.8)",
-                      fontSize: 10,
+                      color: 'rgba(255, 60, 60, 0.9)',
+                      fontSize: 11,
+                      fontWeight: '500',
                     }}
                   >
                     Flagged
@@ -760,25 +759,28 @@ export default function DebateRoom() {
                   style={{
                     flexDirection: "row",
                     alignItems: "center",
-                    backgroundColor: "rgba(60, 130, 255, 0.1)",
-                    paddingHorizontal: 6,
-                    paddingVertical: 2,
-                    borderRadius: 8,
+                    backgroundColor: "rgba(0, 255, 148, 0.08)",
+                    paddingHorizontal: 8,
+                    paddingVertical: 3,
+                    borderRadius: 12,
+                    borderWidth: 1,
+                    borderColor: "rgba(0, 255, 148, 0.2)",
                   }}
                 >
                   <MaterialCommunityIcons
-                    name='check-circle'
-                    size={10}
-                    color='rgba(60, 130, 255, 0.8)'
-                    style={{ marginRight: 2 }}
+                    name='robot'
+                    size={11}
+                    color={theme.colors.primary}
+                    style={{ marginRight: 4 }}
                   />
                   <Text
                     style={{
-                      color: "rgba(60, 130, 255, 0.8)",
-                      fontSize: 10,
+                      color: theme.colors.primary,
+                      fontSize: 11,
+                      fontWeight: '500',
                     }}
                   >
-                    AI: {item.aiScore || 0}
+                    AI Score: {item.aiScore || 0}%
                   </Text>
                 </View>
               ) : null}
@@ -787,7 +789,7 @@ export default function DebateRoom() {
         </Pressable>
       );
     },
-    [handleLike, likedUserIds, isDebateActive, optimisticLikes, pendingLikes, userOpinionId, formatDateTime, highlightedOpinionId]
+    [handleLike, likedUserIds, isDebateActive, optimisticLikes, pendingLikes, userOpinionId, formatDateTime]
   );
 
   // Handle edit button click
@@ -813,15 +815,16 @@ export default function DebateRoom() {
 
   // Handle reply modal
   const handleOpenReplyModal = useCallback((opinion: any) => {
+    // Haptic feedback
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    
     setSelectedOpinionForReply(opinion);
-    setHighlightedOpinionId(opinion.userId);
     setShowReplyModal(true);
   }, []);
 
   const handleCloseReplyModal = useCallback(() => {
     setShowReplyModal(false);
     setSelectedOpinionForReply(null);
-    setHighlightedOpinionId(null);
   }, []);
 
   // Handle reply count update
