@@ -15,6 +15,8 @@ import {
   SafeAreaView,
   StatusBar,
   Pressable,
+  Share,
+  Alert,
 } from "react-native";
 import { useLocalSearchParams } from "expo-router";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
@@ -31,7 +33,7 @@ import ModalSheet from "../components/ModalSheet";
 import DebateEndedResults from "./ResultsScreen";
 import { router } from "expo-router";
 import { logError } from "@/utils/sentry/sentry";
-import { trackOpinionSubmitted, trackOpinionLiked, trackDebateJoined } from "@/lib/posthog/events";
+import { trackOpinionSubmitted, trackOpinionLiked, trackDebateJoined, trackContentShared } from "@/lib/posthog/events";
 import { Modal } from "react-native";
 import InstagramStyleReplyModal from "@/components/chat/opinion/InstagramStyleReplyModal";
 
@@ -45,6 +47,7 @@ export default function DebateRoom() {
 
   // UI state
   const [debateTitle, setDebateTitle] = useState(`Debate ${debateId}`);
+  const [creatorStatement, setCreatorStatement] = useState("");
   const [initialDataLoaded, setInitialDataLoaded] = useState(false);
   const [debateDescription, setDebateDescription] = useState("");
   const [opinions, setOpinions] = useState<any[]>([]);
@@ -77,6 +80,9 @@ export default function DebateRoom() {
   // Reply modal state
   const [showReplyModal, setShowReplyModal] = useState(false);
   const [selectedOpinionForReply, setSelectedOpinionForReply] = useState<any>(null);
+  
+  // Menu modal state
+  const [showMenuModal, setShowMenuModal] = useState(false);
 
   useEffect(() => {
     // Track debate joined when user enters the room
@@ -202,7 +208,9 @@ export default function DebateRoom() {
 
       if (debateRoomResponse.data.success) {
         const roomData = debateRoomResponse.data.data;
+        
         setDebateTitle(roomData.title);
+        setCreatorStatement(roomData.creator_statement || "");
         setDebateDescription(roomData.description || "");
 
         setIsDebateActive(roomData.active);
@@ -837,6 +845,37 @@ export default function DebateRoom() {
     ));
   }, []);
 
+  // Handle menu press
+  const handleMenuPress = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setShowMenuModal(true);
+  }, []);
+
+  // Handle share debate
+  const handleShareDebate = useCallback(async () => {
+    setShowMenuModal(false);
+    
+    try {
+      const base = process.env.EXPO_PUBLIC_SHARE_URL || "https://links-dev.dtrue.online";
+      const shareUrl = `${base}/debate/${debateId}`;
+
+      await Share.share({
+        title: debateTitle,
+        message: `${debateTitle}\n\nJoin the debate: ${shareUrl}`,
+        url: shareUrl,
+      });
+
+      trackContentShared({
+        type: 'debate',
+        contentId: debateId as string,
+        method: 'native'
+      });
+    } catch (err) {
+      console.error("Share error", err);
+      Alert.alert("Could not share", "Please try again.");
+    }
+  }, [debateId, debateTitle]);
+
   if (loadingInitial || isDebateActive === null) {
     return (
       <SafeAreaView
@@ -910,6 +949,7 @@ export default function DebateRoom() {
         opinions={opinions}
         debateTitle={debateTitle}
         debateImage={finalDebateImage}
+        onMenuPress={handleMenuPress}
       />
 
       {!loadingOpinions ? (
@@ -939,6 +979,7 @@ export default function DebateRoom() {
             userOpinion={userOpinion}
             isEditMode={isEditMode}
             onCancelEdit={handleCancelEdit}
+            creatorStatement={creatorStatement}
           />
         </>
       ) : (
@@ -957,6 +998,7 @@ export default function DebateRoom() {
           debateDescription={debateDescription}
           debateImage={finalDebateImage}
           debateTitle={debateTitle}
+          creatorStatement={creatorStatement}
           timeRemaining={timeRemaining}
           opinions={opinions}
           insets={insets}
@@ -1075,6 +1117,114 @@ export default function DebateRoom() {
           onReplyCreated={handleReplyCreated}
         />
       )}
+
+      {/* Debate Menu Modal */}
+      <Modal
+        visible={showMenuModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowMenuModal(false)}
+      >
+        <Pressable
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(0, 0, 0, 0.6)",
+            justifyContent: "flex-end",
+          }}
+          onPress={() => setShowMenuModal(false)}
+        >
+          <View
+            style={{
+              backgroundColor: "#1A1A1A",
+              borderTopLeftRadius: 20,
+              borderTopRightRadius: 20,
+              paddingBottom: Math.max(20, insets.bottom),
+            }}
+          >
+            {/* Handle Bar */}
+            <View
+              style={{
+                width: 40,
+                height: 4,
+                backgroundColor: "rgba(255, 255, 255, 0.3)",
+                borderRadius: 2,
+                alignSelf: "center",
+                marginTop: 12,
+                marginBottom: 20,
+              }}
+            />
+
+            {/* Share Option */}
+            <TouchableOpacity
+              onPress={handleShareDebate}
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                paddingVertical: 16,
+                paddingHorizontal: 20,
+              }}
+            >
+              <View
+                style={{
+                  width: 40,
+                  height: 40,
+                  borderRadius: 20,
+                  backgroundColor: "rgba(255, 255, 255, 0.1)",
+                  justifyContent: "center",
+                  alignItems: "center",
+                  marginRight: 12,
+                }}
+              >
+                <Ionicons
+                  name="share-social-outline"
+                  size={20}
+                  color="#FFF"
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text
+                  style={{
+                    color: "#FFF",
+                    fontSize: 16,
+                    fontWeight: "500",
+                  }}
+                >
+                  Share Debate
+                </Text>
+                <Text
+                  style={{
+                    color: "rgba(255, 255, 255, 0.5)",
+                    fontSize: 13,
+                    marginTop: 2,
+                  }}
+                >
+                  Invite others to join
+                </Text>
+              </View>
+            </TouchableOpacity>
+
+            {/* Cancel */}
+            <TouchableOpacity
+              onPress={() => setShowMenuModal(false)}
+              style={{
+                paddingVertical: 16,
+                paddingHorizontal: 20,
+              }}
+            >
+              <Text
+                style={{
+                  color: "rgba(255, 255, 255, 0.6)",
+                  fontSize: 16,
+                  fontWeight: "500",
+                  textAlign: "center",
+                }}
+              >
+                Cancel
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </Pressable>
+      </Modal>
     </SafeAreaView>
   );
 }

@@ -423,13 +423,52 @@ const DebateCard = ({ debate, onJoinPress }) => {
           {debate.title}
         </Text>
 
+        {/* Creator Statement - Prominent Display */}
+        {debate.creator_statement && (
+          <View
+            style={{
+              backgroundColor: "rgba(0, 255, 148, 0.08)",
+              borderLeftWidth: 3,
+              borderLeftColor: cyberpunkTheme.colors.primary,
+              borderRadius: 8,
+              padding: 10,
+              marginBottom: 10,
+            }}
+          >
+            <Text
+              style={{
+                color: cyberpunkTheme.colors.primary,
+                fontSize: 10,
+                fontWeight: "700",
+                textTransform: "uppercase",
+                letterSpacing: 0.5,
+                marginBottom: 4,
+              }}
+            >
+              Statement
+            </Text>
+            <Text
+              style={{
+                color: "#E0F0EA",
+                fontSize: 14,
+                fontWeight: "600",
+                lineHeight: 20,
+                fontStyle: "italic",
+              }}
+              numberOfLines={2}
+            >
+              "{debate.creator_statement}"
+            </Text>
+          </View>
+        )}
+
         {debate.description && (
           <Text
             style={{
               color: "#8F9BB3",
-              fontSize: 16,
+              fontSize: 14,
               marginBottom: 10,
-              lineHeight: 22,
+              lineHeight: 20,
             }}
             numberOfLines={2}
           >

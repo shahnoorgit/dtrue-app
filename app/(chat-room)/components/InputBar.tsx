@@ -22,6 +22,7 @@ interface InputBarProps {
   showModal: boolean;
   isEditMode?: boolean;
   onCancelEdit?: () => void;
+  creatorStatement?: string;
 }
 
 const InputBar: React.FC<InputBarProps> = ({
@@ -36,6 +37,7 @@ const InputBar: React.FC<InputBarProps> = ({
   showModal,
   isEditMode = false,
   onCancelEdit,
+  creatorStatement = "",
 }) => {
   // Show input bar if in edit mode, even if submitted
   if (showModal || (submitted && !isEditMode)) return null;
@@ -65,6 +67,21 @@ const InputBar: React.FC<InputBarProps> = ({
               <Text style={styles.cancelButtonText}>Cancel</Text>
             </TouchableOpacity>
           )}
+        </View>
+      )}
+
+      {/* Show creator statement when stance is selected */}
+      {stance && creatorStatement && (
+        <View style={styles.statementBanner}>
+          <Text style={[
+            styles.statementLabel,
+            { color: stance === "agree" ? "#00FF94" : "#FF4757" }
+          ]}>
+            {stance === "agree" ? "Agreeing with" : "Disagreeing with"}:
+          </Text>
+          <Text style={styles.statementText} numberOfLines={2}>
+            "{creatorStatement}"
+          </Text>
         </View>
       )}
 
@@ -226,5 +243,27 @@ const styles = StyleSheet.create({
     padding: 10,
     borderRadius: 20,
     backgroundColor: "rgba(255,255,255,0.1)",
+  },
+  statementBanner: {
+    backgroundColor: "rgba(255, 255, 255, 0.08)",
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 12,
+    borderLeftWidth: 3,
+    borderLeftColor: "#00FF94",
+  },
+  statementLabel: {
+    fontSize: 11,
+    fontWeight: "700",
+    textTransform: "uppercase",
+    marginBottom: 4,
+    letterSpacing: 0.5,
+  },
+  statementText: {
+    color: "#FFF",
+    fontSize: 13,
+    fontWeight: "500",
+    lineHeight: 18,
+    fontStyle: "italic",
   },
 });

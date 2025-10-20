@@ -30,6 +30,7 @@ export interface DebateProperties {
   title?: string;
   duration?: number;
   hasImage?: boolean;
+  statementLength?: number;
   descriptionLength?: number;
   source?: "feed" | "explore" | "trending" | "profile" | "share" | "direct";
   debateTitle?: string;

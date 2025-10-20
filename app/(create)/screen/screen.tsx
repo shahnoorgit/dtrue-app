@@ -302,6 +302,7 @@ export default function CreateDebateRoomScreen() {
   const debateId = params.debateId as string;
   
   const [title, setTitle] = useState(params.title as string || "");
+  const [statement, setStatement] = useState(params.statement as string || "");
   const [description, setDescription] = useState(params.description as string || "");
   const [selectedDuration, setSelectedDuration] = useState(parseInt(params.duration as string) || 24);
   const [imageUri, setImageUri] = useState<string | null>(params.image as string || null);
@@ -312,7 +313,7 @@ export default function CreateDebateRoomScreen() {
   const { showError } = useError();
   const [uploading, setUploading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [errors, setErrors] = useState({ title: "", description: "" });
+  const [errors, setErrors] = useState({ title: "", statement: "", description: "" });
   const [showSuccess, setShowSuccess] = useState(false);
   const [token, refreshToken] = useAuthToken();
 
@@ -510,7 +511,7 @@ export default function CreateDebateRoomScreen() {
   };
 
   const validateForm = () => {
-    const newErrors = { title: "", description: "" };
+    const newErrors = { title: "", statement: "", description: "" };
     let isValid = true;
 
     if (!title.trim()) {
@@ -521,6 +522,17 @@ export default function CreateDebateRoomScreen() {
       isValid = false;
     } else if (title.length > 160) {
       newErrors.title = "Title must be 160 characters or less";
+      isValid = false;
+    }
+
+    if (!statement.trim()) {
+      newErrors.statement = "Your statement is required";
+      isValid = false;
+    } else if (statement.length < 10) {
+      newErrors.statement = "Statement must be at least 10 characters";
+      isValid = false;
+    } else if (statement.length > 80) {
+      newErrors.statement = "Statement must be 80 characters or less";
       isValid = false;
     }
 
@@ -552,6 +564,7 @@ export default function CreateDebateRoomScreen() {
           `${process.env.EXPO_PUBLIC_BASE_URL}/debate-room/${debateId}`,
           {
             title: title.trim(),
+            creator_statement: statement.trim(),
             description: description.trim(),
             duration: selectedDuration,
             image: cloudUrl,
@@ -567,6 +580,7 @@ export default function CreateDebateRoomScreen() {
           `${process.env.EXPO_PUBLIC_BASE_URL}/debate-room`,
           {
             title: title.trim(),
+            creator_statement: statement.trim(),
             description: description.trim(),
             duration: selectedDuration,
             image: cloudUrl,
@@ -590,6 +604,7 @@ export default function CreateDebateRoomScreen() {
             title: title,
             duration: selectedDuration,
             hasImage: !!imageUri,
+            statementLength: statement.length,
             descriptionLength: description.length,
           });
         }
@@ -602,6 +617,7 @@ export default function CreateDebateRoomScreen() {
       logError(err, {
         context: isEditMode ? "CreateDebateRoomScreen.handleUpdate" : "CreateDebateRoomScreen.handleSubmit",
         title: title ? "[REDACTED_TITLE]" : "undefined",
+        statementLength: statement.length,
         descriptionLength: description.length,
         selectedDuration,
         isEditMode,
@@ -679,6 +695,27 @@ export default function CreateDebateRoomScreen() {
             error={errors.title}
             style={styles.inputSpacing}
           />
+
+          {/* Statement Input - Your Position */}
+          <View style={styles.statementSection}>
+            <View style={styles.statementHeader}>
+              <Icon name="message-bulleted" size={18} color={THEME.colors.primary} />
+              <Text style={styles.statementTitle}>Your Statement</Text>
+            </View>
+            <Text style={styles.statementSubtitle}>
+              State your position clearly. People will agree or disagree with this.
+            </Text>
+            <ModernInput
+              icon="message-text"
+              placeholder="I believe that..."
+              value={statement}
+              onChangeText={setStatement}
+              multiline
+              maxLength={80}
+              error={errors.statement}
+              style={styles.statementInputSpacing}
+            />
+          </View>
 
           {/* Description Input */}
           <ModernInput
@@ -1216,5 +1253,34 @@ const styles = {
     color: THEME.colors.textMuted,
     marginLeft: 12,
     marginTop: 2,
+  },
+  // Statement section styles
+  statementSection: {
+    backgroundColor: "rgba(0, 255, 148, 0.05)",
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: "rgba(0, 255, 148, 0.2)",
+  },
+  statementHeader: {
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    marginBottom: 6,
+  },
+  statementTitle: {
+    fontSize: 15,
+    fontWeight: "600" as const,
+    color: THEME.colors.text,
+    marginLeft: 6,
+  },
+  statementSubtitle: {
+    fontSize: 12,
+    color: THEME.colors.textMuted,
+    marginBottom: 10,
+    lineHeight: 16,
+  },
+  statementInputSpacing: {
+    marginBottom: 0,
   },
 };

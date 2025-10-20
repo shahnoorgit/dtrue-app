@@ -18,6 +18,7 @@ interface ModalSheetProps {
   setShowModal: (show: boolean) => void;
   debateImage: string | null;
   debateTitle: string;
+  creatorStatement?: string;
   debateDescription: string | null;
   timeRemaining: number | null;
   opinions: any[];
@@ -30,6 +31,7 @@ const ModalSheet: React.FC<ModalSheetProps> = ({
   setShowModal,
   debateImage,
   debateTitle,
+  creatorStatement = "",
   debateDescription,
   timeRemaining,
   opinions,
@@ -64,6 +66,20 @@ const ModalSheet: React.FC<ModalSheetProps> = ({
               </View>
             </View>
           </View>
+
+          {/* Creator Statement - Prominent Display */}
+          {creatorStatement && (
+            <View style={styles.statementContainer}>
+              <View style={styles.statementHeader}>
+                <Ionicons name="chatbox-ellipses" size={16} color="#00FF94" />
+                <Text style={styles.statementHeaderText}>Creator's Statement</Text>
+              </View>
+              <Text style={styles.statementText}>"{creatorStatement}"</Text>
+              <Text style={styles.statementSubtext}>
+                Choose to agree or disagree with this statement
+              </Text>
+            </View>
+          )}
 
           <Text style={styles.description}>
             {debateDescription || "No description available."}
@@ -208,5 +224,41 @@ const styles = StyleSheet.create({
   buttonText: {
     color: "#111",
     fontWeight: "600",
+  },
+  statementContainer: {
+    backgroundColor: "rgba(0, 255, 148, 0.08)",
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+    borderLeftWidth: 4,
+    borderLeftColor: "#00FF94",
+    borderWidth: 1,
+    borderColor: "rgba(0, 255, 148, 0.2)",
+  },
+  statementHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  statementHeaderText: {
+    color: "#00FF94",
+    fontSize: 12,
+    fontWeight: "700",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+    marginLeft: 6,
+  },
+  statementText: {
+    color: "#FFF",
+    fontSize: 16,
+    fontWeight: "600",
+    lineHeight: 24,
+    marginBottom: 8,
+    fontStyle: "italic",
+  },
+  statementSubtext: {
+    color: "#AAA",
+    fontSize: 12,
+    fontStyle: "italic",
   },
 });
