@@ -189,11 +189,12 @@ export default function SignUpScreen() {
       <KeyboardAvoidingView 
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={{ flex: 1 }}
+        keyboardVerticalOffset={80}
       >
-        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
           <ScrollView 
             contentContainerStyle={{ flexGrow: 1 }}
             keyboardShouldPersistTaps="handled"
+            keyboardDismissMode={Platform.OS === 'ios' ? 'on-drag' : 'none'}
             showsVerticalScrollIndicator={false}
           >
             <View style={{ flex: 1, paddingHorizontal: 24 }}>
@@ -586,7 +587,6 @@ export default function SignUpScreen() {
           )}
             </View>
           </ScrollView>
-        </TouchableWithoutFeedback>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );

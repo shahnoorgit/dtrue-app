@@ -286,9 +286,8 @@ export default function SignInScreen() {
   return (
     <SafeAreaView style={{ flex: 1 }}>
       <StatusBar style="light" />
-      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
-        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-          <ScrollView contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }} keyboardVerticalOffset={80}>
+          <ScrollView contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps="handled" keyboardDismissMode={Platform.OS === "ios" ? "on-drag" : "none"} showsVerticalScrollIndicator={false}>
             <View style={{ flex: 1, paddingHorizontal: 24 }}>
               {/* Header Section */}
               <View style={{ paddingTop: 32, paddingBottom: 16 }}>
@@ -520,13 +519,11 @@ export default function SignInScreen() {
               </View>
             </View>
           </ScrollView>
-        </TouchableWithoutFeedback>
       </KeyboardAvoidingView>
 
       {/* ---------- Reset Password Modal ---------- */}
       <Modal visible={resetVisible} animationType="fade" transparent>
-        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
-          <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }} keyboardVerticalOffset={80}>
             <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "rgba(0,0,0,0.7)", paddingHorizontal: 24 }}>
               <View
                 style={{
@@ -668,7 +665,6 @@ export default function SignInScreen() {
                 )}
               </View>
             </View>
-          </TouchableWithoutFeedback>
         </KeyboardAvoidingView>
       </Modal>
     </SafeAreaView>
