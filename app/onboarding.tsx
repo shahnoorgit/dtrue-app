@@ -13,41 +13,32 @@ import { router } from "expo-router";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import { cyberpunkTheme } from "@/constants/theme";
 import * as Haptics from "expo-haptics";
+import { logError } from "@/utils/sentry/sentry";
+import {
+  trackOnboardingCompleted,
+  trackOnboardingAbandoned,
+} from "@/lib/posthog/events";
 
 const { width } = Dimensions.get("window");
 
 const slides = [
   {
     id: "1",
-    title: "Welcome to Let's Debate",
-    description:
-      "Ignite your intellect and join a revolution in online discourse. Experience debates that are structured, meaningful, and designed to spark real insights.",
+    title: "Welcome to Dtrue",
+    description: "Ignite your intellect and join a revolution in online discourse. Experience debates that are structured, meaningful, and designed to spark real insights.",
     icon: "forum",
-    bgColor: "rgba(0, 255, 148, 0.1)",
   },
   {
     id: "2",
     title: "Time-Bound Conversations",
-    description:
-      "Say goodbye to endless arguments. Our debates run on strict time limits, ensuring discussions remain focused and decisions are reached.",
+    description: "Say goodbye to endless arguments. Our debates run on strict time limits, ensuring discussions remain focused and decisions are reached.",
     icon: "clock-outline",
-    bgColor: "rgba(0, 180, 255, 0.1)",
   },
   {
     id: "3",
-    title: "Evidence-Driven Insights",
-    description:
-      "Back your opinions with facts. Every vote requires evidence, promoting quality, accountability, and smarter debates.",
-    icon: "check-decagram",
-    bgColor: "rgba(255, 100, 255, 0.1)",
-  },
-  {
-    id: "4",
-    title: "Secure & Exclusive Spaces",
-    description:
-      "Debate with confidence. Our platform prioritizes your privacy, with verified voices and state-of-the-art security keeping discussions safe and impactful.",
+    title: "Join the Debate",
+    description: "Back your opinions with facts. Every vote requires evidence, promoting quality, accountability, and smarter debates. Ready to start your journey?",
     icon: "shield-lock",
-    bgColor: "rgba(255, 210, 0, 0.1)",
     buttonText: "JOIN THE DEBATE",
   },
 ];
@@ -57,42 +48,29 @@ export default function OnboardingScreen() {
   const scrollX = useRef(new Animated.Value(0)).current;
   const slidesRef = useRef(null);
 
-  // Animation values
+  // Enhanced animation values
   const iconScale = useRef(new Animated.Value(0.5)).current;
   const titleOpacity = useRef(new Animated.Value(0)).current;
   const descriptionTranslateY = useRef(new Animated.Value(20)).current;
   const skipButtonAnim = useRef(new Animated.Value(0)).current;
   const buttonScale = useRef(new Animated.Value(1)).current;
-  const buttonWidth = useRef(new Animated.Value(64)).current;
-  const buttonTextOpacity = useRef(new Animated.Value(0)).current;
+  const buttonTextOpacity = useRef(new Animated.Value(1)).current;
+  const backgroundPulse = useRef(new Animated.Value(1)).current;
 
   const isLastSlide = currentIndex === slides.length - 1;
 
   const animateContent = useCallback(() => {
-    iconScale.setValue(0.5);
-    titleOpacity.setValue(0);
-    descriptionTranslateY.setValue(20);
-    Animated.sequence([
-      Animated.timing(iconScale, {
-        toValue: 1,
-        duration: 400,
-        useNativeDriver: true,
-        easing: Easing.out(Easing.back(1.5)),
-      }),
-      Animated.parallel([
-        Animated.timing(titleOpacity, {
-          toValue: 1,
-          duration: 400,
-          useNativeDriver: true,
-        }),
-        Animated.timing(descriptionTranslateY, {
-          toValue: 0,
-          duration: 500,
-          useNativeDriver: true,
-          easing: Easing.out(Easing.exp),
-        }),
-      ]),
-    ]).start();
+    // Show text immediately, only animate icon
+    titleOpacity.setValue(1);
+    descriptionTranslateY.setValue(0);
+    
+    // Only animate icon with spring
+    Animated.spring(iconScale, {
+      toValue: 1,
+      useNativeDriver: true,
+      tension: 100,
+      friction: 8,
+    }).start();
   }, [iconScale, titleOpacity, descriptionTranslateY]);
 
   const onViewableItemsChanged = useRef(({ viewableItems }) => {
@@ -101,49 +79,34 @@ export default function OnboardingScreen() {
     setCurrentIndex(newIndex);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     animateContent();
-
-    if (newIndex === slides.length - 1) {
-      Animated.sequence([
-        Animated.delay(300),
-        Animated.parallel([
-          Animated.timing(buttonWidth, {
-            toValue: 200,
-            duration: 600,
-            useNativeDriver: false,
-            easing: Easing.out(Easing.back(1)),
-          }),
-          Animated.timing(buttonTextOpacity, {
-            toValue: 1,
-            duration: 400,
-            delay: 300,
-            useNativeDriver: true,
-          }),
-        ]),
-      ]).start();
-    } else {
-      Animated.parallel([
-        Animated.timing(buttonWidth, {
-          toValue: 64,
-          duration: 300,
-          useNativeDriver: false,
-        }),
-        Animated.timing(buttonTextOpacity, {
-          toValue: 0,
-          duration: 200,
-          useNativeDriver: true,
-        }),
-      ]).start();
-    }
   }).current;
 
   useEffect(() => {
-    Animated.timing(skipButtonAnim, {
-      toValue: 1,
-      duration: 800,
-      useNativeDriver: true,
-      easing: Easing.out(Easing.cubic),
-    }).start();
+    // Initial animations
+    Animated.parallel([
+      Animated.timing(skipButtonAnim, {
+        toValue: 1,
+        duration: 800,
+        useNativeDriver: true,
+        easing: Easing.out(Easing.cubic),
+      }),
+      Animated.timing(backgroundPulse, {
+        toValue: 1.05,
+        duration: 2000,
+        useNativeDriver: true,
+        easing: Easing.inOut(Easing.ease),
+      }),
+    ]).start();
 
+    // Set initial values for immediate text display
+    titleOpacity.setValue(1);
+    descriptionTranslateY.setValue(0);
+    buttonTextOpacity.setValue(1);
+    
+    // Animate content for first slide
+    animateContent();
+
+    // Enhanced button pulse animation
     const pulseButton = () => {
       Animated.sequence([
         Animated.timing(buttonScale, {
@@ -165,17 +128,22 @@ export default function OnboardingScreen() {
     return () => {
       buttonScale.stopAnimation();
       skipButtonAnim.stopAnimation();
+      backgroundPulse.stopAnimation();
     };
-  }, [isLastSlide, buttonScale, skipButtonAnim]);
+  }, [isLastSlide, buttonScale, skipButtonAnim, animateContent, backgroundPulse]);
 
   const viewConfig = useRef({ viewAreaCoveragePercentThreshold: 50 }).current;
 
   const scrollTo = useCallback(() => {
     if (currentIndex < slides.length - 1) {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      slidesRef.current.scrollToIndex({ index: currentIndex + 1 });
+      try {
+        slidesRef.current?.scrollToIndex({ index: currentIndex + 1 });
+      } catch (error: any) {
+        console.error("Scroll error:", error);
+      }
     } else {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       Animated.sequence([
         Animated.timing(buttonScale, {
           toValue: 0.95,
@@ -198,22 +166,39 @@ export default function OnboardingScreen() {
           useNativeDriver: true,
         }),
       ]).start(() => {
-        router.replace("/(auth)/sign-in");
+        try {
+          trackOnboardingCompleted({ step: currentIndex });
+          router.replace("/(auth)/sign-in");
+        } catch (error: any) {
+          console.error("Navigation error:", error);
+          logError(error, {
+            context: "OnboardingScreen.scrollTo",
+            action: "navigate_to_signin",
+          });
+        }
       });
     }
   }, [currentIndex, buttonScale, buttonTextOpacity]);
 
   const skipOnboarding = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    router.replace("/(auth)/sign-in");
-  }, []);
+    trackOnboardingAbandoned({
+      step: currentIndex,
+      reason: "skipped",
+    });
+    try {
+      router.replace("/(auth)/sign-in");
+    } catch (error: any) {
+      console.error("Navigation error:", error);
+      logError(error, {
+        context: "OnboardingScreen.skipOnboarding",
+        action: "skip_to_signin",
+      });
+    }
+  }, [currentIndex]);
 
-  const inputRange = slides.map((_, i) => i * width);
-  const backgroundColor = scrollX.interpolate({
-    inputRange,
-    outputRange: slides.map((slide) => slide.bgColor),
-    extrapolate: "clamp",
-  });
+  // Use consistent background color for all 3 slides
+  const backgroundColor = "rgba(0, 255, 148, 0.1)";
 
   const buttonRotation = scrollX.interpolate({
     inputRange: [0, (slides.length - 2) * width, (slides.length - 1) * width],
@@ -222,37 +207,46 @@ export default function OnboardingScreen() {
   });
 
   return (
-    <SafeAreaView className='flex-1 bg-gray-900'>
+    <SafeAreaView style={styles.container}>
       <LinearGradient
         colors={cyberpunkTheme.colors.gradients.background}
-        className='absolute inset-0'
+        style={styles.backgroundGradient}
       />
+      
+      {/* Enhanced background with pulse */}
       <Animated.View
-        className='absolute inset-0 opacity-50'
-        style={{ backgroundColor }}
+        style={[
+          styles.backgroundOverlay,
+          { 
+            backgroundColor,
+            transform: [{ scale: backgroundPulse }],
+          },
+        ]}
       />
+
+      {/* Skip button with enhanced animation */}
       <Animated.View
-        className='absolute top-12 right-6 z-10'
-        style={{
-          opacity: skipButtonAnim,
-          transform: [
-            {
-              translateY: skipButtonAnim.interpolate({
-                inputRange: [0, 1],
-                outputRange: [-20, 0],
-              }),
-            },
-          ],
-        }}
+        style={[
+          styles.skipButtonContainer,
+          {
+            opacity: skipButtonAnim,
+            transform: [
+              {
+                translateY: skipButtonAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [-20, 0],
+                }),
+              },
+            ],
+          },
+        ]}
       >
         <Pressable
-          className='px-4 py-2 rounded-full border border-green-400/30'
+          style={styles.skipButton}
           onPress={skipOnboarding}
-          onPressIn={() =>
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-          }
+          onPressIn={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
         >
-          <Text className='text-green-400 font-medium'>Skip</Text>
+          <Text style={styles.skipButtonText}>Skip</Text>
         </Pressable>
       </Animated.View>
 
@@ -271,77 +265,86 @@ export default function OnboardingScreen() {
         onViewableItemsChanged={onViewableItemsChanged}
         viewabilityConfig={viewConfig}
         renderItem={({ item }) => (
-          <View
-            className='flex-1 justify-center items-center px-6'
-            style={{ width }}
-          >
+          <View style={styles.slideContainer}>
+            {/* Enhanced icon with better styling */}
             <Animated.View
-              className='w-32 h-32 rounded-full bg-gray-800/50 items-center justify-center mb-8 border border-green-400/20'
-              style={{
-                shadowColor: cyberpunkTheme.colors.primary,
-                shadowOffset: { width: 0, height: 0 },
-                shadowOpacity: 0.3,
-                shadowRadius: 15,
-                transform: [{ scale: iconScale }],
-              }}
+              style={[
+                styles.iconContainer,
+                {
+                  transform: [{ scale: iconScale }],
+                  shadowColor: cyberpunkTheme.colors.primary,
+                },
+              ]}
             >
-              <Icon
-                name={item.icon}
-                size={64}
-                color={cyberpunkTheme.colors.primary}
-              />
+              <LinearGradient
+                colors={[cyberpunkTheme.colors.primary, `${cyberpunkTheme.colors.primary}80`]}
+                style={styles.iconGradient}
+              >
+                <Icon
+                  name={item.icon}
+                  size={48}
+                  color="#FFFFFF"
+                />
+              </LinearGradient>
             </Animated.View>
+
+            {/* Enhanced title */}
             <Animated.Text
-              className='text-white text-3xl font-bold text-center mb-4'
-              style={{ opacity: titleOpacity }}
+              style={[
+                styles.title,
+                { opacity: titleOpacity },
+              ]}
             >
               {item.title}
             </Animated.Text>
+
+            {/* Enhanced description */}
             <Animated.View
-              className='px-4'
-              style={{ transform: [{ translateY: descriptionTranslateY }] }}
+              style={[
+                styles.descriptionContainer,
+                { transform: [{ translateY: descriptionTranslateY }] },
+              ]}
             >
-              <Text className='text-gray-300 text-center text-base'>
-                {item.description}
-              </Text>
+              <Text style={styles.description}>{item.description}</Text>
             </Animated.View>
+
+            {/* Subtle gradient overlay */}
             <LinearGradient
               colors={["rgba(0, 255, 148, 0.1)", "rgba(0, 255, 148, 0.01)"]}
-              className='absolute bottom-0 left-0 right-0 h-40 opacity-30'
+              style={styles.gradientOverlay}
             />
           </View>
         )}
       />
 
-      <View className='flex-row justify-between items-center px-6 pb-12'>
-        <Animated.View className='flex-row'>
+      {/* Enhanced bottom controls */}
+      <View style={styles.bottomControls}>
+        {/* Enhanced progress dots */}
+        <View style={styles.dotsContainer}>
           {slides.map((_, index) => {
-            const dotInput = [
-              (index - 1) * width,
-              index * width,
-              (index + 1) * width,
-            ];
-            const dotWidth = scrollX.interpolate({
-              inputRange: dotInput,
-              outputRange: [8, 32, 8],
-              extrapolate: "clamp",
-            });
-            const dotOpacity = scrollX.interpolate({
-              inputRange: dotInput,
-              outputRange: [0.3, 1, 0.3],
-              extrapolate: "clamp",
-            });
+            const isActive = index === currentIndex;
             return (
-              <Animated.View
+              <View
                 key={index}
-                className='h-1 rounded-full mx-1 bg-green-400'
-                style={{ width: dotWidth, opacity: dotOpacity }}
+                style={[
+                  styles.progressDot,
+                  {
+                    width: isActive ? 32 : 8,
+                    opacity: isActive ? 1 : 0.3,
+                    transform: [{ scale: isActive ? 1.2 : 0.8 }],
+                  },
+                ]}
               />
             );
           })}
-        </Animated.View>
+        </View>
+
+        {/* Enhanced action button */}
         <Animated.View
-          style={{ transform: [{ scale: buttonScale }], position: "relative" }}
+          style={[
+            styles.buttonContainer,
+            { transform: [{ scale: buttonScale }] },
+          ]}
         >
           <Pressable
             onPress={scrollTo}
@@ -360,51 +363,152 @@ export default function OnboardingScreen() {
                 }).start();
               }
             }}
-            className='rounded-full items-center justify-center overflow-hidden'
+            style={styles.actionButton}
           >
-            <Animated.View style={{ width: buttonWidth, height: 64 }}>
+            <View style={styles.buttonContent}>
               <LinearGradient
                 colors={cyberpunkTheme.colors.gradients.primary}
-                className='h-full w-full items-center justify-center flex-row'
-                style={{
-                  shadowColor: cyberpunkTheme.colors.primary,
-                  shadowOffset: { width: 0, height: 0 },
-                  shadowOpacity: 0.5,
-                  shadowRadius: 10,
-                }}
+                style={styles.buttonGradient}
               >
-                {isLastSlide ? (
-                  <Animated.View
-                    style={{
-                      flexDirection: "row",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      width: "100%",
-                    }}
-                  >
-                    <Animated.Text
-                      style={{
-                        color: "#0A1115",
-                        fontWeight: "bold",
-                        fontSize: 16,
-                        opacity: buttonTextOpacity,
-                      }}
-                    >
-                      JOIN THE DEBATE
-                    </Animated.Text>
-                  </Animated.View>
-                ) : (
-                  <Animated.View
-                    style={{ transform: [{ rotate: buttonRotation }] }}
-                  >
-                    <Icon name='chevron-right' size={32} color='#0A1115' />
-                  </Animated.View>
-                )}
+                <Animated.View
+                  style={{ transform: [{ rotate: buttonRotation }] }}
+                >
+                  <Icon name="chevron-right" size={32} color="#0A1115" />
+                </Animated.View>
               </LinearGradient>
-            </Animated.View>
+            </View>
           </Pressable>
         </Animated.View>
       </View>
     </SafeAreaView>
   );
 }
+
+const styles = {
+  container: {
+    flex: 1,
+    backgroundColor: "#0A0A1A",
+  },
+  backgroundGradient: {
+    position: "absolute" as const,
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
+  backgroundOverlay: {
+    position: "absolute" as const,
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    opacity: 0.5,
+  },
+  skipButtonContainer: {
+    position: "absolute" as const,
+    top: 60,
+    right: 20,
+    zIndex: 10,
+  },
+  skipButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "rgba(0, 255, 148, 0.3)",
+    backgroundColor: "rgba(0, 255, 148, 0.1)",
+  },
+  skipButtonText: {
+    color: cyberpunkTheme.colors.primary,
+    fontSize: 14,
+    fontWeight: "600" as const,
+  },
+  slideContainer: {
+    flex: 1,
+    width,
+    justifyContent: "center" as const,
+    alignItems: "center" as const,
+    paddingHorizontal: 32,
+    position: "relative" as const,
+  },
+  iconContainer: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    marginBottom: 32,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.4,
+    shadowRadius: 20,
+    elevation: 20,
+  },
+  iconGradient: {
+    width: "100%",
+    height: "100%",
+    borderRadius: 60,
+    justifyContent: "center" as const,
+    alignItems: "center" as const,
+  },
+  title: {
+    fontSize: 28,
+    fontWeight: "700" as const,
+    color: "#FFFFFF",
+    textAlign: "center" as const,
+    marginBottom: 16,
+    letterSpacing: -0.5,
+  },
+  descriptionContainer: {
+    paddingHorizontal: 16,
+  },
+  description: {
+    fontSize: 16,
+    color: "#A3A3A3",
+    textAlign: "center" as const,
+    lineHeight: 24,
+  },
+  gradientOverlay: {
+    position: "absolute" as const,
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 120,
+    opacity: 0.3,
+  },
+  bottomControls: {
+    flexDirection: "row" as const,
+    justifyContent: "space-between" as const,
+    alignItems: "center" as const,
+    paddingHorizontal: 32,
+    paddingBottom: 40,
+  },
+  dotsContainer: {
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+  },
+  progressDot: {
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: cyberpunkTheme.colors.primary,
+    marginHorizontal: 4,
+  },
+  buttonContainer: {
+    position: "relative" as const,
+  },
+  actionButton: {
+    borderRadius: 32,
+    overflow: "hidden" as const,
+  },
+  buttonContent: {
+    height: 64,
+    width: 64,
+  },
+  buttonGradient: {
+    width: "100%",
+    height: "100%",
+    justifyContent: "center" as const,
+    alignItems: "center" as const,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.5,
+    shadowRadius: 15,
+    elevation: 15,
+  },
+};

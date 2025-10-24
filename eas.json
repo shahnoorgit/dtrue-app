@@ -1,0 +1,48 @@
+{
+  "cli": {
+    "version": ">= 16.2.1",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal"
+    },
+    "preview": {
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY": "pk_live_Y2xlcmsuZHRydWUub25saW5lJA",
+        "EXPO_PUBLIC_BASE_URL": "https://api.dtrue.online",
+        "EXPO_PUBLIC_SHARE_URL": "links.dtrue.online",
+        "EXPO_PUBLIC_JWT_TEMPLATE_NAME": "dtrue_app",
+        "SENTRY_SKIP_UPLOAD": "1",
+        "SENTRY_AUTH_TOKEN": "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"
+      }
+    },
+    "production": {
+      "autoIncrement": true,
+      "android": {
+        "buildType": "app-bundle"
+      },
+      "channel": "production",
+      "env": {
+        "EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY": "pk_live_Y2xlcmsuZHRydWUub25saW5lJA",
+        "EXPO_PUBLIC_BASE_URL": "https://api.dtrue.online",
+        "EXPO_PUBLIC_SHARE_URL": "links.dtrue.online",
+        "EXPO_PUBLIC_JWT_TEMPLATE_NAME": "dtrue_app",
+        "SENTRY_SKIP_UPLOAD": "1",
+        "SENTRY_AUTH_TOKEN": "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"
+      }
+    }
+  },
+  "submit": {
+    "production": {
+      "android": {
+        "track": "internal"
+      }
+    }
+  }
+}

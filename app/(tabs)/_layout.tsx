@@ -1,210 +1,216 @@
-import React, { useRef } from "react";
-import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
+import React, { useRef, useEffect, useState } from "react";
 import {
-  StatusBar,
-  SafeAreaView,
   View,
   Text,
   Pressable,
   Animated,
+  useWindowDimensions,
+  Platform,
 } from "react-native";
+import { Tabs } from "expo-router";
+import { useAuth } from "@clerk/clerk-expo";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
-import { LinearGradient } from "expo-linear-gradient";
-import { SignedIn, useUser } from "@clerk/clerk-expo";
+import { BottomTabBarProps } from "@react-navigation/bottom-tabs";
+import * as Haptics from "expo-haptics";
+import TabContentWrapper from "./components/TabContentWrapper";
 
-// Create the bottom tab navigator
-const Tab = createBottomTabNavigator();
+const TAB_CONFIG = [
+  { name: "index", label: "Feed", icon: "newspaper-variant-outline" },
+  { name: "trending", label: "Trending", icon: "fire" },
+  { name: "explore", label: "Explore", icon: "compass-outline" },
+  { name: "rooms", label: "Rooms", icon: "door-sliding" },
+  { name: "profile", label: "Profile", icon: "card-account-details-outline" },
+];
 
-// Custom Tab Button Component with Basic Animation
-function TabButton({ icon, label, isFocused, onPress }) {
+interface TabButtonProps {
+  icon: string;
+  label: string;
+  isFocused: boolean;
+  onPress: () => void;
+  index: number;
+}
+
+function TabButton({ icon, label, isFocused, onPress, index }: TabButtonProps) {
   const scaleAnim = useRef(new Animated.Value(1)).current;
+  const iconScaleAnim = useRef(new Animated.Value(1)).current;
+  const textOpacityAnim = useRef(new Animated.Value(isFocused ? 1 : 0.7)).current;
 
-  const handlePressIn = () => {
-    Animated.timing(scaleAnim, {
-      toValue: 0.9,
-      duration: 100,
-      useNativeDriver: true,
-    }).start();
+  useEffect(() => {
+    Animated.parallel([
+      Animated.spring(iconScaleAnim, {
+        toValue: isFocused ? 1.05 : 1,
+        useNativeDriver: true,
+        tension: 300,
+        friction: 10,
+      }),
+      Animated.timing(textOpacityAnim, {
+        toValue: isFocused ? 1 : 0.7,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [isFocused]);
+
+  const handlePress = () => {
+    // Button press animation
+    Animated.sequence([
+      Animated.timing(scaleAnim, {
+        toValue: 0.95,
+        duration: 100,
+        useNativeDriver: true,
+      }),
+      Animated.timing(scaleAnim, {
+        toValue: 1,
+        duration: 100,
+        useNativeDriver: true,
+      }),
+    ]).start();
+
+    onPress();
   };
-
-  const handlePressOut = () => {
-    Animated.timing(scaleAnim, {
-      toValue: 1,
-      duration: 200,
-      useNativeDriver: true,
-    }).start();
-  };
-
-  // Bright neon green when active, light gray when inactive
-  const iconColor = isFocused ? "#00FF94" : "#8F9BB3";
 
   return (
-    <Pressable
-      className='flex-1 items-center justify-center relative'
-      onPress={onPress}
-      onPressIn={handlePressIn}
-      onPressOut={handlePressOut}
+    <Animated.View
+      style={{
+        flex: 1,
+        alignItems: "center",
+        justifyContent: "center",
+        transform: [{ scale: scaleAnim }],
+      }}
     >
-      <Animated.View
-        style={{
-          transform: [{ scale: scaleAnim }],
+      <Pressable
+        style={{ 
+          alignItems: "center", 
+          justifyContent: "center",
+          paddingVertical: 6,
+          paddingHorizontal: 2,
         }}
-        className='items-center justify-center py-1'
+        onPress={handlePress}
+        android_ripple={{ color: "rgba(255,255,255,0.1)", borderless: true }}
       >
-        {isFocused && (
-          <LinearGradient
-            colors={["#00FF94", "#02C39A"]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            className='absolute top-0 w-12 h-1 rounded-full'
-            style={{
-              shadowColor: "#00FF94",
-              shadowOffset: { width: 0, height: 0 },
-              shadowOpacity: 0.8,
-              shadowRadius: 10,
-              elevation: 8,
-            }}
-          />
-        )}
-
-        <View className='w-10 h-10 items-center justify-center'>
-          <Icon name={icon} size={28} color={iconColor} />
-        </View>
-
-        {isFocused ? (
-          <Text
-            className='text-xs font-bold mt-1 text-green-400'
-            style={{
-              textShadowColor: "rgba(0, 255, 148, 0.5)",
-              textShadowOffset: { width: 0, height: 0 },
-              textShadowRadius: 10,
-            }}
-          >
-            {label}
-          </Text>
-        ) : (
-          <Text className='text-xs mt-1 text-gray-400'>{label}</Text>
-        )}
-
-        {isFocused && (
-          <View
-            className='absolute w-16 h-16 rounded-full'
-            style={{
-              backgroundColor: "rgba(0, 255, 148, 0.08)",
-              zIndex: -1,
-            }}
-          />
-        )}
-      </Animated.View>
-    </Pressable>
+        <Animated.View
+          style={{
+            transform: [{ scale: iconScaleAnim }],
+          }}
+        >
+          <Icon name={icon} size={24} color={isFocused ? "#FFFFFF" : "#888"} />
+        </Animated.View>
+        <Animated.Text
+          style={{
+            marginTop: 4,
+            fontSize: 13,
+            fontWeight: isFocused ? "600" : "400",
+            color: isFocused ? "#FFFFFF" : "#888",
+            opacity: textOpacityAnim,
+          }}
+        >
+          {label}
+        </Animated.Text>
+      </Pressable>
+    </Animated.View>
   );
 }
 
-// Custom Tab Bar Component
-function CyberpunkTabBar({ state, descriptors, navigation }) {
+function CyberpunkTabBar({ state, navigation }: BottomTabBarProps) {
+  const [previousIndex, setPreviousIndex] = useState(state.index);
+  const [isTransitioning, setIsTransitioning] = useState(false);
+  const backgroundOpacity = useRef(new Animated.Value(0.95)).current;
+
+  useEffect(() => {
+    // Set transitioning state
+    if (state.index !== previousIndex) {
+      setIsTransitioning(true);
+      // Subtle background animation during transition
+      Animated.sequence([
+        Animated.timing(backgroundOpacity, {
+          toValue: 1,
+          duration: 150,
+          useNativeDriver: true,
+        }),
+        Animated.timing(backgroundOpacity, {
+          toValue: 0.95,
+          duration: 150,
+          useNativeDriver: true,
+        }),
+      ]).start(() => {
+        // Reset transitioning state after animation completes
+        setIsTransitioning(false);
+      });
+    }
+
+    setPreviousIndex(state.index);
+  }, [state.index, previousIndex]);
+
   return (
-    <View className='absolute bottom-6 left-4 right-4 rounded-2xl overflow-hidden h-20'>
-      <LinearGradient
-        colors={["rgba(8, 15, 18, 0.97)", "rgba(3, 18, 17, 0.98)"]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 0 }}
-        className='flex-1 flex-row border border-green-900/20 rounded-2xl overflow-hidden'
+    <View style={{ position: "absolute", bottom: 0, left: 0, right: 0 }}>
+      {/* Background with blur effect */}
+      <Animated.View
         style={{
-          shadowColor: "#00FF94",
-          shadowOffset: { width: 0, height: 0 },
-          shadowOpacity: 0.15,
-          shadowRadius: 15,
-          elevation: 5,
+          height: 70,
+          backgroundColor: "rgba(8, 15, 18, 0.95)",
+          borderTopLeftRadius: 20,
+          borderTopRightRadius: 20,
+          shadowColor: "#000",
+          shadowOffset: { width: 0, height: -3 },
+          shadowOpacity: 0.2,
+          shadowRadius: 8,
+          elevation: 8,
+          opacity: backgroundOpacity,
         }}
       >
-        {state.routes.map((route, index) => {
-          const { options } = descriptors[route.key];
-          const label = options.title || route.name;
-          const isFocused = state.index === index;
-
-          // Improved cyberpunk-themed icons
-          let iconName;
-          if (route.name === "index") {
-            iconName = "newspaper-variant-outline"; // Better Feed icon
-          } else if (route.name === "Trending") {
-            iconName = "fire"; // Fire flame for trending
-          } else if (route.name === "Rooms") {
-            iconName = "door-sliding"; // Better rooms icon
-          } else if (route.name === "Profile") {
-            iconName = "card-account-details-outline"; // Better profile icon
-          }
-
-          const onPress = () => {
-            const event = navigation.emit({
-              type: "tabPress",
-              target: route.key,
-            });
-
-            if (!isFocused && !event.defaultPrevented) {
-              navigation.navigate(route.name);
-            }
-          };
-
-          return (
-            <TabButton
-              key={index}
-              icon={iconName}
-              label={label}
-              isFocused={isFocused}
-              onPress={onPress}
-            />
-          );
-        })}
-      </LinearGradient>
-
-      {/* Decorative cyberpunk elements */}
-      <View
-        className='absolute top-0 left-10 w-20 h-1 rounded-full opacity-30'
-        style={{ backgroundColor: "#00FF94" }}
-      />
-      <View
-        className='absolute top-0 right-10 w-12 h-1 rounded-full opacity-20'
-        style={{ backgroundColor: "#00FF94" }}
-      />
+        {/* Tab buttons */}
+        <View
+          style={{
+            flexDirection: "row",
+            height: "100%",
+            paddingTop: 8,
+          }}
+        >
+          {TAB_CONFIG.map(({ name, label, icon }, idx) => {
+            const isFocused = state.index === idx;
+            return (
+              <TabButton
+                key={name}
+                icon={icon}
+                label={label}
+                isFocused={isFocused}
+                index={idx}
+                onPress={() => {
+                  if (!isFocused && !isTransitioning) {
+                    // Extra-light haptic feedback on actual tab change
+                    Haptics.selectionAsync();
+                    navigation.navigate(name);
+                  }
+                }}
+              />
+            );
+          })}
+        </View>
+      </Animated.View>
     </View>
   );
 }
 
-// Layout component
-export default function Layout() {
-  const { user } = useUser();
+export default function TabsLayout() {
+  const { isSignedIn } = useAuth();
+
   return (
-    <SignedIn>
-      <StatusBar barStyle='light-content' backgroundColor='#0A1115' />
-      <SafeAreaView className='flex-1 bg-gray-900'>
-        <Tab.Navigator
-          tabBar={(props) => <CyberpunkTabBar {...props} />}
-          screenOptions={{
-            headerShown: false,
-          }}
-        >
-          <Tab.Screen
-            name='index'
-            component={require("./index").default}
-            options={{ title: "Feed" }}
-          />
-          <Tab.Screen
-            name='Trending'
-            component={require("./trending").default}
-            options={{ title: "Trending" }}
-          />
-          <Tab.Screen
-            name='Rooms'
-            component={require("./rooms").default}
-            options={{ title: "Rooms" }}
-          />
-          <Tab.Screen
-            name='Profile'
-            component={require("./profile").default}
-            options={{ title: "Profile" }}
-          />
-        </Tab.Navigator>
-      </SafeAreaView>
-    </SignedIn>
+    <Tabs
+      tabBar={(props) => <CyberpunkTabBar {...props} />}
+      screenOptions={{ 
+        headerShown: false,
+        tabBarStyle: { display: 'none' }, // Hide default tab bar since we have custom one
+      }}
+    >
+      {TAB_CONFIG.map(({ name, label }) => (
+        <Tabs.Screen 
+          key={name} 
+          name={name} 
+          options={{ 
+            title: label,
+          }} 
+        />
+      ))}
+    </Tabs>
   );
 }
