@@ -29,6 +29,8 @@ import { posthog } from "@/lib/posthog/posthog";
 import { AppOpenTracker } from "@/lib/posthog/PosthogWrapper";
 import { ErrorProvider } from "@/contexts/ErrorContext";
 import SimpleOfflineWrapper from "@/components/ui/SimpleOfflineWrapper";
+import ForceUpdateGate from "@/components/ui/ForceUpdateGate";
+import { useForceUpdate } from "@/hook/useForceUpdate";
 import { useSimpleUpdates } from "@/hook/useSimpleUpdates";
 
 // Prevent the splash screen from auto-hiding. We will control this manually.
@@ -517,6 +519,8 @@ export default Sentry.wrap(function RootLayout() {
 
               <SentryUserWrapper />
               <AppOpenTracker />
+              {/* Force update check at launch - blocks navigation when required */}
+              <ForceUpdateWrapper />
               <InitialStateNavigator />
               <RuntimeDeepLinkHandlerWrapper />
 
@@ -536,6 +540,18 @@ export default Sentry.wrap(function RootLayout() {
 function RuntimeDeepLinkHandlerWrapper() {
   useRuntimeDeepLinkHandler();
   return null;
+}
+
+function ForceUpdateWrapper() {
+  const state = useForceUpdate("com.shahnoor.dtrue");
+  return (
+    <ForceUpdateGate
+      visible={!state.checking && state.required}
+      latestVersion={state.latestVersion}
+      currentVersion={state.currentVersion}
+      storeUrl={state.playStoreUrl}
+    />
+  );
 }
 
 // Export function for manual cache cleanup if needed (e.g., on sign out)

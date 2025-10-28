@@ -29,6 +29,8 @@ import TabScreenWrapper from "../components/TabScreenWrapper";
 import ProfileCard from "@/components/profile/ProfileCard";
 import { useAuth } from "@clerk/clerk-expo";
 import { logError } from "@/utils/sentry/sentry"; // Added Sentry import
+import ThreeDotsMenu from "@/components/ui/ThreeDotsMenu";
+import ReportModal from "@/components/ui/ReportModal";
 
 const { width, height } = Dimensions.get("window");
 
@@ -155,6 +157,7 @@ const ProfilePage: React.FC = () => {
   const [isFollowing, setIsFollowing] = useState(false);
   const [imageModalVisible, setImageModalVisible] = useState(false);
   const [modalImageUri, setModalImageUri] = useState("");
+  const [showReportModal, setShowReportModal] = useState(false);
   const [showImageOptions, setShowImageOptions] = useState(false);
   const [token, fetchToken] = useAuthToken();
   const insets = useSafeAreaInsets();
@@ -353,6 +356,35 @@ const ProfilePage: React.FC = () => {
     }
   };
 
+  // Handle report
+  const handleReport = () => {
+    setShowReportModal(true);
+  };
+
+  // Menu options - only show for other users
+  const menuOptions = user?.clerkId !== userId ? [
+    {
+      id: 'share',
+      label: 'Share Profile',
+      icon: 'share-outline' as const,
+      onPress: handleShareProfile,
+    },
+    {
+      id: 'report',
+      label: 'Report User',
+      icon: 'alert-circle-outline' as const,
+      onPress: handleReport,
+      destructive: true,
+    },
+  ] : [
+    {
+      id: 'share',
+      label: 'Share Profile',
+      icon: 'share-outline' as const,
+      onPress: handleShareProfile,
+    },
+  ];
+
   const openImageModal = (uri: string) => {
     setModalImageUri(uri);
     setImageModalVisible(true);
@@ -404,20 +436,9 @@ const ProfilePage: React.FC = () => {
         </TouchableOpacity>
 
         <View style={[styles.headerActions, { top: insets.top + 8 }]}>
-          <TouchableOpacity
-            style={styles.shareButton}
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              handleShareProfile();
-            }}
-            accessibilityLabel='Share Profile'
-          >
-            <Ionicons
-              name='share-social-sharp'
-              size={24}
-              color={THEME.colors.text}
-            />
-          </TouchableOpacity>
+          <View style={styles.menuContainer}>
+            <ThreeDotsMenu options={menuOptions} />
+          </View>
         </View>
       </View>
 
@@ -576,6 +597,18 @@ const ProfilePage: React.FC = () => {
           </View>
         </TouchableOpacity>
       </Modal>
+
+      {/* Report Modal */}
+      {user?.clerkId !== userId && (
+        <ReportModal
+          visible={showReportModal}
+          onClose={() => setShowReportModal(false)}
+          target={{
+            reportedUserId: user.id,
+          }}
+          targetTitle={`user @${user.username}`}
+        />
+      )}
     </TabScreenWrapper>
   );
 };
@@ -655,6 +688,16 @@ const styles = StyleSheet.create({
     zIndex: 1,
     flexDirection: "row",
     gap: THEME.spacing.sm,
+  },
+  menuContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: THEME.colors.cardBackground,
+    borderWidth: 1,
+    borderColor: THEME.colors.border,
+    justifyContent: "center",
+    alignItems: "center",
   },
   shareButton: {
     width: 40,

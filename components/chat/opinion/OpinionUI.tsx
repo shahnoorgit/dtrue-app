@@ -6,6 +6,8 @@ import { Image, Text } from "react-native";
 import { View } from "react-native";
 import { TouchableOpacity } from "react-native";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
+import ThreeDotsMenu from "@/components/ui/ThreeDotsMenu";
+import ReportModal from "@/components/ui/ReportModal";
 
 const theme = {
   colors: {
@@ -18,15 +20,32 @@ const theme = {
   },
 };
 
-export function RenderOpinion({ item }: { item: any }) {
+export function RenderOpinion({ item, debateRoomId }: { item: any; debateRoomId?: string }) {
   const isAgreed = item.agreed;
   const [token, refreshToken] = useAuthToken();
   const [likes, setLikes] = useState(item.upvotes);
+  const [showReportModal, setShowReportModal] = useState(false);
 
   // Handle opinion press
   const handleOpinionPress = () => {
     setLikes(likes + 1);
   };
+
+  // Handle report
+  const handleReport = () => {
+    setShowReportModal(true);
+  };
+
+  // Menu options
+  const menuOptions = [
+    {
+      id: 'report',
+      label: 'Report',
+      icon: 'alert-circle-outline' as const,
+      onPress: handleReport,
+      destructive: true,
+    },
+  ];
 
   return (
     <TouchableOpacity onPress={handleOpinionPress} activeOpacity={0.8}>
@@ -96,6 +115,9 @@ export function RenderOpinion({ item }: { item: any }) {
               hour12: true,
             })}
           </Text>
+          <View style={{ marginLeft: 8 }}>
+            <ThreeDotsMenu options={menuOptions} />
+          </View>
         </View>
 
         {/* Opinion content */}
@@ -197,6 +219,17 @@ export function RenderOpinion({ item }: { item: any }) {
           ) : null}
         </View>
       </View>
+
+      {/* Report Modal */}
+      <ReportModal
+        visible={showReportModal}
+        onClose={() => setShowReportModal(false)}
+        target={{
+          participantId: item.user.id,
+          debateRoomId: debateRoomId,
+        }}
+        targetTitle={`opinion by @${item.user.username}`}
+      />
     </TouchableOpacity>
   );
 }

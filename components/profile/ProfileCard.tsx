@@ -79,6 +79,7 @@ const ProfileCard: React.FC<ProfileCardProps> = ({
             <Image source={{ uri: user.image }} style={styles.profileImage} />
           </Pressable>
 
+
           {/* Stats Section */}
           <View style={styles.statsContainer}>
             <Pressable
@@ -134,6 +135,7 @@ const ProfileCard: React.FC<ProfileCardProps> = ({
             </Text>
           </TouchableOpacity>
         )}
+
       </View>
     </View>
   );

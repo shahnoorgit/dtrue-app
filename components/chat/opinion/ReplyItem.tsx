@@ -14,6 +14,8 @@ import { useOpinionReplyService } from '@/services/opinionReplyApi';
 import { useAuth } from '@clerk/clerk-expo';
 import * as Haptics from 'expo-haptics';
 import ReplySkeleton from './ReplySkeleton';
+import ThreeDotsMenu from '@/components/ui/ThreeDotsMenu';
+import ReportModal from '@/components/ui/ReportModal';
 
 interface ReplyItemProps {
   reply: OpinionReply;
@@ -57,6 +59,7 @@ const ReplyItem = React.memo(function ReplyItem({
   const { userId } = useAuth();
   const replyService = useOpinionReplyService();
   const [isUpvoting, setIsUpvoting] = useState(false);
+  const [showReportModal, setShowReportModal] = useState(false);
   
   // Local state for upvotes - this is the source of truth for display
   const [localUpvoted, setLocalUpvoted] = useState(reply.isUpvoted || false);
@@ -209,6 +212,22 @@ const ReplyItem = React.memo(function ReplyItem({
     );
   };
 
+  // Handle report
+  const handleReport = useCallback(() => {
+    setShowReportModal(true);
+  }, []);
+
+  // Menu options
+  const menuOptions = [
+    {
+      id: 'report',
+      label: 'Report',
+      icon: 'alert-circle-outline' as const,
+      onPress: handleReport,
+      destructive: true,
+    },
+  ];
+
   const leftMargin = level * 12; // Minimal indent
 
   return (
@@ -275,23 +294,26 @@ const ReplyItem = React.memo(function ReplyItem({
             </Text>
           )}
           
-          {/* Delete button - Inline */}
-          {isOwner && !reply.isDeleted && (
-            <TouchableOpacity
-              onPress={handleDelete}
-              style={{
-                marginLeft: 'auto',
-                padding: 2,
-              }}
-            >
-              <Ionicons
-                name="trash-outline"
-                size={13}
-                color={theme.colors.textMuted}
-                style={{ opacity: 0.6 }}
-              />
-            </TouchableOpacity>
-          )}
+          {/* Three dots menu or delete button */}
+          <View style={{ marginLeft: 'auto' }}>
+            {isOwner && !reply.isDeleted ? (
+              <TouchableOpacity
+                onPress={handleDelete}
+                style={{
+                  padding: 2,
+                }}
+              >
+                <Ionicons
+                  name="trash-outline"
+                  size={13}
+                  color={theme.colors.textMuted}
+                  style={{ opacity: 0.6 }}
+                />
+              </TouchableOpacity>
+            ) : (
+              <ThreeDotsMenu options={menuOptions} />
+            )}
+          </View>
         </View>
 
         {/* Reply Content - CLEAN & READABLE */}
@@ -420,6 +442,16 @@ const ReplyItem = React.memo(function ReplyItem({
           ))}
         </View>
       )}
+
+      {/* Report Modal */}
+      <ReportModal
+        visible={showReportModal}
+        onClose={() => setShowReportModal(false)}
+        target={{
+          replyId: reply.id,
+        }}
+        targetTitle={`reply by @${reply.user?.username || 'Unknown User'}`}
+      />
     </View>
   );
 });

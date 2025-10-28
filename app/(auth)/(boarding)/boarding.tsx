@@ -38,6 +38,7 @@ import {
 } from "@/lib/posthog/events";
 import * as ImageManipulator from "expo-image-manipulator";
 import { logError } from "@/utils/sentry/sentry";
+import SuggestedUsersScreen from "@/components/onboarding/SuggestedUsersScreen";
 
 // Interest Modal Component using NativeWind classes
 const InterestModal = ({
@@ -709,6 +710,7 @@ export default function OnboardingScreen() {
   const [animatedValue] = useState(new Animated.Value(0));
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [onboardingStartTime] = useState(Date.now());
+  const [showSuggestedUsers, setShowSuggestedUsers] = useState(false);
 
   const {
     username,
@@ -794,7 +796,16 @@ export default function OnboardingScreen() {
     setTempSelectedInterests(CATEGORY_INTERESTS[currentCategory] || []);
   }, [currentCategory]);
 
-  const goToNextStep = useCallback(() => {
+  // Handle suggested users completion
+  const handleSuggestedUsersComplete = useCallback(() => {
+    setShowSuggestedUsers(false);
+    router.replace("/(tabs)");
+    setTimeout(() => {
+      router.replace("/(tabs)");
+    }, 1000);
+  }, [router]);
+
+   const goToNextStep = useCallback(() => {
     if (currentStep === 0) {
       if (Object.keys(selectedCategories).length === 0) {
         showError("Validation Error", "Please select at least one category", { type: 'warning' });
@@ -842,12 +853,10 @@ export default function OnboardingScreen() {
               timeToComplete: Date.now() - onboardingStartTime,
             });
             
-            // Navigate to main app
+            // Show suggested users screen
+            setIsSubmitting(false); // Clear loading state
             await new Promise((resolve) => setTimeout(resolve, 500));
-            router.replace("/(tabs)");
-            setTimeout(() => {
-              router.replace("/(tabs)");
-            }, 1000);
+            setShowSuggestedUsers(true);
           } else {
             console.error("[ONBOARDING] Failed to create user in database");
             // Rollback Clerk metadata
@@ -921,74 +930,81 @@ export default function OnboardingScreen() {
   }, [currentStep]);
 
   return (
-    <View className='flex-1 bg-[#111] pt-6'>
-      <StatusBar
-        style='light'
-        backgroundColor={cyberpunkTheme.colors.background.dark}
-      />
-      {isSubmitting && (
-        <View className='absolute inset-0 z-10 bg-black/50 justify-center items-center'>
-          <ActivityIndicator
-            size='large'
-            color={cyberpunkTheme.colors.primary}
-          />
-        </View>
+    <>
+      <View className='flex-1 bg-[#111] pt-6'>
+        <StatusBar
+          style='light'
+          backgroundColor={cyberpunkTheme.colors.background.dark}
+        />
+        {isSubmitting && !showSuggestedUsers && (
+          <View className='absolute inset-0 z-10 bg-black/50 justify-center items-center'>
+            <ActivityIndicator
+              size='large'
+              color={cyberpunkTheme.colors.primary}
+            />
+          </View>
+        )}
+        {currentStep === 0 ? (
+          <>
+            <CategorySelectionStep
+              selectedCategories={selectedCategories}
+              onToggleCategory={toggleCategory}
+            />
+            <NavigationButtons
+              currentStep={currentStep}
+              onPrevious={goToPreviousStep}
+              onNext={goToNextStep}
+              isUploading={isSubmitting || isUploading}
+              isUsernameAvailable={isUsernameAvailable}
+            />
+          </>
+        ) : (
+          <KeyboardAvoidingView
+            behavior={Platform.OS === "ios" ? "padding" : "height"}
+            className='flex-1'
+            keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
+          >
+            <ProfileCreationStep
+              username={username}
+              onUsernameChange={handleUsernameChange}
+              usernameError={usernameError}
+              isCheckingUsername={isCheckingUsername}
+              isUsernameAvailable={isUsernameAvailable}
+              suggestedUsernames={suggestedUsernames}
+              onSelectSuggestion={selectSuggestedUsername}
+              bio={bio}
+              onBioChange={setBio}
+              profileImage={profileImage}
+              isUploading={isUploading}
+              profileImageUrl={profileImageUrl}
+              onPickImage={pickImage}
+              onTakePhoto={takePhoto}
+            />
+            <NavigationButtons
+              currentStep={currentStep}
+              onPrevious={goToPreviousStep}
+              onNext={goToNextStep}
+              isUploading={isSubmitting || isUploading}
+              isUsernameAvailable={isUsernameAvailable}
+            />
+          </KeyboardAvoidingView>
+        )}
+        <InterestModal
+          visible={modalVisible}
+          currentCategory={currentCategory}
+          tempInterests={tempSelectedInterests}
+          onToggleInterest={toggleTempInterest}
+          onConfirm={confirmSelection}
+          onSelectAll={selectAllTempInterests}
+          onClose={closeModal}
+          animatedValue={animatedValue}
+        />
+      </View>
+      
+      {/* Suggested Users Screen - Rendered outside main container */}
+      {showSuggestedUsers && (
+        <SuggestedUsersScreen onComplete={handleSuggestedUsersComplete} />
       )}
-      {currentStep === 0 ? (
-        <>
-          <CategorySelectionStep
-            selectedCategories={selectedCategories}
-            onToggleCategory={toggleCategory}
-          />
-          <NavigationButtons
-            currentStep={currentStep}
-            onPrevious={goToPreviousStep}
-            onNext={goToNextStep}
-            isUploading={isSubmitting || isUploading}
-            isUsernameAvailable={isUsernameAvailable}
-          />
-        </>
-      ) : (
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
-          className='flex-1'
-          keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
-        >
-          <ProfileCreationStep
-            username={username}
-            onUsernameChange={handleUsernameChange}
-            usernameError={usernameError}
-            isCheckingUsername={isCheckingUsername}
-            isUsernameAvailable={isUsernameAvailable}
-            suggestedUsernames={suggestedUsernames}
-            onSelectSuggestion={selectSuggestedUsername}
-            bio={bio}
-            onBioChange={setBio}
-            profileImage={profileImage}
-            isUploading={isUploading}
-            profileImageUrl={profileImageUrl}
-            onPickImage={pickImage}
-            onTakePhoto={takePhoto}
-          />
-          <NavigationButtons
-            currentStep={currentStep}
-            onPrevious={goToPreviousStep}
-            onNext={goToNextStep}
-            isUploading={isSubmitting || isUploading}
-            isUsernameAvailable={isUsernameAvailable}
-          />
-        </KeyboardAvoidingView>
-      )}
-      <InterestModal
-        visible={modalVisible}
-        currentCategory={currentCategory}
-        tempInterests={tempSelectedInterests}
-        onToggleInterest={toggleTempInterest}
-        onConfirm={confirmSelection}
-        onSelectAll={selectAllTempInterests}
-        onClose={closeModal}
-        animatedValue={animatedValue}
-      />
-    </View>
+    </>
   );
 }

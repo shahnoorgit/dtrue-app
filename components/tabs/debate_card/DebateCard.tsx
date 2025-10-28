@@ -20,6 +20,8 @@ import { router } from "expo-router";
 import { useAuth } from "@clerk/clerk-expo";
 import { theme } from "@/app/(chat-room)/theme";
 import { trackDebateJoined, trackContentShared } from "@/lib/posthog/events";
+import ThreeDotsMenu from "@/components/ui/ThreeDotsMenu";
+import ReportModal from "@/components/ui/ReportModal";
 
 const { width } = Dimensions.get("window");
 // Slightly wider card
@@ -28,6 +30,7 @@ const IMAGE_HEIGHT = CARD_WIDTH * 0.6;
 
 const DebateCard = ({ debate, onJoinPress }) => {
   const [loading, setLoading] = useState(false);
+  const [showReportModal, setShowReportModal] = useState(false);
   const { userId } = useAuth();
   const navigation = useNavigation();
   const [token, refreshToken] = useAuthToken();
@@ -227,6 +230,28 @@ const DebateCard = ({ debate, onJoinPress }) => {
     [debate.id, debate.title]
   );
 
+  // Report handler
+  const handleReport = useCallback(() => {
+    setShowReportModal(true);
+  }, []);
+
+  // Menu options
+  const menuOptions = [
+    {
+      id: 'share',
+      label: 'Share',
+      icon: 'share-outline' as const,
+      onPress: handleShare,
+    },
+    {
+      id: 'report',
+      label: 'Report',
+      icon: 'alert-circle-outline' as const,
+      onPress: handleReport,
+      destructive: true,
+    },
+  ];
+
   // Memoized CyberpunkSpinner component to avoid recreation
   const CyberpunkSpinner = useMemo(() => {
     if (!loading) return null;
@@ -334,22 +359,20 @@ const DebateCard = ({ debate, onJoinPress }) => {
           </Text>
         </View>
 
-        {/* Share button (top-right) */}
-        <Pressable
-          onPress={(e) => handleShare(e)}
+        {/* Three dots menu (top-right) */}
+        <View
           style={{
             position: "absolute",
             top: 12,
             right: 12,
-            padding: 8,
+            padding: 4,
             borderRadius: 999,
             backgroundColor: cyberpunkTheme.colors.primaryDark + "DD",
             elevation: 4,
           }}
-          accessibilityLabel={`Share debate ${debate.title}`}
         >
-          <Icon name='share-variant' size={20} color={"#00FF94"} />
-        </Pressable>
+          <ThreeDotsMenu options={menuOptions} />
+        </View>
       </View>
 
       <View style={{ padding: 10 }}>
@@ -632,6 +655,16 @@ const DebateCard = ({ debate, onJoinPress }) => {
           </LinearGradient>
         </Pressable>
       </View>
+
+      {/* Report Modal */}
+      <ReportModal
+        visible={showReportModal}
+        onClose={() => setShowReportModal(false)}
+        target={{
+          debateRoomId: debate.id,
+        }}
+        targetTitle={`debate: "${debate.title}"`}
+      />
     </Pressable>
   );
 };
