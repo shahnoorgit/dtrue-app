@@ -132,7 +132,7 @@ class ErrorBoundary extends React.Component<
           <View className='p-6 bg-gray-800 rounded-lg w-4/5 max-w-md'>
             <StatusBar
               barStyle='light-content'
-              backgroundColor={cyberpunkTheme.colors.background.dark}
+              backgroundColor={cyberpunkTheme.colors.background.primary}
             />
             <Text className='text-white text-xl font-bold mb-4'>
               Something went wrong
@@ -507,7 +507,7 @@ export default Sentry.wrap(function RootLayout() {
           <View className='flex-1 bg-gray-900'>
             <StatusBar
               barStyle='light-content'
-              backgroundColor={cyberpunkTheme.colors.background.dark}
+              backgroundColor={cyberpunkTheme.colors.background.primary}
             />
             <PostHogProvider autocapture={false} client={posthog}>
               <LinearGradient

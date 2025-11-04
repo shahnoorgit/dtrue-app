@@ -126,7 +126,7 @@ const InterestModal = ({
 const CategorySelectionStep = ({ selectedCategories, onToggleCategory }) => (
   <View
     className='flex-1 p-6 pt-12'
-    style={{ backgroundColor: cyberpunkTheme.colors.background.dark }}
+    style={{ backgroundColor: cyberpunkTheme.colors.background.primary }}
   >
     <Text className='text-4xl font-bold text-white text-center mt-6'>
       SELECT INTERESTS
@@ -269,7 +269,7 @@ const ProfileCreationStep = ({
 }) => (
   <View
     className='flex-1 p-6 pt-12 pb-4'
-    style={{ backgroundColor: cyberpunkTheme.colors.background.dark }}
+    style={{ backgroundColor: cyberpunkTheme.colors.background.primary }}
   >
     <Text className='text-4xl font-bold text-white text-center mt-6'>
       CREATE PROFILE
@@ -397,7 +397,7 @@ const NavigationButtons = ({
           className='rounded-xl py-4 items-center'
         >
           {isUploading ? (
-            <ActivityIndicator size='small' color='#000000' />
+            <ActivityIndicator size='small' color={cyberpunkTheme.colors.text.inverse} />
           ) : (
             <Text className='text-black font-bold text-lg'>
               {currentStep === 0 ? "NEXT" : "COMPLETE"}
@@ -934,7 +934,7 @@ export default function OnboardingScreen() {
       <View className='flex-1 bg-[#111] pt-6'>
         <StatusBar
           style='light'
-          backgroundColor={cyberpunkTheme.colors.background.dark}
+          backgroundColor={cyberpunkTheme.colors.background.primary}
         />
         {isSubmitting && !showSuggestedUsers && (
           <View className='absolute inset-0 z-10 bg-black/50 justify-center items-center'>

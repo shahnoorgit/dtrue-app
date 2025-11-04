@@ -109,7 +109,7 @@ export default function ThreeDotsMenu({ options, disabled = false }: ThreeDotsMe
         <Ionicons
           name="ellipsis-horizontal"
           size={20}
-          color={disabled ? cyberpunkTheme.colors.text.muted : cyberpunkTheme.colors.text.light}
+          color={disabled ? cyberpunkTheme.colors.text.muted : cyberpunkTheme.colors.text.primary}
         />
       </TouchableOpacity>
 
@@ -144,7 +144,7 @@ export default function ThreeDotsMenu({ options, disabled = false }: ThreeDotsMe
           >
             <View
               style={{
-                backgroundColor: cyberpunkTheme.colors.background.dark,
+                backgroundColor: cyberpunkTheme.colors.background.secondary,
                 borderRadius: 16,
                 minWidth: 200,
                 maxWidth: width * 0.8,
@@ -199,7 +199,7 @@ export default function ThreeDotsMenu({ options, disabled = false }: ThreeDotsMe
                       style={{
                         fontSize: 16,
                         fontWeight: '600',
-                        color: option.destructive ? cyberpunkTheme.colors.secondary : cyberpunkTheme.colors.text.light,
+                        color: option.destructive ? cyberpunkTheme.colors.secondary : cyberpunkTheme.colors.text.primary,
                         flex: 1,
                       }}
                     >

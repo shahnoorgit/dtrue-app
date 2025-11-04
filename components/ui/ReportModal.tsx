@@ -101,76 +101,113 @@ export default function ReportModal({
       presentationStyle="pageSheet"
       onRequestClose={handleClose}
     >
-      <View className="flex-1 bg-gray-900">
+      <View style={{ flex: 1, backgroundColor: cyberpunkTheme.colors.background.primary }}>
         <LinearGradient
           colors={cyberpunkTheme.colors.gradients.background as [string, string]}
-          className="absolute inset-0"
+          style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
         />
         
         {/* Header */}
-        <View className="flex-row items-center justify-between p-4 border-b border-gray-700">
+        <View style={{ 
+          flexDirection: 'row', 
+          alignItems: 'center', 
+          justifyContent: 'space-between', 
+          padding: 16, 
+          borderBottomWidth: 1, 
+          borderBottomColor: cyberpunkTheme.colors.border.primary 
+        }}>
           <TouchableOpacity
             onPress={handleClose}
             disabled={isSubmitting}
-            className="p-2"
+            style={{ padding: 8 }}
           >
-            <Text className="text-blue-400 text-base font-medium">
+            <Text style={{ 
+              color: cyberpunkTheme.colors.primary, 
+              fontSize: 16, 
+              fontWeight: '500' 
+            }}>
               {isSubmitting ? 'Submitting...' : 'Cancel'}
             </Text>
           </TouchableOpacity>
           
-          <Text className="text-white text-lg font-semibold">Report Content</Text>
+          <Text style={{ 
+            color: cyberpunkTheme.colors.text.primary, 
+            fontSize: 18, 
+            fontWeight: '600' 
+          }}>Report Content</Text>
           
           <TouchableOpacity
             onPress={handleSubmit}
             disabled={!selectedReason || isSubmitting}
-            className="p-2"
+            style={{ padding: 8 }}
           >
-            <Text
-              className={`text-base font-medium ${
-                selectedReason && !isSubmitting
-                  ? 'text-blue-400'
-                  : 'text-gray-500'
-              }`}
-            >
+            <Text style={{
+              fontSize: 16,
+              fontWeight: '500',
+              color: selectedReason && !isSubmitting
+                ? cyberpunkTheme.colors.primary
+                : cyberpunkTheme.colors.text.disabled
+            }}>
               Submit
             </Text>
           </TouchableOpacity>
         </View>
 
-        <ScrollView className="flex-1 p-6">
+        <ScrollView style={{ flex: 1, padding: 24 }}>
           {/* Target Info */}
-          <View className="mb-8">
-            <Text className="text-white text-xl font-bold mb-3">
+          <View style={{ marginBottom: 32 }}>
+            <Text style={{ 
+              color: cyberpunkTheme.colors.text.primary, 
+              fontSize: 20, 
+              fontWeight: '700', 
+              marginBottom: 12 
+            }}>
               What are you reporting?
             </Text>
-            <Text className="text-gray-300 text-base leading-6">
+            <Text style={{ 
+              color: cyberpunkTheme.colors.text.tertiary, 
+              fontSize: 16, 
+              lineHeight: 24 
+            }}>
               {targetTitle}
             </Text>
           </View>
 
           {/* Reason Selection */}
-          <View className="mb-8">
-            <Text className="text-white text-xl font-bold mb-6">
+          <View style={{ marginBottom: 32 }}>
+            <Text style={{ 
+              color: cyberpunkTheme.colors.text.primary, 
+              fontSize: 20, 
+              fontWeight: '700', 
+              marginBottom: 24 
+            }}>
               Why are you reporting this?
             </Text>
-            <View className="space-y-4">
+            <View>
               {Object.entries(REPORT_REASONS).map(([key, label]) => (
                 <TouchableOpacity
                   key={key}
                   onPress={() => setSelectedReason(key as ReportReason)}
-                  className={`p-5 rounded-xl border-2 ${
-                    selectedReason === key
-                      ? 'border-blue-400 bg-blue-400/10'
-                      : 'border-gray-600 bg-gray-800/50'
-                  }`}
-                  style={{ marginBottom: 12 }}
+                  style={{
+                    padding: 20,
+                    borderRadius: 12,
+                    borderWidth: 2,
+                    borderColor: selectedReason === key 
+                      ? cyberpunkTheme.colors.primary 
+                      : cyberpunkTheme.colors.border.primary,
+                    backgroundColor: selectedReason === key
+                      ? cyberpunkTheme.colors.primary + '20'
+                      : cyberpunkTheme.colors.background.elevated,
+                    marginBottom: 12,
+                  }}
                 >
-                  <Text
-                    className={`text-base font-medium ${
-                      selectedReason === key ? 'text-blue-400' : 'text-gray-300'
-                    }`}
-                  >
+                  <Text style={{
+                    fontSize: 16,
+                    fontWeight: '500',
+                    color: selectedReason === key 
+                      ? cyberpunkTheme.colors.primary 
+                      : cyberpunkTheme.colors.text.tertiary,
+                  }}>
                     {label}
                   </Text>
                 </TouchableOpacity>
@@ -179,30 +216,59 @@ export default function ReportModal({
           </View>
 
           {/* Description */}
-          <View className="mb-8">
-            <Text className="text-white text-xl font-bold mb-3">
+          <View style={{ marginBottom: 32 }}>
+            <Text style={{ 
+              color: cyberpunkTheme.colors.text.primary, 
+              fontSize: 20, 
+              fontWeight: '700', 
+              marginBottom: 12 
+            }}>
               Additional Details (Optional)
             </Text>
             <TextInput
               value={description}
               onChangeText={setDescription}
               placeholder="Provide more details about why you're reporting this content..."
-              placeholderTextColor="#9CA3AF"
+              placeholderTextColor={cyberpunkTheme.colors.text.muted}
               multiline
               numberOfLines={5}
               maxLength={1000}
-              className="bg-gray-800/50 border-2 border-gray-600 rounded-xl p-5 text-white text-base"
-              style={{ textAlignVertical: 'top', minHeight: 120 }}
+              style={{
+                backgroundColor: cyberpunkTheme.colors.background.elevated,
+                borderWidth: 2,
+                borderColor: cyberpunkTheme.colors.border.primary,
+                borderRadius: 12,
+                padding: 20,
+                color: cyberpunkTheme.colors.text.primary,
+                fontSize: 16,
+                textAlignVertical: 'top',
+                minHeight: 120,
+              }}
               editable={!isSubmitting}
             />
-            <Text className="text-gray-400 text-sm mt-3 text-right">
+            <Text style={{ 
+              color: cyberpunkTheme.colors.text.muted, 
+              fontSize: 14, 
+              marginTop: 12, 
+              textAlign: 'right' 
+            }}>
               {description.length}/1000 characters
             </Text>
           </View>
 
           {/* Info */}
-          <View className="bg-blue-900/20 border-2 border-blue-700 rounded-xl p-5">
-            <Text className="text-blue-300 text-sm leading-6">
+          <View style={{
+            backgroundColor: cyberpunkTheme.colors.semantic.info + '20',
+            borderWidth: 2,
+            borderColor: cyberpunkTheme.colors.semantic.info,
+            borderRadius: 12,
+            padding: 20,
+          }}>
+            <Text style={{ 
+              color: cyberpunkTheme.colors.semantic.infoLight, 
+              fontSize: 14, 
+              lineHeight: 21 
+            }}>
               Your report will be reviewed by our moderation team. We take all reports seriously and will take appropriate action if our community guidelines are violated.
             </Text>
           </View>
@@ -210,10 +276,30 @@ export default function ReportModal({
 
         {/* Loading Overlay */}
         {isSubmitting && (
-          <View className="absolute inset-0 bg-black/50 items-center justify-center">
-            <View className="bg-gray-800 rounded-lg p-6 items-center">
-              <ActivityIndicator size="large" color="#60A5FA" />
-              <Text className="text-white text-base mt-4">Submitting report...</Text>
+          <View style={{ 
+            position: 'absolute', 
+            top: 0, 
+            left: 0, 
+            right: 0, 
+            bottom: 0, 
+            backgroundColor: cyberpunkTheme.colors.overlay.darker,
+            alignItems: 'center', 
+            justifyContent: 'center' 
+          }}>
+            <View style={{ 
+              backgroundColor: cyberpunkTheme.colors.background.elevated, 
+              borderRadius: 12, 
+              padding: 24, 
+              alignItems: 'center',
+              borderWidth: 1,
+              borderColor: cyberpunkTheme.colors.primary + '40',
+            }}>
+              <ActivityIndicator size="large" color={cyberpunkTheme.colors.primary} />
+              <Text style={{ 
+                color: cyberpunkTheme.colors.text.primary, 
+                fontSize: 16, 
+                marginTop: 16 
+              }}>Submitting report...</Text>
             </View>
           </View>
         )}

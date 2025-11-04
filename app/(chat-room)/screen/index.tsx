@@ -25,7 +25,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import * as Haptics from "expo-haptics";
 import { useAuthToken } from "../../../hook/clerk/useFetchjwtToken";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { theme } from "../theme";
+import { cyberpunkTheme } from "@/constants/theme";
 import Header from "../components/Header";
 import OpinionsList from "../components/OpinionsList";
 import InputBar from "../components/InputBar";
@@ -587,8 +587,8 @@ export default function DebateRoom() {
             backgroundColor: isAgreed ? "rgba(0, 255, 148, 0.08)" : "rgba(255, 0, 229, 0.08)",
             borderLeftWidth: 2,
             borderLeftColor: isAgreed
-              ? theme.colors.primary
-              : theme.colors.secondary,
+              ? cyberpunkTheme.colors.primary
+              : cyberpunkTheme.colors.secondary,
             borderWidth: 0,
             borderColor: "transparent",
             padding: 10,
@@ -622,14 +622,14 @@ export default function DebateRoom() {
                     : "rgba(255, 0, 229, 0.4)",
                 }}
               />
-              <Text style={{ color: theme.colors.text, fontWeight: "600" }}>
+              <Text style={{ color: cyberpunkTheme.colors.text.primary, fontWeight: "600" }}>
                 {userOpinionId == item?.user.clerkId
                   ? "You"
                   : item.user.username}
               </Text>
               <Text
                 style={{
-                  color: theme.colors.textMuted,
+                  color: cyberpunkTheme.colors.text.muted,
                   fontSize: 12,
                   marginLeft: "auto",
                 }}
@@ -651,13 +651,13 @@ export default function DebateRoom() {
                   <Ionicons
                     name="ellipsis-vertical"
                     size={16}
-                    color={theme.colors.textMuted}
+                    color={cyberpunkTheme.colors.text.muted}
                   />
                 </TouchableOpacity>
               )}
             </Pressable>
 
-            <Text style={{ color: theme.colors.text, lineHeight: 20 }}>
+            <Text style={{ color: cyberpunkTheme.colors.text.primary, lineHeight: 20 }}>
               {item.opinion}
             </Text>
 
@@ -684,12 +684,12 @@ export default function DebateRoom() {
                 <Ionicons
                   name={isLiked ? "thumbs-up" : "thumbs-up-outline"}
                   size={12}
-                  color={isLiked ? "#FF0055" : theme.colors.textMuted}
+                  color={isLiked ? "#FF0055" : cyberpunkTheme.colors.text.muted}
                   style={{ marginRight: 4 }}
                 />
                 <Text
                   style={{
-                    color: isLiked ? "#FF0055" : theme.colors.textMuted,
+                    color: isLiked ? "#FF0055" : cyberpunkTheme.colors.text.muted,
                     fontSize: 12,
                     fontWeight: isLiked ? "600" : "400",
                   }}
@@ -717,12 +717,12 @@ export default function DebateRoom() {
                 <Ionicons
                   name="chatbubble-outline"
                   size={12}
-                  color={theme.colors.textMuted}
+                  color={cyberpunkTheme.colors.text.muted}
                   style={{ marginRight: 4 }}
                 />
                 <Text
                   style={{
-                    color: theme.colors.textMuted,
+                    color: cyberpunkTheme.colors.text.muted,
                     fontSize: 12,
                   }}
                 >
@@ -778,12 +778,12 @@ export default function DebateRoom() {
                   <MaterialCommunityIcons
                     name='robot'
                     size={11}
-                    color={theme.colors.primary}
+                    color={cyberpunkTheme.colors.primary}
                     style={{ marginRight: 4 }}
                   />
                   <Text
                     style={{
-                      color: theme.colors.primary,
+                      color: cyberpunkTheme.colors.primary,
                       fontSize: 11,
                       fontWeight: '500',
                     }}
@@ -879,7 +879,7 @@ export default function DebateRoom() {
   if (loadingInitial || isDebateActive === null) {
     return (
       <SafeAreaView
-        style={{ flex: 1, backgroundColor: theme.colors.background }}
+        style={{ flex: 1, backgroundColor: cyberpunkTheme.colors.background.primary }}
       >
         <StatusBar barStyle='light-content' />
         <View
@@ -890,13 +890,13 @@ export default function DebateRoom() {
             padding: 16,
           }}
         >
-          <ActivityIndicator size='large' color={theme.colors.primary} />
+          <ActivityIndicator size='large' color={cyberpunkTheme.colors.primary} />
 
           <Text
             style={{
               marginTop: 20,
               fontSize: 16,
-              color: theme.colors.text,
+              color: cyberpunkTheme.colors.text.primary,
               fontWeight: "600",
             }}
           >
@@ -907,7 +907,7 @@ export default function DebateRoom() {
             style={{
               marginTop: 6,
               fontSize: 13,
-              color: theme.colors.textMuted,
+              color: cyberpunkTheme.colors.text.muted,
             }}
           >
             Gathering strong opinions.
@@ -921,7 +921,7 @@ export default function DebateRoom() {
   if (!isDebateActive && endedRoomResults) {
     return (
       <SafeAreaView
-        style={{ flex: 1, backgroundColor: theme.colors.background }}
+        style={{ flex: 1, backgroundColor: cyberpunkTheme.colors.background.primary }}
       >
         <StatusBar barStyle='light-content' />
         <DebateEndedResults
@@ -936,10 +936,10 @@ export default function DebateRoom() {
 
   // Show active debate room
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.background }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: cyberpunkTheme.colors.background.primary }}>
       <StatusBar
         barStyle='light-content'
-        backgroundColor={theme.colors.backgroundDarker}
+        backgroundColor={cyberpunkTheme.colors.background.secondary}
       />
 
       <Header
@@ -986,7 +986,7 @@ export default function DebateRoom() {
         <View
           style={{ flex: 1, justifyContent: "center", alignItems: "center" }}
         >
-          <ActivityIndicator size='large' color={theme.colors.primary} />
+          <ActivityIndicator size='large' color={cyberpunkTheme.colors.primary} />
         </View>
       )}
 
@@ -1023,7 +1023,7 @@ export default function DebateRoom() {
         >
           <View
             style={{
-              backgroundColor: theme.colors.backgroundDarker,
+              backgroundColor: cyberpunkTheme.colors.background.primaryDarker,
               borderRadius: 16,
               padding: 20,
               width: "80%",
@@ -1034,7 +1034,7 @@ export default function DebateRoom() {
           >
             <Text
               style={{
-                color: theme.colors.text,
+                color: cyberpunkTheme.colors.text.primary,
                 fontSize: 18,
                 fontWeight: "600",
                 marginBottom: 16,
@@ -1052,19 +1052,19 @@ export default function DebateRoom() {
                 padding: 14,
                 marginBottom: 10,
                 borderWidth: 1,
-                borderColor: theme.colors.primary,
+                borderColor: cyberpunkTheme.colors.primary,
               }}
             >
               <View style={{ flexDirection: "row", alignItems: "center" }}>
                 <Ionicons
                   name="create-outline"
                   size={20}
-                  color={theme.colors.primary}
+                  color={cyberpunkTheme.colors.primary}
                   style={{ marginRight: 10 }}
                 />
                 <Text
                   style={{
-                    color: theme.colors.primary,
+                    color: cyberpunkTheme.colors.primary,
                     fontSize: 16,
                     fontWeight: "500",
                   }}
@@ -1086,7 +1086,7 @@ export default function DebateRoom() {
             >
               <Text
                 style={{
-                  color: theme.colors.textMuted,
+                  color: cyberpunkTheme.colors.text.muted,
                   fontSize: 16,
                   fontWeight: "500",
                   textAlign: "center",

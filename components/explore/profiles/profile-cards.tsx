@@ -10,7 +10,7 @@ const THEME = {
     background: "#080F12",
     backgroundDarker: "#03120F",
     text: "#FFFFFF",
-    textMuted: "#8F9BB3",
+    textMuted: "#9CA3AB",
     searchBackground: "#1A2332",
   },
 };

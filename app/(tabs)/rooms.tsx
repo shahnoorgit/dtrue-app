@@ -27,6 +27,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import TabScreenWrapper from "./components/TabScreenWrapper";
 import { logError } from "@/utils/sentry/sentry"; // Added Sentry import
 import { trackDebateJoined } from "@/lib/posthog/events";
+import { cyberpunkTheme } from "@/constants/theme";
 
 // Define theme as a constant outside the component to avoid recreation on re-render
 const THEME = {
@@ -36,7 +37,7 @@ const THEME = {
     background: "#080F12",
     backgroundDarker: "#03120F",
     text: "#FFFFFF",
-    textMuted: "#8F9BB3",
+    textMuted: "#9CA3AB",
     success: "#10B981",
     warning: "#F59E0B",
   },
@@ -825,7 +826,7 @@ const styles = StyleSheet.create({
     marginRight: 6,
   },
   createButtonText: {
-    color: '#000000',
+    color: cyberpunkTheme.colors.text.inverse,
     fontSize: 14,
     fontWeight: '600',
   },
@@ -855,7 +856,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   activeTabText: {
-    color: "#000000", // solid black for emphasis
+    color: cyberpunkTheme.colors.text.inverse,
     fontWeight: "600",
   },
   listContainer: {

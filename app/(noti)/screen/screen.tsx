@@ -28,7 +28,7 @@ const THEME = {
     background: "#080F12",
     backgroundDarker: "#03120F",
     text: "#FFFFFF",
-    textMuted: "#8F9BB3",
+    textMuted: "#9CA3AB",
     textSecondary: "#6B7280",
     cardBorder: "#2A2D33",
     cardBackground: "#0F1419",

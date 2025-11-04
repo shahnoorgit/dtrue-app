@@ -33,7 +33,7 @@ const THEME = {
     surface: "#1A1A1A",
     text: "#FFFFFF",
     textSecondary: "#A3A3A3",
-    textMuted: "#8F9BB3",
+    textMuted: "#9CA3AB",
     border: "#404040",
     success: "#10B981",
     error: "#EF4444",

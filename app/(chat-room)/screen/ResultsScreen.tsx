@@ -9,7 +9,7 @@ import {
   TouchableOpacity,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
-import { theme } from "../theme";
+import { cyberpunkTheme } from "@/constants/theme";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 
@@ -81,7 +81,7 @@ const DebateEndedResults = ({ results, insets, debateTitle, debateImage }: Debat
           <Text style={styles.sectionTitle}>Participation Overview</Text>
           <View style={styles.statsRow}>
             <View style={styles.statItem}>
-              <Ionicons name='people' size={24} color={theme.colors.primary} />
+              <Ionicons name='people' size={24} color={cyberpunkTheme.colors.primary} />
               <Text style={styles.statValue}>{results.totalParticipants}</Text>
               <Text style={styles.statLabel}>Total</Text>
             </View>
@@ -150,24 +150,24 @@ const DebateEndedResults = ({ results, insets, debateTitle, debateImage }: Debat
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: theme.colors.background,
+    backgroundColor: cyberpunkTheme.colors.background.primary,
   },
   waitContainer: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: theme.colors.background,
+    backgroundColor: cyberpunkTheme.colors.background.primary,
     paddingHorizontal: 30,
   },
   waitTitle: {
     fontSize: 20,
     fontWeight: "700",
-    color: theme.colors.text,
+    color: cyberpunkTheme.colors.text.primary,
     marginBottom: 12,
   },
   waitMessage: {
     fontSize: 16,
-    color: theme.colors.textMuted,
+    color: cyberpunkTheme.colors.text.muted,
     textAlign: "center",
     lineHeight: 24,
   },
@@ -177,7 +177,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     borderBottomLeftRadius: 30,
     borderBottomRightRadius: 30,
-    backgroundColor: theme.colors.backgroundDarker,
+    backgroundColor: cyberpunkTheme.colors.background.secondary,
     position: 'relative',
   },
   backButton: {
@@ -223,7 +223,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 18,
     fontWeight: "700",
-    color: theme.colors.text,
+    color: cyberpunkTheme.colors.text.primary,
     marginBottom: 15,
   },
   statsRow: {
@@ -237,12 +237,12 @@ const styles = StyleSheet.create({
   statValue: {
     fontSize: 24,
     fontWeight: "800",
-    color: theme.colors.text,
+    color: cyberpunkTheme.colors.text.primary,
     marginVertical: 5,
   },
   statLabel: {
     fontSize: 14,
-    color: theme.colors.textMuted,
+    color: cyberpunkTheme.colors.text.muted,
   },
   summaryCard: {
     backgroundColor: "rgba(255,255,255,0.08)",
@@ -253,7 +253,7 @@ const styles = StyleSheet.create({
   summaryText: {
     fontSize: 16,
     lineHeight: 24,
-    color: theme.colors.text,
+    color: cyberpunkTheme.colors.text.primary,
   },
   opinionsCard: {
     backgroundColor: "rgba(255,255,255,0.08)",
@@ -278,12 +278,12 @@ const styles = StyleSheet.create({
     marginRight: 10,
   },
   username: {
-    color: theme.colors.text,
+    color: cyberpunkTheme.colors.text.primary,
     fontWeight: "600",
     fontSize: 16,
   },
   badge: {
-    backgroundColor: theme.colors.primary,
+    backgroundColor: cyberpunkTheme.colors.primary,
     borderRadius: 10,
     paddingHorizontal: 8,
     paddingVertical: 2,
@@ -295,7 +295,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
   opinionText: {
-    color: theme.colors.text,
+    color: cyberpunkTheme.colors.text.primary,
     fontSize: 15,
     lineHeight: 22,
   },

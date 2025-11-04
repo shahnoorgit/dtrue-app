@@ -18,7 +18,6 @@ import { useNavigation } from "@react-navigation/native";
 import { useAuthToken } from "@/hook/clerk/useFetchjwtToken";
 import { router } from "expo-router";
 import { useAuth } from "@clerk/clerk-expo";
-import { theme } from "@/app/(chat-room)/theme";
 import { trackDebateJoined, trackContentShared } from "@/lib/posthog/events";
 import ThreeDotsMenu from "@/components/ui/ThreeDotsMenu";
 import ReportModal from "@/components/ui/ReportModal";
@@ -314,9 +313,9 @@ const DebateCard = ({ debate, onJoinPress }) => {
         {
           width: CARD_WIDTH,
           borderRadius: 16,
-          backgroundColor: theme.colors.background,
+          backgroundColor: cyberpunkTheme.colors.background.primary,
           borderWidth: 1,
-          borderColor: "#cccccc",
+          borderColor: cyberpunkTheme.colors.border.primary,
           marginVertical: 16,
           marginHorizontal: 12, // Adjusted for wider card
           overflow: "hidden",
@@ -351,10 +350,10 @@ const DebateCard = ({ debate, onJoinPress }) => {
             paddingVertical: 6,
             borderRadius: 6,
             elevation: 3,
-            backgroundColor: "#cccccc",
+            backgroundColor: cyberpunkTheme.colors.primary,
           }}
         >
-          <Text style={{ color: "#03120F", fontSize: 12, fontWeight: "700" }}>
+          <Text style={{ color: cyberpunkTheme.colors.text.inverse, fontSize: 12, fontWeight: "700" }}>
             {mainCategory}
           </Text>
         </View>
@@ -404,11 +403,11 @@ const DebateCard = ({ debate, onJoinPress }) => {
             />
             <View style={{ marginLeft: 8 }}>
               <Text
-                style={{ color: "#E0F0EA", fontWeight: "bold", fontSize: 14 }}
+                style={{ color: cyberpunkTheme.colors.text.secondary, fontWeight: "bold", fontSize: 14 }}
               >
                 {debate.creator.username}
               </Text>
-              <Text style={{ color: "#8F9BB3", fontSize: 11 }}>Creator</Text>
+              <Text style={{ color: cyberpunkTheme.colors.text.muted, fontSize: 11 }}>Creator</Text>
             </View>
           </Pressable>
 
@@ -425,10 +424,10 @@ const DebateCard = ({ debate, onJoinPress }) => {
             <Icon
               name='account-group'
               size={12}
-              color='#03120F'
+              color={cyberpunkTheme.colors.text.inverse}
               style={{ marginRight: 4 }}
             />
-            <Text style={{ color: "#03120F", fontSize: 12, fontWeight: "700" }}>
+            <Text style={{ color: cyberpunkTheme.colors.text.inverse, fontSize: 12, fontWeight: "700" }}>
               {debate.participantCount} Joined
             </Text>
           </View>
@@ -436,7 +435,7 @@ const DebateCard = ({ debate, onJoinPress }) => {
 
         <Text
           style={{
-            color: "#E0F0EA",
+            color: cyberpunkTheme.colors.text.secondary,
             fontWeight: "bold",
             fontSize: 20,
             marginBottom: 10,
@@ -472,7 +471,7 @@ const DebateCard = ({ debate, onJoinPress }) => {
             </Text>
             <Text
               style={{
-                color: "#E0F0EA",
+                color: cyberpunkTheme.colors.text.secondary,
                 fontSize: 14,
                 fontWeight: "600",
                 lineHeight: 20,
@@ -488,7 +487,7 @@ const DebateCard = ({ debate, onJoinPress }) => {
         {debate.description && (
           <Text
             style={{
-              color: "#8F9BB3",
+              color: cyberpunkTheme.colors.text.muted,
               fontSize: 14,
               marginBottom: 10,
               lineHeight: 20,
@@ -507,19 +506,19 @@ const DebateCard = ({ debate, onJoinPress }) => {
               <View
                 key={tag}
                 style={{
-                  backgroundColor: theme.colors.backgroundDarker,
+                  backgroundColor: cyberpunkTheme.colors.background.secondary,
                   paddingHorizontal: 10,
                   paddingVertical: 6,
                   borderRadius: 6,
                   marginRight: 8,
                   marginBottom: 2,
                   borderWidth: 1,
-                  borderColor: "#cccccc",
+                  borderColor: cyberpunkTheme.colors.border.primary,
                 }}
               >
                 <Text
                   style={{
-                    color: "#E0F0EA",
+                    color: cyberpunkTheme.colors.text.secondary,
                     fontSize: 10,
                     fontWeight: "600",
                   }}
@@ -541,13 +540,13 @@ const DebateCard = ({ debate, onJoinPress }) => {
             <Icon
               name='clock-outline'
               size={16}
-              color={"#E0F0EA"}
+              color={cyberpunkTheme.colors.text.secondary}
               style={{ opacity: 0.9 }}
             />
             <Text
               style={{
                 marginLeft: 6,
-                color: "#E0F0EA",
+                color: cyberpunkTheme.colors.text.secondary,
                 fontSize: 12,
                 fontWeight: "500",
               }}
@@ -559,13 +558,13 @@ const DebateCard = ({ debate, onJoinPress }) => {
             <Icon
               name='vote-outline'
               size={16}
-              color={"#E0F0EA"}
+              color={cyberpunkTheme.colors.text.secondary}
               style={{ opacity: 0.9 }}
             />
             <Text
               style={{
                 marginLeft: 6,
-                color: "#E0F0EA",
+                color: cyberpunkTheme.colors.text.secondary,
                 fontSize: 12,
                 fontWeight: "500",
               }}
@@ -649,7 +648,7 @@ const DebateCard = ({ debate, onJoinPress }) => {
               alignItems: "center",
             }}
           >
-            <Text style={{ color: "#03120F", fontSize: 14, fontWeight: "700" }}>
+            <Text style={{ color: cyberpunkTheme.colors.text.inverse, fontSize: 14, fontWeight: "700" }}>
               {loading ? "CONNECTING..." : "JOIN DEBATE"}
             </Text>
           </LinearGradient>

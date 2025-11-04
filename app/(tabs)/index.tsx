@@ -388,7 +388,7 @@ export default function DebateFeed() {
 
         <Text
           style={{
-            color: "#8F9BB3",
+            color: cyberpunkTheme.colors.text.muted,
             fontSize: 16,
             textAlign: "center",
             lineHeight: 24,
@@ -648,8 +648,8 @@ export default function DebateFeed() {
                 }}
               >
                 <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center" }}>
-                  <Ionicons name='add' size={16} color='#000000' style={{ marginRight: 3 }} />
-                  <Text style={{ color: '#000000', fontSize: 12, fontWeight: '600' }}>Create</Text>
+                  <Ionicons name='add' size={16} color={cyberpunkTheme.colors.text.inverse} style={{ marginRight: 3 }} />
+                  <Text style={{ color: cyberpunkTheme.colors.text.inverse, fontSize: 12, fontWeight: '600' }}>Create</Text>
                 </View>
               </LinearGradient>
             </TouchableOpacity>
@@ -714,7 +714,7 @@ export default function DebateFeed() {
               <Text
                 style={{
                   textAlign: "center",
-                  color: "#8F9BB3",
+                  color: "#9CA3AB",
                   marginVertical: 16,
                 }}
               >
@@ -764,7 +764,7 @@ export default function DebateFeed() {
             </Text>
             
             <Text style={{
-              color: '#8F9BB3',
+              color: '#9CA3AB',
               fontSize: 14,
               textAlign: 'center',
               marginBottom: 24,
@@ -801,7 +801,7 @@ export default function DebateFeed() {
                   Explore Debates
                 </Text>
                 <Text style={{
-                  color: '#8F9BB3',
+                  color: '#9CA3AB',
                   fontSize: 12,
                 }}>
                   Discover and join existing debates
@@ -837,7 +837,7 @@ export default function DebateFeed() {
                   Create Debate
                 </Text>
                 <Text style={{
-                  color: '#8F9BB3',
+                  color: '#9CA3AB',
                   fontSize: 12,
                 }}>
                   Start your own debate topic
@@ -854,7 +854,7 @@ export default function DebateFeed() {
               }}
             >
               <Text style={{
-                color: '#8F9BB3',
+                color: '#9CA3AB',
                 fontSize: 14,
                 fontWeight: '500',
               }}>

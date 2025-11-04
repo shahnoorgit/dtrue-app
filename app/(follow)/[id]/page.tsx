@@ -54,7 +54,7 @@ const THEME = {
     backgroundDarker: "#03120F",
     cardBackground: "#0F1419",
     text: "#FFFFFF",
-    textMuted: "#8F9BB3",
+    textMuted: "#9CA3AB",
     textSecondary: "#6B7280",
     border: "#1A1F24",
     accent: "#00D4FF",

@@ -8,26 +8,7 @@ import {
   Pressable,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
-
-const THEME = {
-  colors: {
-    primary: "#00FF94",
-    secondary: "#FF00E5",
-    background: "#080F12",
-    backgroundSecondary: "#1a1a1a",
-    cardBackground: "#262626", // Original card background
-    surface: "#333333",
-    text: "#FFFFFF",
-    textSecondary: "#a3a3a3",
-    textMuted: "#8F9BB3",
-    border: "#404040",
-    success: "#10b981",
-    followButtonBg: "#F5F5DC", // Light beige/off-white like in the image
-    followButtonText: "#262626", // Dark text
-  },
-  spacing: { xs: 4, sm: 8, md: 16, lg: 24, xl: 32 },
-  borderRadius: { sm: 8, md: 12, lg: 16, xl: 24 },
-};
+import { cyberpunkTheme } from "@/constants/theme";
 
 interface User {
   id: string;
@@ -146,8 +127,8 @@ const styles = StyleSheet.create({
     // No padding - let it blend with outside
   },
   profileCard: {
-    borderRadius: THEME.borderRadius.lg,
-    padding: THEME.spacing.xl,
+    borderRadius: cyberpunkTheme.borderRadius.lg,
+    padding: cyberpunkTheme.spacing.xl,
     shadowColor: "#000",
     shadowOffset: {
       width: 0,
@@ -157,30 +138,30 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 8,
     borderWidth: 1,
-    borderColor: THEME.colors.border,
-    backgroundColor: THEME.colors.cardBackground,
+    borderColor: cyberpunkTheme.colors.border.primary,
+    backgroundColor: cyberpunkTheme.colors.background.surface,
   },
   cardContent: {
     flexDirection: "row",
     alignItems: "flex-start",
-    marginBottom: THEME.spacing.md,
+    marginBottom: cyberpunkTheme.spacing.md,
   },
   profileImageContainer: {
-    marginRight: THEME.spacing.lg,
+    marginRight: cyberpunkTheme.spacing.lg,
   },
   profileImage: {
     width: 100,
     height: 100,
     borderRadius: 50,
     borderWidth: 2,
-    borderColor: THEME.colors.text,
+    borderColor: cyberpunkTheme.colors.text.primary,
   },
   statsContainer: {
     flex: 1,
     flexDirection: "row",
     justifyContent: "space-around",
     alignItems: "center",
-    marginTop: THEME.spacing.sm,
+    marginTop: cyberpunkTheme.spacing.sm,
   },
   statItem: {
     alignItems: "center",
@@ -189,42 +170,42 @@ const styles = StyleSheet.create({
   statNumber: {
     fontSize: 24,
     fontWeight: "bold",
-    color: THEME.colors.text,
+    color: cyberpunkTheme.colors.text.primary,
     marginBottom: 2,
   },
   statLabel: {
     fontSize: 14,
-    color: THEME.colors.textSecondary,
+    color: cyberpunkTheme.colors.text.tertiary,
     fontWeight: "500",
   },
   userInfoSection: {
-    marginBottom: THEME.spacing.md,
+    marginBottom: cyberpunkTheme.spacing.md,
   },
   username: {
     fontSize: 24,
     fontWeight: "bold",
-    color: THEME.colors.text,
-    marginBottom: THEME.spacing.xs,
+    color: cyberpunkTheme.colors.text.primary,
+    marginBottom: cyberpunkTheme.spacing.xs,
   },
   bio: {
     fontSize: 14,
-    color: THEME.colors.textSecondary,
+    color: cyberpunkTheme.colors.text.tertiary,
     lineHeight: 20,
   },
   followButton: {
-    backgroundColor: THEME.colors.followButtonBg,
-    paddingVertical: THEME.spacing.sm,
-    paddingHorizontal: THEME.spacing.lg,
+    backgroundColor: cyberpunkTheme.colors.follow.button,
+    paddingVertical: cyberpunkTheme.spacing.sm,
+    paddingHorizontal: cyberpunkTheme.spacing.lg,
     borderRadius: 25, // Pill-shaped
     alignItems: "center",
     justifyContent: "center",
     minHeight: 44,
   },
   followingButton: {
-    backgroundColor: THEME.colors.success, // Green when following
+    backgroundColor: cyberpunkTheme.colors.semantic.success, // Green when following
   },
   followButtonText: {
-    color: THEME.colors.followButtonText,
+    color: cyberpunkTheme.colors.follow.buttonText,
     fontSize: 16,
     fontWeight: "700",
   },

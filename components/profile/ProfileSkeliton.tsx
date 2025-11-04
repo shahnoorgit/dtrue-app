@@ -13,7 +13,7 @@ const THEME = {
     surface: "#333333",
     text: "#FFFFFF",
     textSecondary: "#a3a3a3",
-    textMuted: "#8F9BB3",
+    textMuted: "#9CA3AB",
     border: "#404040",
     success: "#10b981",
     skeletonHighlight: "#3a3a3a", // Lighter shade for shine effect

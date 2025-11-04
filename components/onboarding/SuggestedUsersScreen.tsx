@@ -293,10 +293,10 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: cyberpunkTheme.colors.background.dark,
+    backgroundColor: cyberpunkTheme.colors.background.primary,
   },
   loadingText: {
-    color: cyberpunkTheme.colors.text.light,
+    color: cyberpunkTheme.colors.text.primary,
     fontSize: 16,
     marginTop: 16,
   },
@@ -316,7 +316,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 28,
     fontWeight: 'bold',
-    color: cyberpunkTheme.colors.text.light,
+    color: cyberpunkTheme.colors.text.primary,
     textAlign: 'center',
     flex: 1,
   },
@@ -344,7 +344,7 @@ const styles = StyleSheet.create({
   },
   userCard: {
     width: CARD_WIDTH,
-    backgroundColor: cyberpunkTheme.colors.background.dark,
+    backgroundColor: cyberpunkTheme.colors.background.primary,
     borderRadius: 12,
     borderWidth: 1,
     borderColor: cyberpunkTheme.colors.primary + '20',
@@ -374,7 +374,7 @@ const styles = StyleSheet.create({
   userName: {
     fontSize: 14,
     fontWeight: '600',
-    color: cyberpunkTheme.colors.text.light,
+    color: cyberpunkTheme.colors.text.primary,
     textAlign: 'center',
     marginBottom: 4,
   },
@@ -421,7 +421,7 @@ const styles = StyleSheet.create({
   continueButtonText: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: cyberpunkTheme.colors.background.dark,
+    color: cyberpunkTheme.colors.background.primary,
   },
 });
 

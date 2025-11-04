@@ -19,7 +19,7 @@ export default function ForceUpdateGate({ visible, latestVersion, currentVersion
         colors={cyberpunkTheme.colors.gradients.background as [string, string]}
         className='absolute inset-0'
       />
-      <StatusBar barStyle='light-content' backgroundColor={cyberpunkTheme.colors.background.dark} />
+      <StatusBar barStyle='light-content' backgroundColor={cyberpunkTheme.colors.background.primary} />
       <View className='p-6 bg-gray-800 rounded-lg w-4/5 max-w-md'>
         <Text className='text-white text-2xl font-bold mb-3'>Update Required</Text>
         <Text className='text-gray-300 mb-4'>A newer version of the app is available.</Text>

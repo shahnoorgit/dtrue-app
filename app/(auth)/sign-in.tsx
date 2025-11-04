@@ -328,7 +328,7 @@ export default function SignInScreen() {
                     Welcome Back
                   </Text>
 
-                  <Text style={{ color: "#D1D5DB", textAlign: "center", fontSize: 14, lineHeight: 20 }}>
+                  <Text style={{ color: cyberpunkTheme.colors.text.tertiary, textAlign: "center", fontSize: 14, lineHeight: 20 }}>
                     Sign in to continue your journey
                   </Text>
                 </View>
@@ -339,7 +339,7 @@ export default function SignInScreen() {
                 <View style={{ rowGap: 24 }}>
                   {/* Email Input */}
                   <View>
-                    <Text style={{ color: "#D1D5DB", fontSize: 14, fontWeight: "500", marginBottom: 8, marginLeft: 4 }}>Email Address</Text>
+                    <Text style={{ color: cyberpunkTheme.colors.text.tertiary, fontSize: 14, fontWeight: "500", marginBottom: 8, marginLeft: 4 }}>Email Address</Text>
                     <View
                       style={{
                         backgroundColor: "rgba(31,41,55,0.6)",
@@ -395,7 +395,7 @@ export default function SignInScreen() {
 
                   {/* Password Input */}
                   <View>
-                    <Text style={{ color: "#D1D5DB", fontSize: 14, fontWeight: "500", marginBottom: 8, marginLeft: 4 }}>Password</Text>
+                    <Text style={{ color: cyberpunkTheme.colors.text.tertiary, fontSize: 14, fontWeight: "500", marginBottom: 8, marginLeft: 4 }}>Password</Text>
                     <View
                       style={{
                         backgroundColor: "rgba(31,41,55,0.6)",
@@ -499,7 +499,7 @@ export default function SignInScreen() {
 
                   {/* Sign Up Link */}
                   <View style={{ flexDirection: "row", alignItems: "center" }}>
-                    <Text style={{ color: "#D1D5DB", fontSize: 14 }}>New to Dtrue? </Text>
+                    <Text style={{ color: cyberpunkTheme.colors.text.tertiary, fontSize: 14 }}>New to Dtrue? </Text>
                     <TouchableOpacity onPress={() => router.push("/(auth)/sign-up")} style={{ padding: 4 }} activeOpacity={0.7}>
                       <Text
                         style={{
@@ -558,7 +558,7 @@ export default function SignInScreen() {
                         <Icon name="at" size={18} color={cyberpunkTheme.colors.primary} style={{ marginLeft: 12, marginRight: 8 }} />
                         <TextInput
                           style={{ flex: 1, paddingHorizontal: 12, paddingVertical: 12, color: "white" }}
-                          placeholderTextColor="#8F9BB3"
+                          placeholderTextColor="#9CA3AB"
                           autoCapitalize="none"
                           keyboardType="email-address"
                           ref={resetEmailRef}
@@ -601,7 +601,7 @@ export default function SignInScreen() {
                         <Icon name="key-variant" size={18} color={cyberpunkTheme.colors.primary} style={{ marginLeft: 12, marginRight: 8 }} />
                         <TextInput
                           style={{ flex: 1, paddingHorizontal: 12, paddingVertical: 12, color: "white" }}
-                          placeholderTextColor="#8F9BB3"
+                          placeholderTextColor="#9CA3AB"
                           ref={resetCodeRef}
                           value={resetCode}
                           placeholder="Reset code"
@@ -621,7 +621,7 @@ export default function SignInScreen() {
                         <Icon name="lock" size={18} color={cyberpunkTheme.colors.primary} style={{ marginLeft: 12, marginRight: 8 }} />
                         <TextInput
                           style={{ flex: 1, paddingHorizontal: 12, paddingVertical: 12, color: "white" }}
-                          placeholderTextColor="#8F9BB3"
+                          placeholderTextColor="#9CA3AB"
                           ref={resetPasswordRef}
                           value={resetPassword}
                           placeholder="New password (min 8 chars)"
