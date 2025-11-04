@@ -21,6 +21,7 @@ import * as Haptics from "expo-haptics";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { cyberpunkTheme } from "@/constants/theme";
 import DebateCard from "@/components/tabs/debate_card/DebateCard";
+import FeedCardSkeleton from "@/components/tabs/debate_card/FeedCardSkeleton";
 import { useAuth } from "@clerk/clerk-expo";
 import { useAuthAxios } from "@/utils/axiosInstance";
 import { LinearGradient } from "expo-linear-gradient";
@@ -659,19 +660,7 @@ export default function DebateFeed() {
       </Animated.View>
 
       {loading && cursor === null ? (
-        <View
-          style={{
-            flex: 1,
-            justifyContent: "center",
-            alignItems: "center",
-            padding: 20,
-          }}
-        >
-          <ActivityIndicator
-            size='large'
-            color={cyberpunkTheme.colors.primary}
-          />
-        </View>
+        <FeedCardSkeleton />
       ) : (
         <FlatList
           ref={flatListRef}
