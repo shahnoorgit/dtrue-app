@@ -12,7 +12,9 @@
     "lint": "expo lint",
     "update:production": "eas update --branch production --message",
     "analyze": "expo export --platform android --output-dir ./dist && echo 'Bundle analysis complete. Check ./dist folder for bundle size.'",
-    "build:production": "eas build --platform android --profile production"
+    "build:production": "node scripts/bump-version.js patch && eas build --platform android --profile production",
+    "build:production-minor": "node scripts/bump-version.js minor && eas build --platform android --profile production",
+    "build:production-major": "node scripts/bump-version.js major && eas build --platform android --profile production"
   },
   "jest": {
     "preset": "jest-expo"

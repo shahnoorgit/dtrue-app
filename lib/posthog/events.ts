@@ -341,3 +341,39 @@ export const resetUser = () => {
     console.warn("PostHog reset failed:", error);
   }
 };
+
+// ============================================================================
+// 7. UPDATES & VERSIONING (custom events)
+// ============================================================================
+
+export const trackUpdateCheck = (properties: {
+  packageName?: string | null;
+  currentVersion?: string | null;
+  latestVersion?: string | null;
+  currentBuild?: number | null;
+  minSupportedBuild?: number | null;
+  required?: boolean;
+  reason?: "store_version" | "min_build" | "none";
+  retryCount?: number;
+  error?: string;
+} = {}) => {
+  captureEvent("update_check", {
+    timestamp: new Date().toISOString(),
+    platform: properties?.packageName?.includes("com.") ? "android" : undefined,
+    ...properties,
+  });
+};
+
+export const trackForceUpdateRequired = (properties: {
+  packageName?: string | null;
+  currentVersion?: string | null;
+  latestVersion?: string | null;
+  currentBuild?: number | null;
+  minSupportedBuild?: number | null;
+  reason: "store_version" | "min_build";
+}) => {
+  captureEvent("force_update_required", {
+    timestamp: new Date().toISOString(),
+    ...properties,
+  });
+};
