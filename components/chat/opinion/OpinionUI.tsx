@@ -97,7 +97,10 @@ export function RenderOpinion({ item, debateRoomId }: { item: any; debateRoomId?
               color: theme.colors.text,
               fontWeight: "700",
               fontSize: 15,
+              flexShrink: 1,
             }}
+            numberOfLines={1}
+            ellipsizeMode="tail"
           >
             {item.user.username}
           </Text>
@@ -128,6 +131,7 @@ export function RenderOpinion({ item, debateRoomId }: { item: any; debateRoomId?
             fontSize: 15,
             letterSpacing: 0.2,
             marginBottom: 8,
+            flexShrink: 1,
           }}
         >
           {item.opinion}

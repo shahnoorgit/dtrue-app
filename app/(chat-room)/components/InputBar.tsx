@@ -60,7 +60,7 @@ const InputBar: React.FC<InputBarProps> = ({
         <View style={styles.editModeHeader}>
           <View style={styles.editModeInfo}>
             <Ionicons name="create-outline" size={16} color="#00FF94" />
-            <Text style={styles.editModeText}>Editing your opinion</Text>
+            <Text style={styles.editModeText} numberOfLines={1}>Editing your opinion</Text>
           </View>
           {onCancelEdit && (
             <TouchableOpacity onPress={onCancelEdit} style={styles.cancelButton}>
@@ -79,7 +79,7 @@ const InputBar: React.FC<InputBarProps> = ({
           ]}>
             {stance === "agree" ? "Agreeing with" : "Disagreeing with"}:
           </Text>
-          <Text style={styles.statementText} numberOfLines={2}>
+          <Text style={styles.statementText} numberOfLines={2} ellipsizeMode="tail">
             "{creatorStatement}"
           </Text>
         </View>
@@ -116,6 +116,7 @@ const InputBar: React.FC<InputBarProps> = ({
                   styles.stanceText, 
                   selected && { color: isAgree ? "#00FF94" : "#FF4757" }
                 ]}
+                numberOfLines={1}
               >
                 {opt.charAt(0).toUpperCase() + opt.slice(1)}
               </Text>

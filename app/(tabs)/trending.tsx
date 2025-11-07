@@ -23,6 +23,7 @@ import { logError } from "@/utils/sentry/sentry"; // Added Sentry import
 import { trackDebateJoined, trackContentShared } from "@/lib/posthog/events";
 import TrendingSkeleton from "@/components/explore/TrendingSkeleton";
 import { useFetchWithAutoRetry } from "@/utils/fetchWithAutoRetry";
+import { useDelayedLoading } from "@/hook/useDelayedLoading";
 
 // Define theme as a constant outside the component to avoid recreation on re-render
 const THEME = {
@@ -52,6 +53,9 @@ const TrendingDebatesPage = () => {
   const retryCount = useRef(0);
   const maxRetries = 3;
   const isMountedRef = useRef(true);
+
+  // Apply 100ms grace delay for initial load only
+  const showDelayedLoading = useDelayedLoading(loading && !refreshing && debates.length === 0, 100);
 
   useEffect(() => {
     return () => {
@@ -327,22 +331,6 @@ const TrendingDebatesPage = () => {
     </View>
   );
 
-  if (loading && !refreshing) {
-    return (
-      <View style={styles.container}>
-        <LinearGradient
-          colors={[THEME.colors.backgroundDarker, THEME.colors.background]}
-          style={styles.header}
-        >
-          <View style={styles.headerContent}>
-            <Text style={styles.headerTitle}>Trending</Text>
-          </View>
-        </LinearGradient>
-        <TrendingSkeleton />
-      </View>
-    );
-  }
-
   return (
     <View style={styles.container}>
       {/* Header */}
@@ -358,6 +346,8 @@ const TrendingDebatesPage = () => {
       {/* Content */}
       {fetchError && !loading ? (
         renderError()
+      ) : showDelayedLoading ? (
+        <TrendingSkeleton />
       ) : (
         <FlatList
           data={debates}

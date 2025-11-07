@@ -8,6 +8,8 @@ import {
   Pressable,
   StyleSheet,
   SafeAreaView,
+  ScrollView,
+  useWindowDimensions,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
@@ -40,83 +42,105 @@ const ModalSheet: React.FC<ModalSheetProps> = ({
 }) => {
   const positivePct = Math.round(agreePct * 100);
   const negativePct = 100 - positivePct;
+  const { height } = useWindowDimensions();
+  
+  // Calculate max height: 70% of screen, but ensure minimum space for button
+  const maxModalHeight = Math.min(height * 0.7, height - 150);
 
   return (
     <Modal visible={showModal} transparent animationType='slide'>
-      <SafeAreaView style={styles.container}>
-        <LinearGradient
-          colors={["#222", "#111"]}
-          start={[0, 0]}
-          end={[0, 1]}
-          style={[styles.sheet, { paddingBottom: Math.max(20, insets.bottom) }]}
-        >
-          <View style={styles.handle} />
-
-          <View style={styles.headerRow}>
-            {debateImage && (
-              <Image source={{ uri: debateImage }} style={styles.avatar} />
-            )}
-            <View style={styles.headerTextContainer}>
-              <Text style={styles.title}>{debateTitle}</Text>
-              <View style={styles.timeRow}>
-                <Ionicons name='time-outline' size={16} color='#FFF' />
-                <Text style={styles.timeText}>
-                  {formatTimeRemaining(timeRemaining!)}
-                </Text>
-              </View>
-            </View>
-          </View>
-
-          {/* Creator Statement - Prominent Display */}
-          {creatorStatement && (
-            <View style={styles.statementContainer}>
-              <View style={styles.statementHeader}>
-                <Ionicons name="chatbox-ellipses" size={16} color="#00FF94" />
-                <Text style={styles.statementHeaderText}>Creator's Statement</Text>
-              </View>
-              <Text style={styles.statementText}>"{creatorStatement}"</Text>
-              <Text style={styles.statementSubtext}>
-                Choose to agree or disagree with this statement
-              </Text>
-            </View>
-          )}
-
-          <Text style={styles.description}>
-            {debateDescription || "No description available."}
-          </Text>
-
-          <View style={styles.progressSection}>
-            <Text style={[styles.progressLabel, { color: "#00FF94" }]}>{positivePct}%</Text>
-            <View style={styles.progressBarContainer}>
-              <View
-                style={[
-                  styles.progressFill,
-                  { flex: positivePct || 1, backgroundColor: "#00FF94" },
-                ]}
-              />
-              <View
-                style={[
-                  styles.progressFill,
-                  { flex: negativePct || 1, backgroundColor: "#FF4757" },
-                ]}
-              />
-            </View>
-            <Text style={[styles.progressLabel, { color: "#FF4757" }]}>{negativePct}%</Text>
-          </View>
-
-          <View style={styles.footerRow}>
-            <Text style={styles.opinionCount}>
-              {opinions.length} opinions shared
-            </Text>
-            <TouchableOpacity
-              onPress={() => setShowModal(false)}
-              style={styles.button}
+      <Pressable style={styles.backdrop} onPress={() => setShowModal(false)}>
+        <Pressable onPress={(e) => e.stopPropagation()}>
+          <SafeAreaView style={styles.container}>
+            <LinearGradient
+              colors={["#222", "#111"]}
+              start={[0, 0]}
+              end={[0, 1]}
+              style={[styles.sheet, { maxHeight: maxModalHeight }]}
             >
-              <Text style={styles.buttonText}>Got it</Text>
-            </TouchableOpacity>
-          </View>
-        </LinearGradient>
-      </SafeAreaView>
+              <View style={styles.handle} />
+
+              {/* Scrollable Content */}
+              <ScrollView
+                style={styles.scrollContent}
+                contentContainerStyle={styles.scrollContentContainer}
+                showsVerticalScrollIndicator={false}
+                bounces={false}
+              >
+                <View style={styles.headerRow}>
+                  {debateImage && (
+                    <Image source={{ uri: debateImage }} style={styles.avatar} />
+                  )}
+                  <View style={styles.headerTextContainer}>
+                    <Text style={styles.title} numberOfLines={2} ellipsizeMode="tail">
+                      {debateTitle}
+                    </Text>
+                    <View style={styles.timeRow}>
+                      <Ionicons name='time-outline' size={16} color='#FFF' />
+                      <Text style={styles.timeText}>
+                        {formatTimeRemaining(timeRemaining!)}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+
+                {/* Creator Statement - Prominent Display */}
+                {creatorStatement && (
+                  <View style={styles.statementContainer}>
+                    <View style={styles.statementHeader}>
+                      <Ionicons name="chatbox-ellipses" size={16} color="#00FF94" />
+                      <Text style={styles.statementHeaderText}>Creator's Statement</Text>
+                    </View>
+                    <Text style={styles.statementText} numberOfLines={4} ellipsizeMode="tail">
+                      "{creatorStatement}"
+                    </Text>
+                    <Text style={styles.statementSubtext}>
+                      Choose to agree or disagree with this statement
+                    </Text>
+                  </View>
+                )}
+
+                <Text style={styles.description} numberOfLines={3} ellipsizeMode="tail">
+                  {debateDescription || "No description available."}
+                </Text>
+
+                <View style={styles.progressSection}>
+                  <Text style={[styles.progressLabel, { color: "#00FF94" }]}>{positivePct}%</Text>
+                  <View style={styles.progressBarContainer}>
+                    <View
+                      style={[
+                        styles.progressFill,
+                        { flex: positivePct || 1, backgroundColor: "#00FF94" },
+                      ]}
+                    />
+                    <View
+                      style={[
+                        styles.progressFill,
+                        { flex: negativePct || 1, backgroundColor: "#FF4757" },
+                      ]}
+                    />
+                  </View>
+                  <Text style={[styles.progressLabel, { color: "#FF4757" }]}>{negativePct}%</Text>
+                </View>
+              </ScrollView>
+
+              {/* Fixed Footer with Button - Always Visible */}
+              <View style={[styles.footerRow, { paddingBottom: Math.max(12, insets.bottom) }]}>
+                <Text style={styles.opinionCount}>
+                  {opinions.length} opinion{opinions.length !== 1 ? 's' : ''} shared
+                </Text>
+                <TouchableOpacity
+                  onPress={() => setShowModal(false)}
+                  style={styles.button}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.buttonText}>Got it</Text>
+                </TouchableOpacity>
+              </View>
+            </LinearGradient>
+          </SafeAreaView>
+        </Pressable>
+      </Pressable>
     </Modal>
   );
 };
@@ -124,24 +148,33 @@ const ModalSheet: React.FC<ModalSheetProps> = ({
 export default ModalSheet;
 
 const styles = StyleSheet.create({
-  container: {
+  backdrop: {
     flex: 1,
+    backgroundColor: "rgba(0,0,0,0.4)",
     justifyContent: "flex-end",
-    backgroundColor: "rgba(0,0,0,0.4)", // semi-transparent
+  },
+  container: {
+    justifyContent: "flex-end",
   },
   sheet: {
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
-    padding: 20,
-    maxHeight: "70%",
+    paddingHorizontal: 20,
+    paddingTop: 12,
   },
   handle: {
     width: 40,
     height: 4,
-    backgroundColor: "",
+    backgroundColor: "rgba(255,255,255,0.3)",
     borderRadius: 2,
     alignSelf: "center",
     marginBottom: 16,
+  },
+  scrollContent: {
+    flexGrow: 0,
+  },
+  scrollContentContainer: {
+    paddingBottom: 8,
   },
   headerRow: {
     flexDirection: "row",
@@ -158,12 +191,14 @@ const styles = StyleSheet.create({
   },
   headerTextContainer: {
     flex: 1,
+    flexShrink: 1,
   },
   title: {
     color: "#FFF",
     fontSize: 18,
     fontWeight: "bold",
     marginBottom: 4,
+    flexShrink: 1,
   },
   timeRow: {
     flexDirection: "row",
@@ -183,7 +218,7 @@ const styles = StyleSheet.create({
   progressSection: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 16,
+    marginBottom: 8,
   },
   progressLabel: {
     color: "#FFF",
@@ -210,20 +245,28 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: "#333",
     paddingTop: 16,
+    paddingHorizontal: 20,
+    marginHorizontal: -20,
   },
   opinionCount: {
     color: "#AAA",
     fontSize: 13,
+    flexShrink: 1,
   },
   button: {
     backgroundColor: "#FFF",
-    paddingHorizontal: 20,
-    paddingVertical: 8,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
     borderRadius: 16,
+    minWidth: 100,
+    minHeight: 44, // Minimum touch target
+    alignItems: "center",
+    justifyContent: "center",
   },
   buttonText: {
     color: "#111",
     fontWeight: "600",
+    fontSize: 16,
   },
   statementContainer: {
     backgroundColor: "rgba(0, 255, 148, 0.08)",

@@ -6,7 +6,7 @@ import {
   Animated,
   Easing,
   Image,
-  Dimensions,
+  useWindowDimensions,
   Alert,
   Share,
 } from "react-native";
@@ -21,11 +21,7 @@ import { useAuth } from "@clerk/clerk-expo";
 import { trackDebateJoined, trackContentShared } from "@/lib/posthog/events";
 import ThreeDotsMenu from "@/components/ui/ThreeDotsMenu";
 import ReportModal from "@/components/ui/ReportModal";
-
-const { width } = Dimensions.get("window");
-// Slightly wider card
-const CARD_WIDTH = width - 24; // Changed from 32 to 24 for wider card
-const IMAGE_HEIGHT = CARD_WIDTH * 0.6;
+import { getResponsiveCardWidth, getResponsivePadding, scaleFontSize } from "@/utils/responsive";
 
 const DebateCard = ({ debate, onJoinPress }) => {
   const [loading, setLoading] = useState(false);
@@ -33,6 +29,12 @@ const DebateCard = ({ debate, onJoinPress }) => {
   const { userId } = useAuth();
   const navigation = useNavigation();
   const [token, refreshToken] = useAuthToken();
+  const { width } = useWindowDimensions();
+  
+  // Responsive dimensions
+  const CARD_WIDTH = useMemo(() => getResponsiveCardWidth(24), [width]);
+  const IMAGE_HEIGHT = useMemo(() => CARD_WIDTH * 0.6, [CARD_WIDTH]);
+  const cardPadding = useMemo(() => getResponsivePadding(10), [width]);
 
   // Create animations only once
   const spinValue = useMemo(() => new Animated.Value(0), []);
@@ -374,7 +376,7 @@ const DebateCard = ({ debate, onJoinPress }) => {
         </View>
       </View>
 
-      <View style={{ padding: 10 }}>
+      <View style={{ padding: cardPadding }}>
         <View
           style={{
             flexDirection: "row",
@@ -403,11 +405,13 @@ const DebateCard = ({ debate, onJoinPress }) => {
             />
             <View style={{ marginLeft: 8 }}>
               <Text
-                style={{ color: cyberpunkTheme.colors.text.secondary, fontWeight: "bold", fontSize: 14 }}
+                style={{ color: cyberpunkTheme.colors.text.secondary, fontWeight: "bold", fontSize: scaleFontSize(14, 13, 15), flexShrink: 1 }}
+                numberOfLines={1}
+                ellipsizeMode="tail"
               >
                 {debate.creator.username}
               </Text>
-              <Text style={{ color: cyberpunkTheme.colors.text.muted, fontSize: 11 }}>Creator</Text>
+              <Text style={{ color: cyberpunkTheme.colors.text.muted, fontSize: 11 }} numberOfLines={1}>Creator</Text>
             </View>
           </Pressable>
 
@@ -437,10 +441,13 @@ const DebateCard = ({ debate, onJoinPress }) => {
           style={{
             color: cyberpunkTheme.colors.text.secondary,
             fontWeight: "bold",
-            fontSize: 20,
+            fontSize: scaleFontSize(20, 18, 22),
             marginBottom: 10,
             lineHeight: 26,
+            flexShrink: 1,
           }}
+          numberOfLines={3}
+          ellipsizeMode="tail"
         >
           {debate.title}
         </Text>
@@ -472,12 +479,14 @@ const DebateCard = ({ debate, onJoinPress }) => {
             <Text
               style={{
                 color: cyberpunkTheme.colors.text.secondary,
-                fontSize: 14,
+                fontSize: scaleFontSize(14, 13, 15),
                 fontWeight: "600",
                 lineHeight: 20,
                 fontStyle: "italic",
+                flexShrink: 1,
               }}
               numberOfLines={2}
+              ellipsizeMode="tail"
             >
               "{debate.creator_statement}"
             </Text>
@@ -488,11 +497,13 @@ const DebateCard = ({ debate, onJoinPress }) => {
           <Text
             style={{
               color: cyberpunkTheme.colors.text.muted,
-              fontSize: 14,
+              fontSize: scaleFontSize(14, 13, 15),
               marginBottom: 10,
               lineHeight: 20,
+              flexShrink: 1,
             }}
             numberOfLines={2}
+            ellipsizeMode="tail"
           >
             {debate.description}
           </Text>
@@ -522,6 +533,8 @@ const DebateCard = ({ debate, onJoinPress }) => {
                     fontSize: 10,
                     fontWeight: "600",
                   }}
+                  numberOfLines={1}
+                  ellipsizeMode="tail"
                 >
                   #{formatCategory(tag).replace(/\s+/g, "")}
                 </Text>

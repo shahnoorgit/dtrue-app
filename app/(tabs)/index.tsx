@@ -31,6 +31,7 @@ import { logError } from "@/utils/sentry/sentry";
 import { trackDebateJoined, trackContentShared } from "@/lib/posthog/events";
 import { useSimpleNetworkStatus } from "@/hook/useSimpleNetworkStatus";
 import { useFetchWithAutoRetry } from "@/utils/fetchWithAutoRetry";
+import { useDelayedLoading } from "@/hook/useDelayedLoading";
 
 const DEBATES_STORAGE_KEY = "cached_debates";
 const DEBATES_TIMESTAMP_KEY = "cached_debates_timestamp";
@@ -65,6 +66,9 @@ export default function DebateFeed() {
   const scrollOffsetRef = useRef(0);
   const isInitialMount = useRef(true);
   const insets = useSafeAreaInsets();
+
+  // Apply 100ms grace delay for initial load only
+  const showDelayedLoading = useDelayedLoading(loading && cursor === null && debates.length === 0, 100);
 
   useEffect(() => {
     const initialize = async () => {
@@ -659,7 +663,7 @@ export default function DebateFeed() {
         </Animated.View>
       </Animated.View>
 
-      {loading && cursor === null ? (
+      {showDelayedLoading ? (
         <FeedCardSkeleton />
       ) : (
         <FlatList

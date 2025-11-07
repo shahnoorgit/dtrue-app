@@ -27,6 +27,7 @@ import {
 } from "@/lib/posthog/events";
 import ExploreSkeleton from "@/components/explore/ExploreSkeleton";
 import { useFetchWithAutoRetry } from "@/utils/fetchWithAutoRetry";
+import { useDelayedLoading } from "@/hook/useDelayedLoading";
 
 const THEME = {
   colors: {
@@ -64,6 +65,10 @@ const ExploreDebatesPage = () => {
   const isMountedRef = useRef(true);
   const searchTimeout = useRef<NodeJS.Timeout>();
   const limit = 5;
+
+  // Apply 100ms grace delay for initial load and search
+  const showDelayedLoading = useDelayedLoading(loading && !refreshing && debates.length === 0, 100);
+  const showDelayedSearchLoading = useDelayedLoading(searchLoading && debates.length === 0, 100);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -508,21 +513,6 @@ const ExploreDebatesPage = () => {
       </View>
     ) : null;
 
-  if (loading && !refreshing) {
-    return (
-      <View style={styles.container}>
-        <LinearGradient
-          colors={[THEME.colors.backgroundDarker, THEME.colors.background]}
-          style={styles.header}
-        >
-          <Text style={styles.headerTitle}>Explore</Text>
-          {renderSearchHeader()}
-        </LinearGradient>
-        <ExploreSkeleton />
-      </View>
-    );
-  }
-
   return (
     <View style={styles.container}>
       <LinearGradient
@@ -535,7 +525,7 @@ const ExploreDebatesPage = () => {
 
       {fetchError && !loading ? (
         renderError()
-      ) : searchLoading && debates.length === 0 ? (
+      ) : showDelayedLoading || showDelayedSearchLoading ? (
         <ExploreSkeleton />
       ) : (
         <FlatList

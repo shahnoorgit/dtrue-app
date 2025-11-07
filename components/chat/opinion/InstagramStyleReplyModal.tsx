@@ -9,7 +9,7 @@ import {
   Alert,
   Pressable,
   Animated,
-  Dimensions,
+  useWindowDimensions,
   KeyboardAvoidingView,
   Platform,
   InteractionManager,
@@ -24,13 +24,9 @@ import { OpinionReply, useOpinionReplyService } from '@/services/opinionReplyApi
 import ReplyItem from './ReplyItem';
 import ReplySkeleton from './ReplySkeleton';
 import * as Haptics from 'expo-haptics';
+import { scaleFontSize, getResponsivePadding } from '@/utils/responsive';
 
-const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 const STATUS_BAR_HEIGHT = StatusBar.currentHeight || 0;
-const MODAL_HEIGHT = Platform.select({
-  ios: SCREEN_HEIGHT * 0.70,
-  android: SCREEN_HEIGHT - STATUS_BAR_HEIGHT,
-});
 
 interface InstagramStyleReplyModalProps {
   visible: boolean;
@@ -75,6 +71,12 @@ export default function InstagramStyleReplyModal({
   const { userId } = useAuth();
   const replyService = useOpinionReplyService();
   const insets = useSafeAreaInsets();
+  const { height: SCREEN_HEIGHT } = useWindowDimensions();
+  
+  const MODAL_HEIGHT = Platform.select({
+    ios: SCREEN_HEIGHT * 0.70,
+    android: SCREEN_HEIGHT - STATUS_BAR_HEIGHT,
+  }) || SCREEN_HEIGHT * 0.7;
   
   // Animation refs
   const translateY = useRef(new Animated.Value(MODAL_HEIGHT || 0)).current;
@@ -637,6 +639,7 @@ export default function InstagramStyleReplyModal({
                           fontWeight: sortBy === sort ? '600' : '400',
                           textTransform: 'capitalize',
                         }}
+                        numberOfLines={1}
                       >
                         {sort}
                       </Text>
@@ -678,7 +681,10 @@ export default function InstagramStyleReplyModal({
                         color: theme.colors.textMuted,
                         fontSize: 10,
                         opacity: 0.6,
+                        flexShrink: 1,
                       }}
+                      numberOfLines={1}
+                      ellipsizeMode="tail"
                     >
                       by {opinionAuthor.username}
                     </Text>
@@ -686,11 +692,13 @@ export default function InstagramStyleReplyModal({
                   <Text
                     style={{
                       color: theme.colors.text,
-                      fontSize: 13,
+                      fontSize: scaleFontSize(13, 12, 14),
                       lineHeight: 18,
                       opacity: 0.8,
+                      flexShrink: 1,
                     }}
                     numberOfLines={isOpinionExpanded ? undefined : 2}
+                    ellipsizeMode="tail"
                   >
                     {opinionContent}
                   </Text>

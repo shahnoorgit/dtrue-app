@@ -8,7 +8,11 @@ import {
   ScrollView,
   Alert,
   ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+  useWindowDimensions,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { cyberpunkTheme } from '@/constants/theme';
 import { reportingApi, ReportReason, REPORT_REASONS, CreateReportRequest, validateReportTarget } from '@/services/reportingApi';
@@ -36,6 +40,8 @@ export default function ReportModal({
   const [selectedReason, setSelectedReason] = useState<ReportReason | null>(null);
   const [description, setDescription] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
 
   const handleSubmit = async () => {
     if (!selectedReason) {
@@ -94,6 +100,9 @@ export default function ReportModal({
     setDescription('');
   };
 
+  // Responsive padding based on screen width
+  const horizontalPadding = width < 375 ? 16 : 24;
+
   return (
     <Modal
       visible={visible}
@@ -101,59 +110,75 @@ export default function ReportModal({
       presentationStyle="pageSheet"
       onRequestClose={handleClose}
     >
-      <View style={{ flex: 1, backgroundColor: cyberpunkTheme.colors.background.primary }}>
-        <LinearGradient
-          colors={cyberpunkTheme.colors.gradients.background as [string, string]}
-          style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
-        />
-        
-        {/* Header */}
-        <View style={{ 
-          flexDirection: 'row', 
-          alignItems: 'center', 
-          justifyContent: 'space-between', 
-          padding: 16, 
-          borderBottomWidth: 1, 
-          borderBottomColor: cyberpunkTheme.colors.border.primary 
-        }}>
-          <TouchableOpacity
-            onPress={handleClose}
-            disabled={isSubmitting}
-            style={{ padding: 8 }}
-          >
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={{ flex: 1 }}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+      >
+        <View style={{ flex: 1, backgroundColor: cyberpunkTheme.colors.background.primary }}>
+          <LinearGradient
+            colors={cyberpunkTheme.colors.gradients.background as [string, string]}
+            style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
+          />
+          
+          {/* Header */}
+          <View style={{ 
+            flexDirection: 'row', 
+            alignItems: 'center', 
+            justifyContent: 'space-between', 
+            paddingHorizontal: horizontalPadding,
+            paddingTop: Math.max(16, insets.top),
+            paddingBottom: 16,
+            borderBottomWidth: 1, 
+            borderBottomColor: cyberpunkTheme.colors.border.primary 
+          }}>
+            <TouchableOpacity
+              onPress={handleClose}
+              disabled={isSubmitting}
+              style={{ padding: 8, minWidth: 80, minHeight: 44, justifyContent: 'center' }}
+            >
+              <Text style={{ 
+                color: cyberpunkTheme.colors.primary, 
+                fontSize: 16, 
+                fontWeight: '500' 
+              }} numberOfLines={1}>
+                {isSubmitting ? 'Submitting...' : 'Cancel'}
+              </Text>
+            </TouchableOpacity>
+            
             <Text style={{ 
-              color: cyberpunkTheme.colors.primary, 
-              fontSize: 16, 
-              fontWeight: '500' 
-            }}>
-              {isSubmitting ? 'Submitting...' : 'Cancel'}
-            </Text>
-          </TouchableOpacity>
-          
-          <Text style={{ 
-            color: cyberpunkTheme.colors.text.primary, 
-            fontSize: 18, 
-            fontWeight: '600' 
-          }}>Report Content</Text>
-          
-          <TouchableOpacity
-            onPress={handleSubmit}
-            disabled={!selectedReason || isSubmitting}
-            style={{ padding: 8 }}
-          >
-            <Text style={{
-              fontSize: 16,
-              fontWeight: '500',
-              color: selectedReason && !isSubmitting
-                ? cyberpunkTheme.colors.primary
-                : cyberpunkTheme.colors.text.disabled
-            }}>
-              Submit
-            </Text>
-          </TouchableOpacity>
-        </View>
+              color: cyberpunkTheme.colors.text.primary, 
+              fontSize: 18, 
+              fontWeight: '600',
+              flexShrink: 1,
+            }} numberOfLines={1}>Report Content</Text>
+            
+            <TouchableOpacity
+              onPress={handleSubmit}
+              disabled={!selectedReason || isSubmitting}
+              style={{ padding: 8, minWidth: 80, minHeight: 44, justifyContent: 'center', alignItems: 'flex-end' }}
+            >
+              <Text style={{
+                fontSize: 16,
+                fontWeight: '500',
+                color: selectedReason && !isSubmitting
+                  ? cyberpunkTheme.colors.primary
+                  : cyberpunkTheme.colors.text.disabled
+              }} numberOfLines={1}>
+                Submit
+              </Text>
+            </TouchableOpacity>
+          </View>
 
-        <ScrollView style={{ flex: 1, padding: 24 }}>
+          <ScrollView 
+            style={{ flex: 1 }} 
+            contentContainerStyle={{ 
+              padding: horizontalPadding,
+              paddingBottom: Math.max(24, insets.bottom + 24)
+            }}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
           {/* Target Info */}
           <View style={{ marginBottom: 32 }}>
             <Text style={{ 
@@ -161,14 +186,14 @@ export default function ReportModal({
               fontSize: 20, 
               fontWeight: '700', 
               marginBottom: 12 
-            }}>
+            }} numberOfLines={2}>
               What are you reporting?
             </Text>
             <Text style={{ 
               color: cyberpunkTheme.colors.text.tertiary, 
               fontSize: 16, 
               lineHeight: 24 
-            }}>
+            }} numberOfLines={3} ellipsizeMode="tail">
               {targetTitle}
             </Text>
           </View>
@@ -207,7 +232,7 @@ export default function ReportModal({
                     color: selectedReason === key 
                       ? cyberpunkTheme.colors.primary 
                       : cyberpunkTheme.colors.text.tertiary,
-                  }}>
+                  }} numberOfLines={2} ellipsizeMode="tail">
                     {label}
                   </Text>
                 </TouchableOpacity>
@@ -293,17 +318,19 @@ export default function ReportModal({
               alignItems: 'center',
               borderWidth: 1,
               borderColor: cyberpunkTheme.colors.primary + '40',
+              maxWidth: width - 48,
             }}>
               <ActivityIndicator size="large" color={cyberpunkTheme.colors.primary} />
               <Text style={{ 
                 color: cyberpunkTheme.colors.text.primary, 
                 fontSize: 16, 
                 marginTop: 16 
-              }}>Submitting report...</Text>
+              }} numberOfLines={2}>Submitting report...</Text>
             </View>
           </View>
         )}
       </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }

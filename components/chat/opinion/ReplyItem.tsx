@@ -265,7 +265,10 @@ const ReplyItem = React.memo(function ReplyItem({
               color: theme.colors.text,
               fontWeight: '600',
               fontSize: 12,
+              flexShrink: 1,
             }}
+            numberOfLines={1}
+            ellipsizeMode="tail"
           >
             {reply.user?.username || 'Unknown User'}
           </Text>
@@ -324,6 +327,7 @@ const ReplyItem = React.memo(function ReplyItem({
             fontSize: 15,
             marginBottom: 10,
             letterSpacing: 0.15,
+            flexShrink: 1,
           }}
         >
           {reply.isDeleted ? '[This reply has been deleted]' : reply.content}
