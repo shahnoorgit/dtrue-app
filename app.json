@@ -3,7 +3,7 @@
     "name": "Dtrue",
     "slug": "dtrue",
     "scheme": "dtrue",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "orientation": "portrait",
     "icon": "./assets/images/logo_App.png",
     "splash": {
@@ -11,14 +11,16 @@
       "resizeMode": "cover",
       "backgroundColor": "#0A0E13"
     },
-    "assetBundlePatterns": ["**/*"],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "userInterfaceStyle": "automatic",
     "jsEngine": "hermes",
     "newArchEnabled": true,
     "updates": {
       "url": "https://u.expo.dev/161ac660-74b1-4723-b57c-ba70d81bc91e"
     },
-    "runtimeVersion": "1.0.0",
+    "runtimeVersion": "1.1.0",
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
@@ -35,14 +37,17 @@
         "backgroundColor": "#0A0E13"
       },
       "jsEngine": "hermes",
-      "buildToolsVersion":"35.0.0",
+      "buildToolsVersion": "35.0.0",
       "compileSdkVersion": 35,
       "targetSdkVersion": 35,
       "minSdkVersion": 24,
       "intentFilters": [
         {
           "action": "VIEW",
-          "category": ["BROWSABLE", "DEFAULT"],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ],
           "autoVerify": true,
           "data": [
             {
@@ -54,7 +59,10 @@
         },
         {
           "action": "VIEW",
-          "category": ["BROWSABLE", "DEFAULT"],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ],
           "data": [
             {
               "scheme": "dtrue"
