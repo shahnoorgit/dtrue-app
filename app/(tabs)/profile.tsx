@@ -318,8 +318,8 @@ const ProfilePage: React.FC = () => {
   const { username, userId } =
     (route.params as { username: string; userId: string }) || {};
 
-  // Apply 100ms grace delay for initial load only
-  const showDelayedLoading = useDelayedLoading(loading && !refreshing && !user, 100);
+  // Show skeleton immediately to prevent "user not found" glimpse
+  const showDelayedLoading = useDelayedLoading(loading && !refreshing && !user, 0);
 
   useEffect(() => {
     // Track profile view when user views their own profile
