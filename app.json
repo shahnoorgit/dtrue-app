@@ -3,7 +3,7 @@
     "name": "Dtrue",
     "slug": "dtrue",
     "scheme": "dtrue",
-    "version": "1.1.0",
+    "version": "1.1.1",
     "orientation": "portrait",
     "icon": "./assets/images/logo_App.png",
     "splash": {
@@ -20,7 +20,7 @@
     "updates": {
       "url": "https://u.expo.dev/161ac660-74b1-4723-b57c-ba70d81bc91e"
     },
-    "runtimeVersion": "1.1.0",
+    "runtimeVersion": "1.1.1",
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
