@@ -1,50 +1,85 @@
-# Welcome to your Expo app 👋
+# Dtrue — Turn messy social debate into credible signal
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+Dtrue is a structured debate app that replaces chaotic threads with a clear flow, fast outcomes, and trustworthy summaries. Instead of rewarding volume and outrage, we elevate well‑reasoned arguments and make results easy to understand and share.
 
-## Get started
+## The problem we solve
 
-1. Install dependencies
+Social platforms produce noise: unstructured replies, shifting topics, popularity over quality, and no clear outcome. Good arguments get lost; readers don’t know what to trust.
 
-   ```bash
-   npm install
-   ```
+## How Dtrue fixes it (end‑to‑end flow)
 
-2. Start the app
+1) Explore debates  
+   - Beautiful `DebateGrid` surfaces active and ended rooms with participants and momentum.
 
-   ```bash
-    npx expo start
-   ```
+2) Join the room with a stance  
+   - You choose agree/disagree, then write a focused opinion (no walls of replies).
 
-In the output, you'll find options to open the app in a
+3) Post a structured opinion  
+   - Opinions show author, time, stance, likes, reply count, and AI signals (e.g., “AI Score”, “Flagged”).
+   - Long‑press or tap to like; instant optimistic UI keeps the room responsive.
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+4) Get credible signal while debating  
+   - Live agree/disagree percentages and timers guide towards closure, not endless back‑and‑forth.
+   - Replies open in a focused, Instagram‑style sheet so discussions stay tidy and on‑topic.
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+5) See final results at closure  
+   - Results screen shows participation stats, agreement ratio, AI‑generated summary, and ranked top opinions.
+   - Share a concise outcome card; no context dump required.
 
-## Get a fresh project
+## Why this beats traditional feeds
 
-When you're ready, run:
+- Structure over chaos: claims with reasons and evidence, not scattered threads.  
+- Outcome‑driven: timers and closure produce a result you can act on.  
+- Signal first: scoring and summaries highlight the best ideas quickly.  
+- Fair visibility: everyone can be heard; credibility accrues to consistently strong contributors.
 
-```bash
-npm run reset-project
-```
+## Features (shipped)
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+- Debate discovery via `DebateGrid` (active vs ended, joins, upvotes)
+- Real‑time room with stance selection and opinion submission
+- Opinion UI with likes, reply counts, author info, timestamps
+- AI signals on opinions (AI Score %, AI Flagged badge)
+- Ended debate results: participation overview, agreement ratio, AI‑generated summary, top opinions
+- Share flow for debates and outcomes
+- PostHog analytics and Sentry monitoring
 
-## Learn more
+## Features (designed)
 
-To learn more about developing your project with Expo, look at the following resources:
+- Credibility weighting for consistently high‑quality contributors
+- Time‑to‑result insights across topics and communities
+- Rich argument scaffolding (claims → reasons → evidence → counters)
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+## Security and integrity
 
-## Join the community
+- Transport security: all API traffic sent over TLS
+- Integrity at rest: opinions are stored with cryptographic hashing to prevent tampering
+- Minimal PII: only what’s needed for accounts and safety
+- Abuse controls: reporting, rate limits, anomaly detection
+- Auditability: stable opinion hashes enable consistency checks over time
 
-Join our community of developers creating universal apps.
+## Tech stack
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+- Expo React Native + TypeScript
+- Clerk authentication
+- NativeWind (Tailwind) styling
+- PostHog (analytics/events)
+- Sentry (error monitoring)
+
+## Status
+
+- Closed testing now; production launch soon
+
+### Early access
+
+![Early Access on Google Play](assets/images/closedtesting.jpg)
+
+## Author
+
+Designed and built end‑to‑end by me.
+
+## Screenshots
+
+Screens from the current build:
+
+![Debate Screen](assets/images/screen1.jpg)
+![Chat View](assets/images/chat.jpg)
