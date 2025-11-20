@@ -58,6 +58,9 @@ const DURATION_OPTIONS = [
   { label: "7 Days", hours: 168, icon: "calendar-week" },
 ];
 
+const DESCRIPTION_MIN_LENGTH = 20;
+const DESCRIPTION_MAX_LENGTH = 400;
+
 // Modern Input Component
 const ModernInput = ({
   icon,
@@ -539,11 +542,11 @@ export default function CreateDebateRoomScreen() {
     if (!description.trim()) {
       newErrors.description = "Description is required";
       isValid = false;
-    } else if (description.length < 20) {
-      newErrors.description = "Description must be at least 20 characters";
+    } else if (description.length < DESCRIPTION_MIN_LENGTH) {
+      newErrors.description = `Description must be at least ${DESCRIPTION_MIN_LENGTH} characters`;
       isValid = false;
-    } else if (description.length > 1000) {
-      newErrors.description = "Description must be 1000 characters or less";
+    } else if (description.length > DESCRIPTION_MAX_LENGTH) {
+      newErrors.description = `Description must be ${DESCRIPTION_MAX_LENGTH} characters or less`;
       isValid = false;
     }
 
@@ -724,10 +727,13 @@ export default function CreateDebateRoomScreen() {
             value={description}
             onChangeText={setDescription}
             multiline
-            maxLength={1000}
+            maxLength={DESCRIPTION_MAX_LENGTH}
             error={errors.description}
-            style={styles.inputSpacing}
+            style={styles.descriptionInputSpacing}
           />
+          <Text style={styles.descriptionHelper}>
+            Keep it punchy so everyone can scan fast — max {DESCRIPTION_MAX_LENGTH} characters.
+          </Text>
 
           {/* Duration Section */}
           <View style={styles.durationSection}>
@@ -1004,6 +1010,15 @@ const styles = {
   },
   inputSpacing: {
     marginBottom: 20,
+  },
+  descriptionInputSpacing: {
+    marginBottom: 8,
+  },
+  descriptionHelper: {
+    color: THEME.colors.textMuted,
+    fontSize: 12,
+    marginBottom: 20,
+    lineHeight: 16,
   },
   inputContainer: {
     flexDirection: "row" as const,

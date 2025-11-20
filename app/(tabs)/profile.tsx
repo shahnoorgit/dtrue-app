@@ -31,7 +31,6 @@ import DebateGrid from "@/components/debate/DebateGrid";
 import TabScreenWrapper from "./components/TabScreenWrapper";
 import SearchModal from "@/components/search/SearchModal";
 import EditableProfileCard from "@/components/profile/EditableProfileCard";
-import { useDelayedLoading } from "@/hook/useDelayedLoading";
 import { logError } from "@/utils/sentry/sentry"; // Added Sentry import
 import { clearUserDataOnSignOut } from "../_layout";
 import {
@@ -318,8 +317,7 @@ const ProfilePage: React.FC = () => {
   const { username, userId } =
     (route.params as { username: string; userId: string }) || {};
 
-  // Show skeleton immediately to prevent "user not found" glimpse
-  const showDelayedLoading = useDelayedLoading(loading && !refreshing && !user, 0);
+  const isInitialProfileLoading = loading && !refreshing && !user;
 
   useEffect(() => {
     // Track profile view when user views their own profile
@@ -1032,7 +1030,7 @@ const ProfilePage: React.FC = () => {
     setShowSearchModal(true);
   };
 
-  if (showDelayedLoading) {
+  if (isInitialProfileLoading) {
     return <ProfileSkeleton />;
   }
 

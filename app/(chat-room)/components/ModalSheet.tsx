@@ -100,7 +100,7 @@ const ModalSheet: React.FC<ModalSheetProps> = ({
                   </View>
                 )}
 
-                <Text style={styles.description} numberOfLines={3} ellipsizeMode="tail">
+                <Text style={styles.description}>
                   {debateDescription || "No description available."}
                 </Text>
 
